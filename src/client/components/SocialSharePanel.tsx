@@ -43,7 +43,7 @@ export const SocialSharePanel: React.FC<SocialSharePanelProps> = ({
       color: '#f0f6fc',
       fontFamily: "'Schibsted Grotesk', sans-serif",
       width: '100%',
-      boxBox: 'border-box'
+      boxSizing: 'border-box'
     }}>
       <h3 style={{ fontFamily: "'Archivo', sans-serif", fontSize: 'clamp(15px, 2.5vw, 18px)', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
         <span>🚀</span>
