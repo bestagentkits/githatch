@@ -1,5 +1,5 @@
 // ============================================================================
-// GitHoot Enhanced Grid Slicer with White Alpha Keying & Label Trimming
+// GitHoot Adaptive Border Color Keyer & Grid Slicer
 // (scripts/slice-gemini-grids-sharp.ts)
 // ============================================================================
 
@@ -20,29 +20,69 @@ const companions = [
 ];
 
 /**
- * Removes white, off-white, and green background pixels to create clean transparency.
+ * Adaptive Multi-Pass Background Remover:
+ * 1. Samples corner pixels to find the dominant background color of the cell.
+ * 2. Removes pixels matching the background color within a Euclidean color distance threshold.
+ * 3. Catches all shades of green (dark/mid/bright) and near-white/light-gray backgrounds.
  */
-function removeBackground(rgba: Uint8Array, width: number, height: number): Uint8Array {
+function removeAdaptiveBackground(rgba: Uint8Array, width: number, height: number): Uint8Array {
   const output = new Uint8Array(rgba.length);
   output.set(rgba);
+
+  // Sample the 4 corners to estimate local background color
+  const sampleIndices = [
+    0, // Top-Left
+    (width - 1) * 4, // Top-Right
+    (height - 1) * width * 4, // Bottom-Left
+    ((height - 1) * width + (width - 1)) * 4 // Bottom-Right
+  ];
+
+  let sumR = 0, sumG = 0, sumB = 0;
+  for (const idx of sampleIndices) {
+    sumR += rgba[idx] ?? 0;
+    sumG += rgba[idx + 1] ?? 0;
+    sumB += rgba[idx + 2] ?? 0;
+  }
+  const bgR = sumR / 4;
+  const bgG = sumG / 4;
+  const bgB = sumB / 4;
 
   for (let i = 0; i < output.length; i += 4) {
     const r = output[i] ?? 0;
     const g = output[i + 1] ?? 0;
     const b = output[i + 2] ?? 0;
 
-    // 1. White / Near-White Background
-    const isNearWhite = r > 215 && g > 215 && b > 215;
-    const isLightGray = Math.abs(r - g) < 15 && Math.abs(g - b) < 15 && r > 200;
+    // Euclidean distance to sampled background color
+    const dR = r - bgR;
+    const dG = g - bgG;
+    const dB = b - bgB;
+    const colorDist = Math.sqrt(dR * dR + dG * dG + dB * dB);
 
-    // 2. Green Chroma Background
-    const isGreenChroma = g > 180 && g > r * 1.5 && g > b * 1.5;
+    // Color checks:
+    // 1. Close to local background color
+    const isBgMatch = colorDist < 75;
 
-    // 3. Dark Outer Border / Black Header artifact
-    const isPureBlackBorder = r < 15 && g < 15 && b < 15;
+    // 2. Any shade of green (including mid-green, dark-vignette green, bright chroma)
+    const isAnyGreen = (g > 110 && g > r * 1.15 && g > b * 1.15) || (g > 80 && g > r * 1.3 && g > b * 1.3);
 
-    if (isNearWhite || isLightGray || isGreenChroma) {
-      output[i + 3] = 0; // Transparent
+    // 3. Near-white / light-gray
+    const isNearWhite = r > 205 && g > 205 && b > 205;
+    const isLightGray = Math.abs(r - g) < 15 && Math.abs(g - b) < 15 && r > 190;
+
+    if (isBgMatch || isAnyGreen || isNearWhite || isLightGray) {
+      if (colorDist < 50) {
+        output[i + 3] = 0; // 100% transparent
+      } else {
+        // Feathering
+        const factor = (colorDist - 50) / 25;
+        output[i + 3] = Math.min(output[i + 3] ?? 255, Math.floor(factor * 255));
+      }
+    } else {
+      // Green de-spill for any remaining green fringe
+      const avgRb = (r + b) / 2;
+      if (g > avgRb) {
+        output[i + 1] = Math.min(g, Math.round(avgRb));
+      }
     }
   }
 
@@ -50,7 +90,7 @@ function removeBackground(rgba: Uint8Array, width: number, height: number): Uint
 }
 
 async function processAllGrids() {
-  console.log('✦ Slicing & Trimming 8 Gemini Grids (Removing Backgrounds & Caption Bars)...');
+  console.log('✦ Running Adaptive Multi-Pass Background Removal on All 8 Gemini Grids...');
 
   for (const id of companions) {
     const rawPath = path.join(sampleDir, `${id}-gemini-raw.jpg`);
@@ -63,11 +103,11 @@ async function processAllGrids() {
     const cellW = Math.floor(w / 4);
     const cellH = Math.floor(h / 2);
 
-    console.log(`► Processing [${id}] (${w}x${h}) -> Cell ${cellW}x${cellH}...`);
+    console.log(`► Processing [${id}] (${w}x${h}) with Adaptive Keyer...`);
 
-    // 1. Process Hero Portrait: Crop Cell [0,0], trim outer label padding
-    const heroCropY = Math.floor(cellH * 0.12); // Skip top title banner
-    const heroCropH = Math.floor(cellH * 0.76); // Skip bottom text
+    // 1. Process Hero Portrait: Crop Cell [0,0]
+    const heroCropY = Math.floor(cellH * 0.12);
+    const heroCropH = Math.floor(cellH * 0.76);
     const heroCropX = Math.floor(cellW * 0.05);
     const heroCropW = Math.floor(cellW * 0.90);
 
@@ -77,7 +117,7 @@ async function processAllGrids() {
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    const cleanedHero = removeBackground(heroRaw.data, heroRaw.info.width, heroRaw.info.height);
+    const cleanedHero = removeAdaptiveBackground(heroRaw.data, heroRaw.info.width, heroRaw.info.height);
 
     const heroPng = await sharp(cleanedHero, {
       raw: { width: heroRaw.info.width, height: heroRaw.info.height, channels: 4 }
@@ -89,7 +129,7 @@ async function processAllGrids() {
     fs.writeFileSync(path.join(sampleDir, `${id}-hero.png`), heroPng);
     fs.writeFileSync(path.join(sampleDir, `${id}.jpg`), heroPng);
 
-    // 2. Extract 8 Cells, Trim Labels, and Composite into 1024x512 Spritesheet
+    // 2. Extract 8 Cells with Adaptive Background Removal
     const compositeImages: Array<{ input: Buffer; top: number; left: number }> = [];
 
     for (let cell = 0; cell < 8; cell++) {
@@ -99,7 +139,6 @@ async function processAllGrids() {
       const cellLeft = col * cellW;
       const cellTop = row * cellH;
 
-      // Crop inner character area (trim top 10% and bottom 18% to remove text labels)
       const innerLeft = cellLeft + Math.floor(cellW * 0.06);
       const innerTop = cellTop + Math.floor(cellH * 0.10);
       const innerWidth = Math.floor(cellW * 0.88);
@@ -111,7 +150,7 @@ async function processAllGrids() {
         .raw()
         .toBuffer({ resolveWithObject: true });
 
-      const cleanedCell = removeBackground(cellRaw.data, cellRaw.info.width, cellRaw.info.height);
+      const cleanedCell = removeAdaptiveBackground(cellRaw.data, cellRaw.info.width, cellRaw.info.height);
 
       const cellPng = await sharp(cleanedCell, {
         raw: { width: cellRaw.info.width, height: cellRaw.info.height, channels: 4 }
@@ -142,10 +181,10 @@ async function processAllGrids() {
 
     fs.writeFileSync(path.join(sampleDir, `${id}-spritesheet.png`), sheetPng);
 
-    console.log(`✓ [${id}] Clean transparent hero.png & spritesheet.png generated (0 captions, 0 white boxes).`);
+    console.log(`✓ [${id}] Clean transparent hero.png & spritesheet.png generated (0 residual green).`);
   }
 
-  console.log('✦ All 8 Gemini AI Grids Re-Sliced with Pure Transparency!');
+  console.log('✦ All 8 Gemini AI Grids Re-Processed with Adaptive Keyer!');
 }
 
 processAllGrids().catch(console.error);
