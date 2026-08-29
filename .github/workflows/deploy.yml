@@ -41,6 +41,9 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name=githoot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Apply D1 Production Migrations
         continue-on-error: true
@@ -49,6 +52,9 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 migrations apply githoot_db --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Upload Encrypted Runtime Secrets to Cloudflare Pages Functions
         continue-on-error: true
@@ -58,9 +64,8 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: |
             echo "${{ secrets.GEMINI_API_KEY }}" | npx wrangler pages secret put GEMINI_API_KEY --project-name=githoot
-            echo "${{ secrets.GITHUB_TOKENS }}" | npx wrangler pages secret put GITHUB_TOKENS --project-name=githoot
-            echo "${{ secrets.GITHUB_CLIENT_ID }}" | npx wrangler pages secret put GITHUB_CLIENT_ID --project-name=githoot
-            echo "${{ secrets.GITHUB_CLIENT_SECRET }}" | npx wrangler pages secret put GITHUB_CLIENT_SECRET --project-name=githoot
-            echo "${{ secrets.AUTH_SECRET }}" | npx wrangler pages secret put AUTH_SECRET --project-name=githoot
             echo "${{ secrets.R2_ACCESS_KEY_ID }}" | npx wrangler pages secret put R2_ACCESS_KEY_ID --project-name=githoot
             echo "${{ secrets.R2_SECRET_ACCESS_KEY }}" | npx wrangler pages secret put R2_SECRET_ACCESS_KEY --project-name=githoot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
