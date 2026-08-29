@@ -1,212 +1,79 @@
-# GitHatch
+# GitHoot (`githoot.com`)
 
-> Turn your GitHub activity into a living fantasy companion — and your profile into a game people want to visit.
+> **Turn your GitHub activity into an interactive fantasy companion — and your profile into a viral game people want to visit.**
 
-**GitHatch** is a gamified identity layer for GitHub. Any public GitHub profile can be viewed as an interactive pet profile by replacing the domain:
+**GitHoot** is an Edge-First gamified developer identity and discovery platform built on Cloudflare. Any public GitHub profile can be viewed as an interactive companion guardian profile:
 
 ```text
-https://github.com/mrgoonie
+https://github.com/octocat
               ↓
-https://githatch.com/mrgoonie
+https://githoot.com/octocat
 ```
 
-> **Working name:** GitHatch. **GitPet** is an alternative depending on domain and trademark availability.
+---
 
-## The idea
+## 🌟 Key Features
 
-GitHub profiles are valuable records of what developers build, but they are optimized for inspection rather than discovery, personality, or play.
+1. **Interactive AI Egg Spritesheets:** 8–10 pre-generated AI egg archetypes with real-time 60fps Canvas/CSS animations (idle, wobble, crack, hatch) and procedural Web Audio sound synthesis, requiring $0.00 AI API spend for anonymous visitors.
+2. **Gacha Hatching Ritual:** A dramatic, suspenseful hatching ceremony with particle explosions, fanfare music, and shimmering hologram rarity tier badges (Common to Mythic).
+3. **Gemini Nano Banana 2 Sprite Pipeline:** High-resolution hero portrait + 4x2 multi-pose sprite matrix (idle, happy, sleepy, proud, angry, work/coding, celebrate) with automated WASM contour detection and green de-spill alpha masking.
+4. **Early Access 100-Slot Quota:** First 100 claimed guardians are 100% free; slot 101+ switches to a transparent cost-recovery gate ($0.99 / voucher) to prevent net-negative compute costs.
+5. **Anti-Throttling GitHub Resolver:** Multi-token rotation pool (PATs/GitHub App) combined with Stale-While-Revalidate KV caching (< 20ms cache hit) and graceful degraded seed fallback.
+6. **Dynamic Animated Social Share:** Live animated OpenGraph cards (`/og/:username.gif`, `/og/:username.png`) with 1-click sharing to X (Twitter) and LinkedIn, plus dynamic SVG README badges (`/badge/:username.svg`).
 
-GitHatch converts public GitHub activity into a fantasy pet that hatches, grows, evolves, and cares for its owner's repositories. The result is a more expressive developer profile that can attract community attention and send traffic back to the user's work and products.
+---
 
-## First-time experience
+## 🎨 Design System: Cyber-Arcade Fantasy
 
-A visitor who opens a GitHatch profile for the first time sees an egg.
+- **Primary Colors:** Deep Space Black (`#07090E`), Neon Cyan (`#00F0FF`), Hot Magenta (`#FF2A85`), Electric Amber (`#FFA800`), Matrix Green (`#00FF88`).
+- **Typography:** `Archivo` (Display headers) + `Schibsted Grotesk` (Body) + `JetBrains Mono` (Data & stats).
+- **Interactive Showcase:** Open [`githoot-design-overview.html`](./githoot-design-overview.html) in your browser for a live Canvas simulator, 5 screen mockups with component annotations, and base64-embedded sample pets.
 
-1. **Click to hatch** the egg.
-2. Receive a randomly generated fantasy pet.
-3. Sign in with GitHub to claim the pet and continue raising it.
-4. Keep building on GitHub to earn experience and unlock visual evolution.
+---
 
-The initial hatch should feel rare and personal. Pet visuals can be generated with image models such as **GPT Image 2** or **Nano Banana 2**, then converted into consistent sprite sheets for idle, movement, work, celebration, battle, and evolution animations.
+## 🛠️ Technology Stack
 
-## GitHub activity becomes progression
+| Layer | Technology |
+|---|---|
+| **Runtime & Package Manager** | `Bun` (v1.1+) |
+| **Edge Framework** | `Hono` on Cloudflare Pages / Workers |
+| **Database** | Cloudflare `D1` (Serverless SQLite) |
+| **Asset Storage & CDN** | Cloudflare `R2` (Bucket: `githoot`, Domain: `cdn.githoot.com`) |
+| **KV Cache** | Cloudflare `KV` (Namespace: `GITHOOT_CACHE`) |
+| **AI Generation** | Google Gemini `nano-banana-pro-preview` / `nano-banana-2` (Dev: `nano-banana-2-lite`) |
+| **WASM Image Processing** | `@silvia-odwyer/photon` (Contour Slicer + Green De-spill) |
+| **CI/CD Deployment** | GitHub Actions on `push: branches: [main]` via `cloudflare/wrangler-action` |
 
-A pet's progression is powered by meaningful GitHub activity. Potential signals include:
+---
 
-- Contributions and contribution consistency
-- Commits and merged pull requests
-- Issues opened, resolved, or meaningfully discussed
-- Releases and repository milestones
-- Stars, forks, watchers, and community growth
-- Code review and collaboration activity
-- Maintaining healthy, active repositories over time
+## 🚀 Quick Start
 
-These signals should not map directly to raw power without safeguards. GitHatch must reward sustained, useful work while resisting spam, empty commits, low-effort repositories, and other forms of activity farming.
+```bash
+# 1. Install dependencies
+bun install
 
-## Pets as repository guardians
+# 2. Local development with Cloudflare emulation
+bun run dev
 
-Each pet acts as the guardian of its owner's repositories.
+# 3. Typecheck & Tests
+bun run typecheck
+bun test
 
-A GitHatch profile may show:
+# 4. Check active implementation plan status
+ak plan status ./plans/260829-2354-githoot-mvp-implementation
+ak plan validate ./plans/260829-2354-githoot-mvp-implementation
 
-- The pet's species, level, experience, rarity, and evolution stage
-- Repositories currently under its care
-- Recent achievements and activity streaks
-- Repository health or momentum represented as habitats, quests, resources, or status effects
-- Featured projects and links back to GitHub, demos, products, and personal sites
-- Cosmetic equipment and earned collectibles
+# 5. Start autonomous implementation
+/ak:cook plans/260829-2354-githoot-mvp-implementation
+```
 
-The more consistently the owner builds and maintains useful projects, the more experienced and visually impressive the pet becomes.
+---
 
-## Evolution system
+## 📂 Documentation & Plans
 
-Pets can evolve visually over time based on both activity and behavioral archetypes.
-
-Examples:
-
-- A prolific maintainer may develop guardian or leadership traits.
-- A strong collaborator may evolve into a support-oriented class.
-- A release-focused builder may unlock forge-themed forms.
-- A security contributor may gain sentinel traits.
-- A long-running open-source project may unlock legacy evolutions.
-
-Evolution should communicate the story of how someone builds, not merely display a contribution count.
-
-## The Arena
-
-The GitHatch homepage is an arena and discovery surface where pets — and therefore GitHub users — earn attention from the community.
-
-Potential experiences include:
-
-- Global, regional, language, and technology leaderboards
-- Seasonal leagues and themed events
-- Friendly pet challenges
-- Repository-versus-repository matchups
-- Team or organization battles
-- Community quests tied to real open-source contributions
-- Featured builders, rising projects, and under-discovered maintainers
-
-The battle gameplay is intentionally open for exploration. The core design constraint is that competition must create positive visibility for builders and their repositories rather than becoming a detached pay-to-win game.
-
-A strong battle system should use a mixture of:
-
-- Earned stats from verified GitHub activity
-- Strategic loadouts and pet classes
-- Time-bounded seasonal modifiers
-- Fair matchmaking
-- Cosmetic expression
-- Community participation
-
-## Discovery and traffic loop
-
-GitHatch is designed to create a loop:
-
-1. A GitHub user receives a pet profile.
-2. GitHub activity makes the pet grow and evolve.
-3. A more interesting pet earns visibility in the arena.
-4. Visitors discover the owner, repositories, products, and demos.
-5. New attention encourages more building and community participation.
-
-GitHatch succeeds when the game increases meaningful discovery of developers and their work.
-
-## Monetization
-
-GitHatch can monetize through optional virtual goods and visibility products:
-
-- Cosmetic items and accessories
-- Armor, gear, equipment, and weapons
-- Pet skins, habitats, animations, emotes, and profile themes
-- Seasonal passes and collectible sets
-- Tournament entry or special challenge formats
-- Sponsored arena placements and featured profile slots
-- Visibility boosts for launches, repositories, or products
-- Utility items that alter strategy without invalidating earned progression
-
-Monetization should preserve trust. Purchases may improve expression, provide bounded strategic choices, or buy clearly labeled promotion, but should not erase the value of genuine GitHub activity. Competitive systems should avoid hard pay-to-win mechanics.
-
-## AI visual pipeline
-
-A possible asset pipeline:
-
-1. Generate a canonical pet concept from a controlled species/class/evolution schema.
-2. Lock identity traits, palette, silhouette, and equipment slots.
-3. Generate consistent poses and evolution forms with GPT Image 2 or Nano Banana 2.
-4. Convert approved poses into sprite sheets.
-5. Validate silhouette, frame alignment, transparency, and animation continuity.
-6. Store provenance, prompt metadata, model version, and moderation status for every asset.
-
-AI should expand visual variety while the product maintains deterministic identity and animation consistency.
-
-## Identity and authentication
-
-Public GitHub profiles may be previewed without registration. Authentication is required to:
-
-- Claim and name a pet
-- Save progression
-- Equip items
-- Choose featured repositories
-- Enter challenges or ranked modes
-- Purchase or manage virtual goods
-- Configure profile and privacy settings
-
-GitHub OAuth should request the minimum permissions necessary. Public contribution data can power discovery, while any private-repository integration must be explicit, optional, and narrowly scoped.
-
-## Product principles
-
-- **GitHub work is the source of progression.**
-- **The pet tells the builder's story.**
-- **Competition should create discovery, not toxicity.**
-- **Useful activity beats noisy activity.**
-- **Paid items should enhance expression, not replace effort.**
-- **Public data is usable by default; private access is always opt-in.**
-- **AI-generated assets require consistency, provenance, and moderation.**
-
-## Suggested MVP
-
-### Phase 1 — Hatch and profile
-
-- Resolve public GitHub usernames
-- Generate the initial egg and hatch interaction
-- GitHub OAuth and pet claiming
-- Basic activity ingestion and experience calculation
-- One pet species system with several visual variations
-- Public profile with featured repositories
-
-### Phase 2 — Growth and retention
-
-- Levels, streaks, achievements, and evolution
-- Sprite-sheet animations
-- Repository guardian views
-- Cosmetics and inventory
-- Activity-abuse detection
-
-### Phase 3 — Arena and discovery
-
-- Leaderboards and seasonal rankings
-- Featured builders and repositories
-- Friendly challenges
-- Shareable pet cards and embeds
-- Referral and traffic analytics for profile owners
-
-### Phase 4 — Economy
-
-- Cosmetic marketplace
-- Seasonal content
-- Sponsored, clearly labeled visibility boosts
-- Balanced equipment and competitive formats
-
-## Open questions
-
-- Which GitHub activities best represent meaningful contribution?
-- How should GitHatch detect and penalize contribution farming?
-- Should pets represent a user, a repository, or both?
-- What battle mechanics can remain fair, legible, and fun?
-- How can new developers compete with long-established accounts?
-- Which progression is permanent, and which resets seasonally?
-- How should organizations and teams participate?
-- What visual-generation pipeline can guarantee sprite consistency at scale?
-- Which name and domain — GitHatch or GitPet — has the strongest legal and brand availability?
-
-## Status
-
-Early concept and product exploration. The name, mechanics, economy, visual direction, and technical architecture are subject to validation.
+- [`AGENTS.md`](./AGENTS.md) — Imperative rules, critical invariants & gotchas for AI agents.
+- [`docs/prd.md`](./docs/prd.md) — Product requirements & viral loop specifications.
+- [`docs/system-architecture.md`](./docs/system-architecture.md) — Cloudflare Edge architecture & D1 schema.
+- [`docs/design-guidelines.md`](./docs/design-guidelines.md) — Cyber-Arcade tokens, typography, and motion rules.
+- [`docs/roadmap.md`](./docs/roadmap.md) — 8-phase execution roadmap.
+- [`plans/260829-2354-githoot-mvp-implementation/`](./plans/260829-2354-githoot-mvp-implementation/) — Active 8-phase implementation plan.
