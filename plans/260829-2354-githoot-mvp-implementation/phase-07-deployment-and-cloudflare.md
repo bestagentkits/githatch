@@ -161,10 +161,10 @@ jobs:
 
 ## Success Criteria
 
-- [ ] Khi tạo commit và push vào nhánh `main`, GitHub Actions tự động kích hoạt và hoàn tất deploy thành công.
-- [ ] R2 Bucket `githoot` được tạo và truy cập công khai qua `https://cdn.githoot.com/...`.
-- [ ] D1 database production được migrate đầy đủ bảng và 100 slots Early Access.
-- [ ] Domain `https://githoot.com` mở trực tiếp trên trình duyệt với chứng chỉ SSL/TLS hợp lệ và phản hồi < 150ms.
+- [x] Khi tạo commit và push vào nhánh `main`, GitHub Actions tự động kích hoạt và hoàn tất deploy thành công.
+- [x] R2 Bucket `githoot` được tạo và truy cập công khai qua `https://cdn.githoot.com/...`.
+- [x] D1 database production được migrate đầy đủ bảng và 100 slots Early Access.
+- [x] Domain `https://githoot.com` mở trực tiếp trên trình duyệt với chứng chỉ SSL/TLS hợp lệ và phản hồi < 150ms.
 
 ## Risk Assessment
 

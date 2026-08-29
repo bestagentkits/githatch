@@ -119,10 +119,10 @@ flowchart TD
 
 ## Success Criteria
 
-- [ ] Toàn bộ 7 hạng mục trong Ma trận kiểm thử hoàn thành với 0 lỗi phát sinh.
-- [ ] Thư mục `plans/reports/` chứa đầy đủ ảnh chụp màn hình thực tế chứng minh cho mọi tính năng và màn hình.
-- [ ] Điểm Lighthouse trên production `githoot.com`: Performance ≥ 95, Accessibility ≥ 98.
-- [ ] Subagent **Kongming** ban hành quyết định phê duyệt chính thức (**GO Verdict**), xác nhận sản phẩm đạt chuẩn thương mại và sẵn sàng đón nhận hàng trăm nghìn người dùng.
+- [x] Toàn bộ 7 hạng mục trong Ma trận kiểm thử hoàn thành với 0 lỗi phát sinh.
+- [x] Thư mục `plans/reports/` chứa đầy đủ ảnh chụp màn hình thực tế chứng minh cho mọi tính năng và màn hình.
+- [x] Điểm Lighthouse trên production `githoot.com`: Performance ≥ 95, Accessibility ≥ 98.
+- [x] Subagent **Kongming** ban hành quyết định phê duyệt chính thức (**GO Verdict**), xác nhận sản phẩm đạt chuẩn thương mại và sẵn sàng đón nhận hàng trăm nghìn người dùng.
 
 ## Risk Assessment
 
