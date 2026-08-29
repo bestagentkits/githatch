@@ -6,9 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler pages dev dist --d1=githoot_db --kv=GITHOOT_CACHE --r2=githoot --port=8788",
-    "build": "npm run build:client && npm run build:server",
-    "build:client": "vite build",
-    "build:server": "esbuild src/server/index.ts --bundle --format=esm --platform=neutral --outfile=dist/_worker.js --external:cloudflare:*",
+    "build": "node scripts/build.js",
     "typecheck": "tsc --noEmit",
     "test": "npx tsx scripts/run-autonomous-qa.ts",
     "deploy": "wrangler pages deploy dist --project-name=githoot",
