@@ -35,13 +35,6 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Apply D1 Production Migrations
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply githoot_db_prod --remote
-
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
@@ -49,7 +42,16 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name=githoot
 
+      - name: Apply D1 Production Migrations
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply githoot_db --remote
+
       - name: Upload Encrypted Runtime Secrets to Cloudflare Pages Functions
+        continue-on-error: true
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
