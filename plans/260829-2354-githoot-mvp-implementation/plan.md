@@ -35,7 +35,8 @@ created: 2026-08-29
 | 4 | **Gemini Nano Banana 2 Pipeline & Pet Spritesheet** | [phase-04-nano-banana-pet-spritesheet.md](./phase-04-nano-banana-pet-spritesheet.md) | Pending | P1 | 1.5d |
 | 5 | **Gacha Reveal, Viral Distribution & Animated Share** | [phase-05-gacha-reveal-and-viral-share.md](./phase-05-gacha-reveal-and-viral-share.md) | Pending | P1 | 1.0d |
 | 6 | **Retention Loop, Tamagotchi State & Launch** | [phase-06-retention-and-launch.md](./phase-06-retention-and-launch.md) | Pending | P2 | 1.0d |
-
+| 7 | **Deployment, Infrastructure CI/CD & Cloudflare Setup** | [phase-07-deployment-and-cloudflare.md](./phase-07-deployment-and-cloudflare.md) | Pending | P1 | 1.0d |
+| 8 | **Autonomous Verification Loop & QA (Kongming)** | [phase-08-verification-loop-and-qa.md](./phase-08-verification-loop-and-qa.md) | Pending | P1 | 1.5d |
 ## Core Architectural Invariants
 
 1. **Kháng nghẽn GitHub API (Anti-Throttling Architecture):** Mọi lượt xem ẩn danh `/:username` đều được phục vụ từ Cloudflare KV (Stale-While-Revalidate). Nếu API GitHub bị rate limit, hệ thống chuyển sang chế độ *Degraded Seed Mode* (sinh trứng dựa trên hàm băm của username mà không làm sập trang).
@@ -53,5 +54,6 @@ created: 2026-08-29
 - [ ] Trải nghiệm Hatch Reveal phong cách Gacha đạt tỷ lệ click share X/LinkedIn > 25%.
 - [ ] Thẻ OpenGraph động (Animated preview) hiển thị sắc nét trên Twitter/X và LinkedIn.
 - [ ] Endpoint `/badge/:username.svg` nhúng trực tiếp vào GitHub README hoạt động ổn định.
-
+- [ ] GitHub Actions tự động build và deploy lên Cloudflare Edge khi push nhánh `main` kèm R2 bucket `githoot`.
+- [ ] Vòng lặp kiểm thử tự động đa công cụ (Playwright/DevTools/Computer Use) hoàn tất 0 lỗi và được Kongming phê duyệt GO.
 <!-- slug: githoot-mvp-implementation -->
