@@ -1,0 +1,52 @@
+name = "githoot"
+compatibility_date = "2025-02-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+# D1 Databases
+[[d1_databases]]
+binding = "DB"
+database_name = "githoot_db"
+database_id = "local-githoot-db"
+migrations_dir = "src/server/db/migrations"
+
+# R2 Object Storage
+[[r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "githoot"
+
+# Workers KV Cache
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "githoot_kv_cache"
+
+# Cloudflare Queues
+[[queues.producers]]
+binding = "AI_QUEUE"
+queue = "githoot-ai-queue"
+
+# Environment Variables (Public non-secret)
+[vars]
+ENVIRONMENT = "development"
+DOMAIN = "githoot.com"
+CDN_DOMAIN = "cdn.githoot.com"
+EARLY_ACCESS_TOTAL_SLOTS = "100"
+AI_MODEL_TIER = "nano-banana-pro-preview"
+
+# Production Overrides
+[env.production]
+vars = { ENVIRONMENT = "production", DOMAIN = "githoot.com", CDN_DOMAIN = "cdn.githoot.com", EARLY_ACCESS_TOTAL_SLOTS = "100", AI_MODEL_TIER = "nano-banana-pro-preview" }
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "githoot_db_prod"
+database_id = "prod-githoot-db"
+migrations_dir = "src/server/db/migrations"
+
+[[env.production.r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "githoot"
+
+[[env.production.kv_namespaces]]
+binding = "CACHE_KV"
+id = "githoot_prod_kv_cache"
