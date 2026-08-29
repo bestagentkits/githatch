@@ -120,10 +120,10 @@ WHERE slot_number = (
 
 ## Success Criteria
 
-- [ ] Luồng đăng nhập GitHub OAuth hoạt động an toàn, chống 100% các cuộc tấn công CSRF / State tampering.
-- [ ] User A không thể claim hộ hoặc claim đè lên profile của User B.
-- [ ] 100 slot Early Access đầu tiên được phân bổ chính xác từng số thứ tự (Slot 1 đến 100) không bị trùng lặp khi có concurrent requests.
-- [ ] Lượt truy cập thứ 101 hiển thị chính xác giao diện Cost-Recovery Gate, ngăn chặn việc gọi API AI gây thâm hụt tài chính.
+- [x] Luồng đăng nhập GitHub OAuth hoạt động an toàn, chống 100% các cuộc tấn công CSRF / State tampering.
+- [x] User A không thể claim hộ hoặc claim đè lên profile của User B.
+- [x] 100 slot Early Access đầu tiên được phân bổ chính xác từng số thứ tự (Slot 1 đến 100) không bị trùng lặp khi có concurrent requests.
+- [x] Lượt truy cập thứ 101 hiển thị chính xác giao diện Cost-Recovery Gate, ngăn chặn việc gọi API AI gây thâm hụt tài chính.
 
 ## Risk Assessment
 

@@ -120,10 +120,10 @@ File `metadata.json` mẫu:
 
 ## Success Criteria
 
-- [ ] 8–10 loại Trứng AI được tải lên R2 và truy cập mượt mà qua CDN `cdn.githoot.com/eggs/...`.
-- [ ] Component `EggSpritesheetPlayer` chạy đạt 60fps trên Chrome, Safari, Firefox và Mobile Web.
-- [ ] Tương tác click vào trứng phản hồi tức thì với hoạt ảnh wobble và âm thanh sinh động.
-- [ ] Toàn bộ trang tải không cần gọi bất kỳ external AI API nào, dung lượng tải ban đầu < 250KB.
+- [x] 8–10 loại Trứng AI được tải lên R2 và truy cập mượt mà qua CDN `cdn.githoot.com/eggs/...`.
+- [x] Component `EggSpritesheetPlayer` chạy đạt 60fps trên Chrome, Safari, Firefox và Mobile Web.
+- [x] Tương tác click vào trứng phản hồi tức thì với hoạt ảnh wobble và âm thanh sinh động.
+- [x] Toàn bộ trang tải không cần gọi bất kỳ external AI API nào, dung lượng tải ban đầu < 250KB.
 
 ## Risk Assessment
 

@@ -181,10 +181,10 @@ CREATE TABLE IF NOT EXISTS github_token_pool (
 
 ## Success Criteria
 
-- [ ] Lệnh `wrangler dev` khởi động thành công với đầy đủ D1, R2, KV bindings.
-- [ ] Endpoint `GET /api/profile/:username` trả về đúng thông tin user thật với < 150ms trên lần gọi đầu và < 30ms trên lần gọi thứ hai.
-- [ ] Test trường hợp cạn token GitHub: Hệ thống tự động chuyển sang Degraded Mode, trả về Egg Archetype hợp lệ và không văng lỗi 500.
-- [ ] Schema D1 được khởi tạo và 100 slots Early Access sẵn sàng trong database.
+- [x] Lệnh `wrangler dev` khởi động thành công với đầy đủ D1, R2, KV bindings.
+- [x] Endpoint `GET /api/profile/:username` trả về đúng thông tin user thật với < 150ms trên lần gọi đầu và < 30ms trên lần gọi thứ hai.
+- [x] Test trường hợp cạn token GitHub: Hệ thống tự động chuyển sang Degraded Mode, trả về Egg Archetype hợp lệ và không văng lỗi 500.
+- [x] Schema D1 được khởi tạo và 100 slots Early Access sẵn sàng trong database.
 
 ## Risk Assessment
 

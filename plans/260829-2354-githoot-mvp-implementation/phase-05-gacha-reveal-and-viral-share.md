@@ -101,10 +101,10 @@ Bố cục chuẩn của thẻ chia sẻ OpenGraph (`1200 x 630 px`):
 
 ## Success Criteria
 
-- [ ] Trải nghiệm nghi thức mở trứng chạy mượt mà 60fps, mang lại cảm xúc phấn khích và bất ngờ.
-- [ ] Khi share link `githoot.com/:username` lên Twitter/X hoặc Discord, thẻ Open Graph hiển thị hình ảnh Pet + chỉ số sắc nét và đẹp mắt.
-- [ ] Nút 1-Click Share tự động điền sẵn nội dung bài đăng cuốn hút và URL dẫn về đúng profile.
-- [ ] Badge nhúng `/badge/:username.svg` hiển thị chuẩn xác trên GitHub README của lập trình viên.
+- [x] Trải nghiệm nghi thức mở trứng chạy mượt mà 60fps, mang lại cảm xúc phấn khích và bất ngờ.
+- [x] Khi share link `githoot.com/:username` lên Twitter/X hoặc Discord, thẻ Open Graph hiển thị hình ảnh Pet + chỉ số sắc nét và đẹp mắt.
+- [x] Nút 1-Click Share tự động điền sẵn nội dung bài đăng cuốn hút và URL dẫn về đúng profile.
+- [x] Badge nhúng `/badge/:username.svg` hiển thị chuẩn xác trên GitHub README của lập trình viên.
 
 ## Risk Assessment
 

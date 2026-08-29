@@ -88,10 +88,10 @@ flowchart TD
 
 ## Success Criteria
 
-- [ ] Trạng thái tâm trạng của Linh thú phản ánh chính xác hoạt động commit mới nhất của người dùng.
-- [ ] Tính năng SWR cập nhật profile ngầm không gây gián đoạn trải nghiệm xem trang.
-- [ ] Bộ ngắt ngân sách (Budget Circuit Breaker) hoạt động chính xác khi đạt hạn mức thiết lập.
-- [ ] Danh sách 500 lập trình viên nổi tiếng được pre-warm cache thành công trước giờ launch.
+- [x] Trạng thái tâm trạng của Linh thú phản ánh chính xác hoạt động commit mới nhất của người dùng.
+- [x] Tính năng SWR cập nhật profile ngầm không gây gián đoạn trải nghiệm xem trang.
+- [x] Bộ ngắt ngân sách (Budget Circuit Breaker) hoạt động chính xác khi đạt hạn mức thiết lập.
+- [x] Danh sách 500 lập trình viên nổi tiếng được pre-warm cache thành công trước giờ launch.
 
 ## Risk Assessment
 

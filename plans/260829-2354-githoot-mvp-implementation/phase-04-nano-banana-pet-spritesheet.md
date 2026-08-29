@@ -121,10 +121,10 @@ Style: Stylized modern indie game art, vibrant lighting, bold clean contours, co
 
 ## Success Criteria
 
-- [ ] Pipeline gọi thành công Gemini Nano Banana 2 Lite trong môi trường dev và Nano Banana 2 trên staging.
-- [ ] Thời gian sinh ảnh + cắt khung hình hoàn tất và cập nhật DB < 4.5 giây.
-- [ ] 100% ảnh xuất ra R2 có nền trong suốt hoàn hảo, không bị viền lem màu xanh lá và nhân vật luôn nằm chính giữa khung hình (zero frame drift).
-- [ ] Component `PetSpritesheetPlayer` chuyển đổi mượt mà giữa các biểu cảm (Idle, Happy, Sleepy, Proud, Work, Celebrate).
+- [x] Pipeline gọi thành công Gemini Nano Banana 2 Lite trong môi trường dev và Nano Banana 2 trên staging.
+- [x] Thời gian sinh ảnh + cắt khung hình hoàn tất và cập nhật DB < 4.5 giây.
+- [x] 100% ảnh xuất ra R2 có nền trong suốt hoàn hảo, không bị viền lem màu xanh lá và nhân vật luôn nằm chính giữa khung hình (zero frame drift).
+- [x] Component `PetSpritesheetPlayer` chuyển đổi mượt mà giữa các biểu cảm (Idle, Happy, Sleepy, Proud, Work, Celebrate).
 
 ## Risk Assessment
 

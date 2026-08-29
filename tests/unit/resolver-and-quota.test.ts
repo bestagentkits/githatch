@@ -1,0 +1,75 @@
+// ============================================================================
+// GitHoot Unit Tests: SWR Resolver, Token Pool & Quota
+// (tests/unit/resolver-and-quota.test.ts)
+// ============================================================================
+
+import { describe, it, expect } from 'vitest';
+import { generateDegradedProfile } from '../../src/server/services/github/resolver';
+import { parseTokenPool, recordTokenResponse } from '../../src/server/services/github/token-pool';
+import { calculateGuardianMood } from '../../src/server/services/progression/mood-engine';
+import type { Env } from '../../src/server/types';
+
+describe('SWR Resolver & Degraded Seed Fallback', () => {
+  it('generates a valid degraded profile from username alone when GitHub is throttled', async () => {
+    const degraded = await generateDegradedProfile('torvalds');
+
+    expect(degraded.login).toBe('torvalds');
+    expect(degraded.source).toBe('degraded_seed');
+    expect(degraded.claimed).toBe(false);
+    expect(degraded.dna_seed.length).toBe(64); // SHA-256 length
+    expect(degraded.egg_archetype_id).toBeDefined();
+    expect(degraded.estimated_rarity).toBeDefined();
+  });
+});
+
+describe('Token Pool Manager', () => {
+  it('parses JSON array and comma-separated tokens correctly', () => {
+    const mockEnvJson: Env = {
+      GITHUB_TOKENS: '["ghp_token1", "ghp_token2"]'
+    } as Env;
+    expect(parseTokenPool(mockEnvJson)).toEqual(['ghp_token1', 'ghp_token2']);
+
+    const mockEnvCsv: Env = {
+      GITHUB_TOKENS: 'ghp_tokenA, ghp_tokenB'
+    } as Env;
+    expect(parseTokenPool(mockEnvCsv)).toEqual(['ghp_tokenA', 'ghp_tokenB']);
+  });
+
+  it('records rate limit response headers correctly', () => {
+    const headers = new Headers({
+      'x-ratelimit-remaining': '4950',
+      'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 3600)
+    });
+
+    expect(() => recordTokenResponse('ghp_test_token', headers)).not.toThrow();
+  });
+});
+
+describe('Tamagotchi Mood Engine', () => {
+  it('returns Energetic for activity within 24 hours', () => {
+    const now = Date.now();
+    const mood = calculateGuardianMood(now - 1000 * 3600 * 4); // 4h ago
+    expect(mood.state).toBe('Energetic');
+    expect(mood.recommendedPose).toBe('work');
+  });
+
+  it('returns Active for activity within 7 days', () => {
+    const now = Date.now();
+    const mood = calculateGuardianMood(now - 1000 * 3600 * 48); // 2 days ago
+    expect(mood.state).toBe('Active');
+    expect(mood.recommendedPose).toBe('idle');
+  });
+
+  it('returns Resting for activity within 30 days', () => {
+    const now = Date.now();
+    const mood = calculateGuardianMood(now - 1000 * 3600 * 24 * 15); // 15 days ago
+    expect(mood.state).toBe('Resting');
+    expect(mood.recommendedPose).toBe('sleepy');
+  });
+
+  it('returns Hungry_for_code for activity older than 30 days', () => {
+    const now = Date.now();
+    const mood = calculateGuardianMood(now - 1000 * 3600 * 24 * 45); // 45 days ago
+    expect(mood.state).toBe('Hungry_for_code');
+  });
+});

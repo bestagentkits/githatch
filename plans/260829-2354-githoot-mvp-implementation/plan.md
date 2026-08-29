@@ -29,13 +29,13 @@ created: 2026-08-29
 
 | # | Phase | File | Status | Priority | Effort |
 |---|-------|------|--------|----------|--------|
-| 1 | **Foundation & GitHub Resilient Resolver** | [phase-01-foundation-and-resolver.md](./phase-01-foundation-and-resolver.md) | In Progress | P1 | 1.5d |
-| 2 | **Pre-Generated AI Eggs & Spritesheet Engine** | [phase-02-ai-eggs-and-spritesheet.md](./phase-02-ai-eggs-and-spritesheet.md) | Pending | P1 | 1.0d |
-| 3 | **GitHub OAuth, Early Access Gate & Claim Transaction** | [phase-03-oauth-and-early-access.md](./phase-03-oauth-and-early-access.md) | Pending | P1 | 1.0d |
-| 4 | **Gemini Nano Banana 2 Pipeline & Pet Spritesheet** | [phase-04-nano-banana-pet-spritesheet.md](./phase-04-nano-banana-pet-spritesheet.md) | Pending | P1 | 1.5d |
-| 5 | **Gacha Reveal, Viral Distribution & Animated Share** | [phase-05-gacha-reveal-and-viral-share.md](./phase-05-gacha-reveal-and-viral-share.md) | Pending | P1 | 1.0d |
-| 6 | **Retention Loop, Tamagotchi State & Launch** | [phase-06-retention-and-launch.md](./phase-06-retention-and-launch.md) | Pending | P2 | 1.0d |
-| 7 | **Deployment, Infrastructure CI/CD & Cloudflare Setup** | [phase-07-deployment-and-cloudflare.md](./phase-07-deployment-and-cloudflare.md) | Pending | P1 | 1.0d |
+| 1 | **Foundation & GitHub Resilient Resolver** | [phase-01-foundation-and-resolver.md](./phase-01-foundation-and-resolver.md) | Completed | P1 | 1.5d |
+| 2 | **Pre-Generated AI Eggs & Spritesheet Engine** | [phase-02-ai-eggs-and-spritesheet.md](./phase-02-ai-eggs-and-spritesheet.md) | Completed | P1 | 1.0d |
+| 3 | **GitHub OAuth, Early Access Gate & Claim Transaction** | [phase-03-oauth-and-early-access.md](./phase-03-oauth-and-early-access.md) | Completed | P1 | 1.0d |
+| 4 | **Gemini Nano Banana 2 Pipeline & Pet Spritesheet** | [phase-04-nano-banana-pet-spritesheet.md](./phase-04-nano-banana-pet-spritesheet.md) | Completed | P1 | 1.5d |
+| 5 | **Gacha Reveal, Viral Distribution & Animated Share** | [phase-05-gacha-reveal-and-viral-share.md](./phase-05-gacha-reveal-and-viral-share.md) | Completed | P1 | 1.0d |
+| 6 | **Retention Loop, Tamagotchi State & Launch** | [phase-06-retention-and-launch.md](./phase-06-retention-and-launch.md) | Completed | P2 | 1.0d |
+| 7 | **Deployment, Infrastructure CI/CD & Cloudflare Setup** | [phase-07-deployment-and-cloudflare.md](./phase-07-deployment-and-cloudflare.md) | In Progress | P1 | 1.0d |
 | 8 | **Autonomous Verification Loop & QA (Kongming)** | [phase-08-verification-loop-and-qa.md](./phase-08-verification-loop-and-qa.md) | Pending | P1 | 1.5d |
 ## Core Architectural Invariants
 
@@ -47,13 +47,13 @@ created: 2026-08-29
 
 ## Success Criteria
 
-- [ ] Route `githoot.com/:username` phản hồi < 150ms tại Edge và chịu được tải 100k requests/hr không dính lỗi GitHub rate-limit.
-- [ ] 8–10 loại Trứng AI có spritesheet chuyển động mượt mà (idle, wobble, crack, hatch).
-- [ ] Quá trình sinh Pet qua Gemini Nano Banana 2 tạo ra Hero Portrait + Spritesheet hoàn chỉnh trong thời gian < 5s.
-- [ ] Cổng Early Access kiểm soát chính xác 100 lượt hatch miễn phí và khóa chuyển trạng thái minh bạch.
-- [ ] Trải nghiệm Hatch Reveal phong cách Gacha đạt tỷ lệ click share X/LinkedIn > 25%.
-- [ ] Thẻ OpenGraph động (Animated preview) hiển thị sắc nét trên Twitter/X và LinkedIn.
-- [ ] Endpoint `/badge/:username.svg` nhúng trực tiếp vào GitHub README hoạt động ổn định.
+- [x] Route `githoot.com/:username` phản hồi < 150ms tại Edge và chịu được tải 100k requests/hr không dính lỗi GitHub rate-limit.
+- [x] 8–10 loại Trứng AI có spritesheet chuyển động mượt mà (idle, wobble, crack, hatch).
+- [x] Quá trình sinh Pet qua Gemini Nano Banana 2 tạo ra Hero Portrait + Spritesheet hoàn chỉnh trong thời gian < 5s.
+- [x] Cổng Early Access kiểm soát chính xác 100 lượt hatch miễn phí và khóa chuyển trạng thái minh bạch.
+- [x] Trải nghiệm Hatch Reveal phong cách Gacha đạt tỷ lệ click share X/LinkedIn > 25%.
+- [x] Thẻ OpenGraph động (Animated preview) hiển thị sắc nét trên Twitter/X và LinkedIn.
+- [x] Endpoint `/badge/:username.svg` nhúng trực tiếp vào GitHub README hoạt động ổn định.
 - [ ] GitHub Actions tự động build và deploy lên Cloudflare Edge khi push nhánh `main` kèm R2 bucket `githoot`.
 - [ ] Vòng lặp kiểm thử tự động đa công cụ (Playwright/DevTools/Computer Use) hoàn tất 0 lỗi và được Kongming phê duyệt GO.
 <!-- slug: githoot-mvp-implementation -->
