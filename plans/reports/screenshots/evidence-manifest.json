@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-29T18:04:10.000Z",
+  "timestamp": "2026-08-29T18:35:00.000Z",
   "domain": "https://githoot.com",
   "dns_apex_ip": ["104.21.21.191", "172.67.200.12"],
   "cdn": "https://cdn.githoot.com",
@@ -7,17 +7,17 @@
   "design_system": "Option 1: Cyber-Arcade Fantasy",
   "sample_pets_loaded": ["emberfox", "neonbyte", "abyssal", "verdant"],
   "screenshots_captured": [
-    "01-live-profile-page.png",
-    "02-egg-cracking-state.png",
-    "03-live-gacha-reveal-modal.png",
-    "04-mobile-viewport-375px.png"
+    "01-desktop-1440px.png",
+    "02-tablet-portrait-768px.png",
+    "03-tablet-landscape-1024px.png",
+    "04-mobile-portrait-375px.png",
+    "05-mobile-gacha-modal-375px.png"
   ],
-  "verified_live_endpoints": [
-    "GET https://githoot.pages.dev/ (200 OK - React Vite bundle mounted)",
-    "GET https://githoot.pages.dev/health (200 OK - Hono edge api)",
-    "GET https://githoot.pages.dev/api/early-access/status (200 OK - 100/100 slots)",
-    "GET https://githoot.pages.dev/api/profile/octocat (200 OK - SWR KV resolver)",
-    "GET https://githoot.pages.dev/badge/octocat.svg (200 OK - SVG README badge)",
-    "GET https://githoot.pages.dev/og/octocat (200 OK - Dynamic OpenGraph card)"
+  "viewports_verified": [
+    "Desktop 1440x900 (Landscape 2-col)",
+    "Tablet 768x1024 (Portrait 1-col stacked)",
+    "Tablet 1024x768 (Landscape 2-col)",
+    "Mobile 375x667 (Portrait 1-col touch-ready)",
+    "Mobile 375x667 (Gacha Reveal Modal scrollable viewport)"
   ]
 }
