@@ -1,5 +1,5 @@
 // ============================================================================
-// GitHoot Egg Archetypes Manifest (src/client/assets/eggs/manifest.ts)
+// GitHoot Egg Archetypes & Gemini Companion Manifest (src/client/assets/eggs/manifest.ts)
 // ============================================================================
 
 export interface EggAnimationConfig {
@@ -13,7 +13,9 @@ export interface EggArchetype {
   id: string;
   name: string;
   element: string;
+  species: string;
   description: string;
+  companionImageUrl: string;
   color: {
     primary: string;
     glow: string;
@@ -34,8 +36,10 @@ export const EGG_MANIFEST: Record<string, EggArchetype> = {
   'ember-core': {
     id: 'ember-core',
     name: 'Ember Core Egg',
-    element: 'Fire',
+    species: 'Ignis Emberfox',
+    element: 'Fire / Rust & Go',
     description: 'Forged in high-performance Rust and Go compiler flames.',
+    companionImageUrl: '/assets/sample-pets/emberfox.jpg',
     color: { primary: '#FF4500', glow: 'rgba(255, 69, 0, 0.45)', particle: '#FFA500' },
     frameWidth: 256,
     frameHeight: 256,
@@ -50,8 +54,10 @@ export const EGG_MANIFEST: Record<string, EggArchetype> = {
   'neon-byte': {
     id: 'neon-byte',
     name: 'Neon Byte Egg',
-    element: 'Cyber',
+    species: 'Aether Neon Byte',
+    element: 'Cyber / TypeScript & Web',
     description: 'Pulsing with holographic TypeScript and React frontend energy.',
+    companionImageUrl: '/assets/sample-pets/neonbyte.jpg',
     color: { primary: '#00F0FF', glow: 'rgba(0, 240, 255, 0.45)', particle: '#FF2A85' },
     frameWidth: 256,
     frameHeight: 256,
@@ -66,8 +72,10 @@ export const EGG_MANIFEST: Record<string, EggArchetype> = {
   'abyssal-pearl': {
     id: 'abyssal-pearl',
     name: 'Abyssal Pearl Egg',
-    element: 'Water',
+    species: 'Nox Abyssal Pearl',
+    element: 'Water / Python & AI',
     description: 'Infused with deep learning neural networks and Python data pipelines.',
+    companionImageUrl: '/assets/sample-pets/abyssal.jpg',
     color: { primary: '#0070F3', glow: 'rgba(0, 112, 243, 0.45)', particle: '#00DFD8' },
     frameWidth: 256,
     frameHeight: 256,
@@ -82,8 +90,10 @@ export const EGG_MANIFEST: Record<string, EggArchetype> = {
   'verdant-spore': {
     id: 'verdant-spore',
     name: 'Verdant Spore Egg',
-    element: 'Nature',
+    species: 'Sylvan Verdant Golem',
+    element: 'Nature / Open Source',
     description: 'Rooted in enduring open-source maintenance and community care.',
+    companionImageUrl: '/assets/sample-pets/verdant.jpg',
     color: { primary: '#00DF71', glow: 'rgba(0, 223, 113, 0.45)', particle: '#50E3C2' },
     frameWidth: 256,
     frameHeight: 256,
@@ -98,8 +108,10 @@ export const EGG_MANIFEST: Record<string, EggArchetype> = {
   'solar-flare': {
     id: 'solar-flare',
     name: 'Solar Flare Egg',
-    element: 'Light',
+    species: 'Helios Solar Griffin',
+    element: 'Light / High-Velocity Shipper',
     description: 'Blazing with high-velocity product shipping and bold execution.',
+    companionImageUrl: '/assets/sample-pets/solargriffin.jpg',
     color: { primary: '#F5A623', glow: 'rgba(245, 166, 35, 0.45)', particle: '#FFD700' },
     frameWidth: 256,
     frameHeight: 256,
@@ -114,8 +126,10 @@ export const EGG_MANIFEST: Record<string, EggArchetype> = {
   'void-shard': {
     id: 'void-shard',
     name: 'Void Shard Egg',
-    element: 'Void',
+    species: 'Astral Void Stalker',
+    element: 'Void / Security & DevOps',
     description: 'Shrouded in mysterious kernel architecture and security exploits.',
+    companionImageUrl: '/assets/sample-pets/voidstalker.jpg',
     color: { primary: '#7928CA', glow: 'rgba(121, 40, 202, 0.45)', particle: '#FF0080' },
     frameWidth: 256,
     frameHeight: 256,
@@ -130,8 +144,10 @@ export const EGG_MANIFEST: Record<string, EggArchetype> = {
   'rust-dynamo': {
     id: 'rust-dynamo',
     name: 'Rust Dynamo Egg',
-    element: 'Mechanical',
+    species: 'Ferrum Rust Golem',
+    element: 'Mechanical / Low-level C/C++',
     description: 'Armored in zero-cost abstractions and memory-safe mechanisms.',
+    companionImageUrl: '/assets/sample-pets/rustgolem.jpg',
     color: { primary: '#A0AEC0', glow: 'rgba(160, 174, 192, 0.45)', particle: '#E2E8F0' },
     frameWidth: 256,
     frameHeight: 256,
@@ -146,8 +162,10 @@ export const EGG_MANIFEST: Record<string, EggArchetype> = {
   'celestial-echo': {
     id: 'celestial-echo',
     name: 'Celestial Echo Egg',
-    element: 'Mythic',
+    species: 'Zenith Celestial Drake',
+    element: 'Mythic / Polyglot 10x Engineer',
     description: 'Radiating rare polyglot mastery across every domain layer.',
+    companionImageUrl: '/assets/sample-pets/celestialdrake.jpg',
     color: { primary: '#E2B340', glow: 'rgba(226, 179, 64, 0.45)', particle: '#00E5FF' },
     frameWidth: 256,
     frameHeight: 256,
@@ -162,5 +180,5 @@ export const EGG_MANIFEST: Record<string, EggArchetype> = {
 };
 
 export function getEggArchetype(id: string): EggArchetype {
-  return EGG_MANIFEST[id] || EGG_MANIFEST['neon-byte'];
+  return EGG_MANIFEST[id] || EGG_MANIFEST['neon-byte']!;
 }
