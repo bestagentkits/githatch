@@ -3,33 +3,21 @@
 // ============================================================================
 
 import React, { useState } from 'react';
+import type { GuardianSummary } from '../../server/types';
 import { PetSpritesheetPlayer, type PetPose } from '../components/PetSpritesheetPlayer';
 import { EggSpritesheetPlayer } from '../components/EggSpritesheetPlayer';
 
 export const DesignSystemPage: React.FC = () => {
-  const [selectedPet, setSelectedPet] = useState({
-    id: 'emberfox',
-    name: 'Ignis Emberfox',
-    species: 'Ignis Emberfox',
-    element: 'Fire / Rust & Go',
-    rarity_tier: 'Legendary' as const,
-    level: 1,
-    experience: 420,
-    energy_state: 'Energetic' as const,
-    hero_image_url: '/assets/sample-pets/emberfox.jpg',
-    spritesheet_url: '/assets/sample-pets/emberfox.jpg'
-  });
-
-  const samplePets = [
+  const samplePets: GuardianSummary[] = [
     {
       id: 'emberfox',
       name: 'Ignis Emberfox',
       species: 'Ignis Emberfox',
       element: 'Fire / Rust & Go',
-      rarity_tier: 'Legendary' as const,
+      rarity_tier: 'Legendary',
       level: 1,
       experience: 420,
-      energy_state: 'Energetic' as const,
+      energy_state: 'Energetic',
       hero_image_url: '/assets/sample-pets/emberfox.jpg',
       spritesheet_url: '/assets/sample-pets/emberfox.jpg'
     },
@@ -38,10 +26,10 @@ export const DesignSystemPage: React.FC = () => {
       name: 'Aether Neon Byte',
       species: 'Aether Neon Byte',
       element: 'Cyber / TypeScript & Web',
-      rarity_tier: 'Epic' as const,
+      rarity_tier: 'Epic',
       level: 1,
       experience: 650,
-      energy_state: 'Active' as const,
+      energy_state: 'Active',
       hero_image_url: '/assets/sample-pets/neonbyte.jpg',
       spritesheet_url: '/assets/sample-pets/neonbyte.jpg'
     },
@@ -50,10 +38,10 @@ export const DesignSystemPage: React.FC = () => {
       name: 'Nox Abyssal Pearl',
       species: 'Nox Abyssal Pearl',
       element: 'Water / Python & AI',
-      rarity_tier: 'Mythic' as const,
+      rarity_tier: 'Mythic',
       level: 1,
       experience: 990,
-      energy_state: 'Active' as const,
+      energy_state: 'Active',
       hero_image_url: '/assets/sample-pets/abyssal.jpg',
       spritesheet_url: '/assets/sample-pets/abyssal.jpg'
     },
@@ -62,14 +50,16 @@ export const DesignSystemPage: React.FC = () => {
       name: 'Sylvan Verdant Golem',
       species: 'Sylvan Verdant Golem',
       element: 'Nature / Open Source Maintainer',
-      rarity_tier: 'Rare' as const,
+      rarity_tier: 'Rare',
       level: 1,
       experience: 300,
-      energy_state: 'Resting' as const,
+      energy_state: 'Resting',
       hero_image_url: '/assets/sample-pets/verdant.jpg',
       spritesheet_url: '/assets/sample-pets/verdant.jpg'
     }
   ];
+
+  const [selectedPet, setSelectedPet] = useState<GuardianSummary>(samplePets[0]!);
 
   return (
     <div style={{ background: '#07090e', color: '#f0f6fc', minHeight: '100vh', fontFamily: "'Schibsted Grotesk', sans-serif", padding: '48px 24px' }}>
