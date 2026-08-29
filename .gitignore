@@ -1,0 +1,8 @@
+.env
+.env.*
+.env.local
+node_modules/
+dist/
+build/
+.wrangler/
+*.log
