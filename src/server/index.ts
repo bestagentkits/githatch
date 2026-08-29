@@ -77,4 +77,19 @@ app.get('/api/early-access/status', async (c) => {
   }
 });
 
+// Static Asset & SPA Fallback for Cloudflare Pages
+app.all('*', async (c) => {
+  if (c.env.ASSETS) {
+    const res = await c.env.ASSETS.fetch(c.req.raw);
+    if (res.status !== 404) return res;
+    const url = new URL(c.req.url);
+    if (!url.pathname.includes('.')) {
+      const indexReq = new Request(new URL('/', c.req.url).toString(), c.req.raw);
+      return c.env.ASSETS.fetch(indexReq);
+    }
+    return res;
+  }
+  return c.text('Not found', 404);
+});
+
 export default app;

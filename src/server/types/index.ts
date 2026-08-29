@@ -8,6 +8,7 @@ export interface Env {
   ASSETS_BUCKET: R2Bucket;
   CACHE_KV: KVNamespace;
   AI_QUEUE: Queue<any>;
+  ASSETS?: { fetch: (req: Request) => Promise<Response> };
 
   // Public Configuration
   ENVIRONMENT: string;

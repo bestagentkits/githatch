@@ -23,8 +23,9 @@ export async function generateSpriteSheetWithGemini(
     };
   }
 
-  const model = env.AI_MODEL_TIER || 'models/nano-banana-pro-preview';
-  const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const rawModel = env.AI_MODEL_TIER || 'nano-banana-pro-preview';
+  const modelName = rawModel.replace(/^models\//, '');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   const body = {
     contents: [
@@ -37,11 +38,10 @@ export async function generateSpriteSheetWithGemini(
   };
 
   let lastError = '';
-  // Up to 2 attempts
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       const res = await fetch(url, {
         method: 'POST',

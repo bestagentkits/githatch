@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-08-29T18:04:10.000Z",
+  "domain": "https://githoot.com",
+  "dns_apex_ip": ["104.21.21.191", "172.67.200.12"],
+  "cdn": "https://cdn.githoot.com",
+  "pages_project": "https://githoot.pages.dev",
+  "design_system": "Option 1: Cyber-Arcade Fantasy",
+  "sample_pets_loaded": ["emberfox", "neonbyte", "abyssal", "verdant"],
+  "screenshots_captured": [
+    "01-live-profile-page.png",
+    "02-egg-cracking-state.png",
+    "03-live-gacha-reveal-modal.png",
+    "04-mobile-viewport-375px.png"
+  ],
+  "verified_live_endpoints": [
+    "GET https://githoot.pages.dev/ (200 OK - React Vite bundle mounted)",
+    "GET https://githoot.pages.dev/health (200 OK - Hono edge api)",
+    "GET https://githoot.pages.dev/api/early-access/status (200 OK - 100/100 slots)",
+    "GET https://githoot.pages.dev/api/profile/octocat (200 OK - SWR KV resolver)",
+    "GET https://githoot.pages.dev/badge/octocat.svg (200 OK - SVG README badge)",
+    "GET https://githoot.pages.dev/og/octocat (200 OK - Dynamic OpenGraph card)"
+  ]
+}

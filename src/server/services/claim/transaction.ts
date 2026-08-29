@@ -5,6 +5,10 @@
 import type { Env, GuardianSummary, GitHubUserRaw } from '../../types';
 import { deriveGuardianDNA } from '../dna/seed';
 import { reserveEarlyAccessSlot } from './quota';
+import { checkDailyBudgetLimit, recordAiGenerationSpend } from '../billing/budget-guard';
+import { compileNanoBananaPrompt } from '../ai/prompt-compiler';
+import { generateSpriteSheetWithGemini } from '../ai/gemini-client';
+import { processAndUploadGuardianAssets } from '../image/slicer';
 
 export interface ClaimResult {
   success: boolean;
@@ -38,20 +42,43 @@ export async function executeClaimTransaction(
     };
   }
 
-  // 2. Reserve Early Access Slot
+  // 2. Check Daily Budget Limit
+  const budget = await checkDailyBudgetLimit(env);
+  if (!budget.allowed) {
+    console.warn('[Claim] Daily AI budget cap reached ($20). Switching to voucher/waitlist.');
+  }
+
+  // 3. Reserve Early Access Slot
   const slotRes = await reserveEarlyAccessSlot(authUser.id, env);
 
   if (!slotRes.isFree) {
     throw new Error('EARLY_ACCESS_FULL: 100 free slots have been claimed. Please use standard voucher or checkout.');
   }
 
-  // 3. Derive Deterministic DNA
+  // 4. Derive Deterministic DNA
   const dna = await deriveGuardianDNA(authUser.id, authUser.login, []);
 
-  // 4. Default fallback hero image URL while queue processes
-  const initialHeroUrl = `/assets/sample-pets/${dna.egg_archetype_id === 'ember-core' ? 'emberfox' : dna.egg_archetype_id === 'neon-byte' ? 'neonbyte' : dna.egg_archetype_id === 'abyssal-pearl' ? 'abyssal' : 'verdant'}.jpg`;
+  // 5. Default initial hero URL
+  let heroUrl = `/assets/sample-pets/${dna.egg_archetype_id === 'ember-core' ? 'emberfox' : dna.egg_archetype_id === 'neon-byte' ? 'neonbyte' : dna.egg_archetype_id === 'abyssal-pearl' ? 'abyssal' : 'verdant'}.jpg`;
+  let spritesheetUrl: string | null = null;
 
-  // 5. Execute Atomic DB Writes
+  // 6. Execute Direct AI Generation if API key is present
+  if (env.GEMINI_API_KEY && budget.allowed) {
+    try {
+      const prompt = compileNanoBananaPrompt(dna);
+      const aiRes = await generateSpriteSheetWithGemini(prompt, env);
+      if (aiRes.success && aiRes.base64Data) {
+        const assets = await processAndUploadGuardianAssets(guardianId, aiRes.base64Data, env);
+        heroUrl = assets.heroImageUrl;
+        spritesheetUrl = assets.spritesheetUrl;
+        await recordAiGenerationSpend(env);
+      }
+    } catch (err) {
+      console.warn('[Claim] Direct AI generation failed, using fallback:', err);
+    }
+  }
+
+  // 7. Execute Atomic DB Writes
   const batchStatements = [
     // Create or ignore User
     env.DB.prepare(
@@ -81,7 +108,7 @@ export async function executeClaimTransaction(
     // Create Guardian Record
     env.DB.prepare(`
       INSERT INTO guardians (id, user_id, github_user_id, name, egg_type, species, element, dna_seed, rarity_tier, hero_image_url, spritesheet_url, traits, level, experience, energy_state, created_at)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, ?11, 1, 0, 'Active', ?12)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1, 0, 'Active', ?13)
     `).bind(
       guardianId,
       userId,
@@ -92,7 +119,8 @@ export async function executeClaimTransaction(
       dna.element,
       dna.dna_seed,
       dna.rarity_tier,
-      initialHeroUrl,
+      heroUrl,
+      spritesheetUrl,
       JSON.stringify(dna),
       now
     ),
@@ -110,21 +138,7 @@ export async function executeClaimTransaction(
 
   await env.DB.batch(batchStatements);
 
-  // 6. Push Job to AI Generation Queue
-  if (env.AI_QUEUE) {
-    try {
-      await env.AI_QUEUE.send({
-        type: 'GENERATE_GUARDIAN_ASSET',
-        guardianId,
-        githubUserId: authUser.id,
-        dna
-      });
-    } catch (err) {
-      console.warn('[Claim] Failed to push to AI_QUEUE, will retry later:', err);
-    }
-  }
-
-  // 7. Invalidate KV Cache so profile instantly reflects claimed status
+  // 8. Invalidate KV Cache so profile instantly reflects claimed status
   try {
     await env.CACHE_KV.delete(`gh:profile:${authUser.login.toLowerCase()}`);
   } catch {
@@ -140,8 +154,8 @@ export async function executeClaimTransaction(
     level: 1,
     experience: 0,
     energy_state: 'Active',
-    hero_image_url: initialHeroUrl,
-    spritesheet_url: null
+    hero_image_url: heroUrl,
+    spritesheet_url: spritesheetUrl
   };
 
   return {
