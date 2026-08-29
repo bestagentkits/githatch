@@ -84,7 +84,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    name: Build, Migrate & Deploy
+    name: Build, Migrate, Set Secrets & Deploy
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -117,20 +117,26 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 migrations apply githoot_db_prod --remote
 
-      - name: Deploy to Cloudflare Pages / Workers
+      - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name=githoot
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
-          GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
-          GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+      - name: Upload Encrypted Runtime Secrets to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: |
+            echo "${{ secrets.GEMINI_API_KEY }}" | npx wrangler pages secret put GEMINI_API_KEY --project-name=githoot
+            echo "${{ secrets.GITHUB_TOKENS }}" | npx wrangler pages secret put GITHUB_TOKENS --project-name=githoot
+            echo "${{ secrets.GITHUB_CLIENT_ID }}" | npx wrangler pages secret put GITHUB_CLIENT_ID --project-name=githoot
+            echo "${{ secrets.GITHUB_CLIENT_SECRET }}" | npx wrangler pages secret put GITHUB_CLIENT_SECRET --project-name=githoot
+            echo "${{ secrets.AUTH_SECRET }}" | npx wrangler pages secret put AUTH_SECRET --project-name=githoot
+            echo "${{ secrets.R2_ACCESS_KEY_ID }}" | npx wrangler pages secret put R2_ACCESS_KEY_ID --project-name=githoot
+            echo "${{ secrets.R2_SECRET_ACCESS_KEY }}" | npx wrangler pages secret put R2_SECRET_ACCESS_KEY --project-name=githoot
 ```
 
 ## Related Code Files
@@ -149,9 +155,9 @@ jobs:
 2. **Cấu hình `wrangler.toml` cho Môi trường Production:**
    - Khai báo D1 database id, R2 bucket `githoot`, KV namespace id và Cloudflare Queue.
 3. **Tạo GitHub Actions Workflow (`deploy.yml`):**
-   - Cấu hình các bước kiểm tra chất lượng mã nguồn, chạy migration và deploy tự động.
+   - Cấu hình các bước kiểm tra chất lượng mã nguồn, chạy migration D1, deploy bundle và **tự động upload các runtime secrets được mã hóa** lên Cloudflare Pages Functions qua `wrangler pages secret put`.
 4. **Cấu hình Secrets trên GitHub Repository:**
-   - Nạp các giá trị từ `.env` vào GitHub Repository Secrets để workflow sử dụng khi chạy CI/CD.
+   - Nạp các giá trị từ `.env` vào GitHub Repository Secrets (`Settings > Secrets and variables > Actions`) để workflow sử dụng khi chạy CI/CD.
 
 ## Success Criteria
 
