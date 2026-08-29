@@ -35,7 +35,7 @@ https://githoot.com/octocat
 
 | Layer | Technology |
 |---|---|
-| **Runtime & Package Manager** | `Bun` (v1.1+) |
+| **Runtime & Package Manager** | `Node.js` (v20+ / v24+) or `Bun` (npm / bun) |
 | **Edge Framework** | `Hono` on Cloudflare Pages / Workers |
 | **Database** | Cloudflare `D1` (Serverless SQLite) |
 | **Asset Storage & CDN** | Cloudflare `R2` (Bucket: `githoot`, Domain: `cdn.githoot.com`) |
@@ -50,14 +50,17 @@ https://githoot.com/octocat
 
 ```bash
 # 1. Install dependencies
-bun install
+npm install  # or bun install
 
-# 2. Local development with Cloudflare emulation
-bun run dev
+# 2. Configure environment
+cp .env.example .env
 
-# 3. Typecheck & Tests
-bun run typecheck
-bun test
+# 3. Local development with Cloudflare emulation
+npm run dev  # or npx wrangler pages dev
+
+# 4. Typecheck & Tests
+npm run typecheck
+npm test
 
 # 4. Check active implementation plan status
 ak plan status ./plans/260829-2354-githoot-mvp-implementation

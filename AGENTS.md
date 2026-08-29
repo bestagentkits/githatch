@@ -12,8 +12,7 @@
 ---
 
 ## 2. Technology Stack & Key Tools
-
-- **Runtime & Package Manager:** `Bun` (v1.1+).
+- **Runtime & Package Manager:** `Node.js` (v20+ / v24+) or `Bun`, with universal `npm` / `npx` scripts for 100% cross-platform compatibility.
 - **Backend / Edge Framework:** `Hono` on Cloudflare Pages / Workers.
 - **Database:** Cloudflare `D1` (Serverless SQLite).
 - **Asset Storage:** Cloudflare `R2` (Bucket: `githoot`, Custom Domain: `cdn.githoot.com`).
