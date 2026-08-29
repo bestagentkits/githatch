@@ -7,6 +7,7 @@
 - **Domain:** `githoot.com` (DNS & CDN on Cloudflare).
 - **Core Strategy:** Edge-First Serverless architecture with zero server maintenance cost.
 - **Active Implementation Plan:** `plans/260829-2354-githoot-mvp-implementation/` (8 phases).
+- **Design System:** Option 1 (Cyber-Arcade Fantasy) with `Archivo` + `JetBrains Mono` fonts.
 
 ---
 
@@ -20,39 +21,10 @@
 - **AI Image Generation:** Google Gemini `nano-banana-pro-preview` / `nano-banana-2` (Dev: `nano-banana-2-lite`).
 - **Image Processing (Edge WASM):** `@silvia-odwyer/photon` / Connected Component analysis for contour slicing & green de-spill.
 - **Client Framework:** React / Vite or TanStack on Cloudflare Pages.
-- **Design System:** Option 1 (Cyber-Arcade Fantasy) with `Archivo` + `JetBrains Mono` fonts.
 
 ---
 
-## 3. Essential Commands
-
-```bash
-# Dependencies & Setup
-bun install
-
-# Local Development (Cloudflare Pages/Worker + D1/KV local emulation)
-bun run dev
-# or
-npx wrangler pages dev dist --d1=githoot_db --kv=GITHOOT_CACHE
-
-# Quality & Type Checking
-bun run typecheck
-bun run lint
-bun test
-
-# D1 Database Migrations
-npx wrangler d1 migrations apply githoot_db --local       # Local dev
-npx wrangler d1 migrations apply githoot_db_prod --remote # Production
-
-# Autonomous Plan & Implementation
-ak plan status ./plans/260829-2354-githoot-mvp-implementation
-ak plan validate ./plans/260829-2354-githoot-mvp-implementation
-/ak:cook plans/260829-2354-githoot-mvp-implementation
-```
-
----
-
-## 4. Critical Invariants & Non-Derivable Gotchas
+## 3. Critical Invariants & Non-Derivable Gotchas
 
 1. **GitHub API Anti-Throttling (Never assume 5,000 req/hr is enough):**
    - Unauthenticated `/:username` visits MUST be served from Cloudflare KV (Stale-While-Revalidate).
@@ -79,21 +51,22 @@ ak plan validate ./plans/260829-2354-githoot-mvp-implementation
 
 ---
 
-## 5. Directory Structure & Conventions
+## 4. DOs & DON'Ts
 
-```text
-├── .github/workflows/          # CI/CD (deploy.yml on push main)
-├── assets/sample-pets/         # Pre-generated sample pet references
-├── docs/                       # Evergreen specifications & guidelines
-│   ├── prd.md                  # Product requirements & viral loop
-│   ├── system-architecture.md  # Cloudflare Edge architecture & D1 schema
-│   ├── roadmap.md              # 8-phase execution roadmap
-│   └── design-guidelines.md    # Cyber-Arcade design tokens & typography
-├── plans/                      # Actionable implementation plans
-│   └── 260829-2354-githoot-mvp-implementation/ # Active 8-phase plan
-├── src/
-│   ├── client/                 # Frontend components, Canvas players, Web Audio
-│   └── server/                 # Hono API routes, GitHub resolver, AI pipeline
-├── githoot-design-overview.html # Interactive HTML design & simulator showcase
-└── wrangler.toml               # Cloudflare Pages/Worker bindings (D1, R2, KV, Queues)
-```
+### DOs
+- **DO** use Cloudflare KV Stale-While-Revalidate (SWR) cache and the Token Pool manager for all public `/:username` queries to achieve sub-30ms cache hits.
+- **DO** fallback gracefully to deterministic SHA-256 seed rendering (Degraded Mode) whenever GitHub API returns a 429 rate limit or 403 forbidden status.
+- **DO** gate Gemini Nano Banana 2 API calls strictly behind GitHub OAuth within the 100 free Early Access quota (or verified payment/voucher for slot 101+).
+- **DO** use WASM Smart Bounding-Box Detection (connected components) to detect character contours, center them on 256x256 frames, and apply the Green De-Spill filter ($g = \min(g, (r+b)/2)$) before uploading WebP assets to R2.
+- **DO** bind production runtime secrets directly to Cloudflare Pages Functions using `wrangler pages secret put` in the CI/CD workflow.
+- **DO** strictly follow the Option 1 (Cyber-Arcade Fantasy) Design System: `Archivo` headers, `JetBrains Mono` numbers/stats, 4pt spacing scale, and neon cyan/magenta glowing accents.
+- **DO** back all verification claims with fresh screenshots, network timing metrics, and console error logs, requiring formal **GO** signoff from `kongming` in Phase 8.
+
+### DON'Ts
+- **DON'T** call AI image generation models on anonymous unauthenticated page views — anonymous visitors must only receive 0-cost Canvas/SVG pre-generated eggs.
+- **DON'T** slice AI multi-pose sprite grids with naive fixed-pixel offsets, which causes clipped limbs and drifting frames.
+- **DON'T** rely on CI runner environment variables (`env:`) to pass runtime secrets to Cloudflare Edge Functions.
+- **DON'T** build heavyweight features out of scope (e.g. Arena combat, in-game store/inventory, Guilds, or real-time webhook ingestion) during the MVP phase.
+- **DON'T** allow free DNA rerolls for the same GitHub user ID — 1 GitHub ID equals 1 immutable Guardian.
+- **DON'T** penalize users or kill pets during periods of GitHub inactivity — only adjust visual mood (Tamagotchi positive reinforcement).
+- **DON'T** assume any feature or layout works without concrete browser-driven visual evidence (Zero Assumptions rule).
