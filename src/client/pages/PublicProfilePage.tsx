@@ -43,7 +43,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07090e', color: '#00f0ff', fontFamily: "'JetBrains Mono', monospace" }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07090e', color: '#00f0ff', fontFamily: "'JetBrains Mono', monospace", padding: '24px', textAlign: 'center' }}>
         <div>✦ Scanning GitHub Realm for @{username}... ✦</div>
       </div>
     );
@@ -51,9 +51,9 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
 
   if (error || !profile) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#07090e', color: '#ff2a85', fontFamily: "'JetBrains Mono', monospace" }}>
-        <h2>⚠️ {error || 'User not found'}</h2>
-        <a href="/" style={{ marginTop: '16px', color: '#00f0ff' }}>← Back to GitHoot.com</a>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#07090e', color: '#ff2a85', fontFamily: "'JetBrains Mono', monospace", padding: '24px', textAlign: 'center' }}>
+        <h2 style={{ fontSize: 'clamp(20px, 4vw, 28px)' }}>⚠️ {error || 'User not found'}</h2>
+        <a href="/" style={{ marginTop: '16px', color: '#00f0ff', textDecoration: 'none', borderBottom: '1px solid #00f0ff', paddingBottom: '2px' }}>← Back to GitHoot.com</a>
       </div>
     );
   }
@@ -61,104 +61,103 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
   return (
     <div style={{ minHeight: '100vh', background: '#07090e', color: '#f0f6fc', fontFamily: "'Schibsted Grotesk', sans-serif" }}>
       {/* Top Navigation */}
-      <header style={{ borderBottom: '1px solid rgba(0,240,255,0.12)', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header className="githoot-header">
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: '#fff', fontWeight: 900, fontSize: '20px', fontFamily: "'Archivo', sans-serif" }}>
           <span style={{ width: '32px', height: '32px', background: 'linear-gradient(135deg, #00f0ff, #ff2a85)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🦉</span>
           <span>GitHoot</span>
         </a>
 
         {quota && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(0,240,255,0.08)', border: '1px solid #00f0ff', padding: '6px 16px', borderRadius: '9999px', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', fontWeight: 700, color: '#00f0ff' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(0,240,255,0.08)', border: '1px solid #00f0ff', padding: '6px 14px', borderRadius: '9999px', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', fontWeight: 700, color: '#00f0ff' }}>
             <span style={{ width: '8px', height: '8px', background: '#00f0ff', borderRadius: '50%', boxShadow: '0 0 8px #00f0ff' }} />
             <span>Early Access: {quota.remaining}/{quota.total} slots left</span>
           </div>
         )}
       </header>
 
-      {/* Main Container */}
-      <main style={{ maxWidth: '1100px', margin: '48px auto', padding: '0 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '48px', alignItems: 'center' }}>
+      {/* Main Responsive Container */}
+      <main className="githoot-container" style={{ margin: 'clamp(24px, 5vw, 48px) auto' }}>
+        <div className="githoot-main-grid">
           
           {/* Left Column: Interactive Egg Canvas */}
-          <div style={{ background: '#0d111a', border: '1px solid rgba(0,240,255,0.15)', borderRadius: '16px', padding: '32px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+          <div className="githoot-card" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '320px' }}>
             <EggSpritesheetPlayer archetypeId={profile.egg_archetype_id} />
           </div>
 
           {/* Right Column: Developer Snapshot & Claim Action */}
-          <div style={{ background: '#0d111a', border: '1px solid rgba(0,240,255,0.15)', borderRadius: '16px', padding: '32px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+          <div className="githoot-card">
             
             {/* Dev Info */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-              <img src={profile.avatar_url} alt={profile.login} style={{ width: '64px', height: '64px', borderRadius: '50%', border: '2px solid #00f0ff' }} />
-              <div>
-                <h1 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '24px', fontWeight: 900, margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+              <img src={profile.avatar_url} alt={profile.login} style={{ width: 'clamp(48px, 12vw, 64px)', height: 'clamp(48px, 12vw, 64px)', borderRadius: '50%', border: '2px solid #00f0ff', flexShrink: 0 }} />
+              <div style={{ overflow: 'hidden' }}>
+                <h1 style={{ fontFamily: "'Archivo', sans-serif", fontSize: 'clamp(20px, 4vw, 26px)', fontWeight: 900, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                   {profile.name || profile.login}
                 </h1>
-                <div style={{ color: '#8b9bb4', fontSize: '14px' }}>@{profile.login}</div>
+                <div style={{ color: '#8b9bb4', fontSize: '13px' }}>@{profile.login}</div>
               </div>
             </div>
 
             {profile.bio && (
-              <p style={{ fontSize: '14px', color: '#8b9bb4', marginBottom: '24px', lineHeight: 1.5 }}>
+              <p style={{ fontSize: '13px', color: '#8b9bb4', marginBottom: '20px', lineHeight: 1.5 }}>
                 {profile.bio}
               </p>
             )}
 
             {/* Dev Stats Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '28px' }}>
-              <div style={{ background: '#141b27', padding: '12px 16px', borderRadius: '8px' }}>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '20px', fontWeight: 800, color: '#00f0ff' }}>
+            <div className="githoot-stats-grid" style={{ marginBottom: '24px' }}>
+              <div style={{ background: '#141b27', padding: '12px 14px', borderRadius: '8px' }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(18px, 3vw, 22px)', fontWeight: 800, color: '#00f0ff' }}>
                   {profile.public_repos}
                 </div>
-                <div style={{ fontSize: '11px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Public Repos</div>
+                <div style={{ fontSize: '10px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Public Repos</div>
               </div>
 
-              <div style={{ background: '#141b27', padding: '12px 16px', borderRadius: '8px' }}>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '20px', fontWeight: 800, color: '#00f0ff' }}>
+              <div style={{ background: '#141b27', padding: '12px 14px', borderRadius: '8px' }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(18px, 3vw, 22px)', fontWeight: 800, color: '#00f0ff' }}>
                   {profile.followers}
                 </div>
-                <div style={{ fontSize: '11px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Followers</div>
+                <div style={{ fontSize: '10px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Followers</div>
               </div>
 
-              <div style={{ background: '#141b27', padding: '12px 16px', borderRadius: '8px' }}>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '16px', fontWeight: 800, color: '#ffa800' }}>
+              <div style={{ background: '#141b27', padding: '12px 14px', borderRadius: '8px' }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(14px, 2.5vw, 16px)', fontWeight: 800, color: '#ffa800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {profile.top_languages[0] || 'Polyglot'}
                 </div>
-                <div style={{ fontSize: '11px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Top Language</div>
+                <div style={{ fontSize: '10px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Top Language</div>
               </div>
 
-              <div style={{ background: '#141b27', padding: '12px 16px', borderRadius: '8px' }}>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '16px', fontWeight: 800, color: '#ff2a85' }}>
+              <div style={{ background: '#141b27', padding: '12px 14px', borderRadius: '8px' }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(14px, 2.5vw, 16px)', fontWeight: 800, color: '#ff2a85' }}>
                   {profile.estimated_rarity}
                 </div>
-                <div style={{ fontSize: '11px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Estimated Rarity</div>
+                <div style={{ fontSize: '10px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Estimated Rarity</div>
               </div>
             </div>
 
-            {/* Claim CTA */}
+            {/* Claim CTA Button (Touch Standard >= 48px) */}
             <div>
               <a
                 href={`/auth/github?claim_username=${encodeURIComponent(profile.login)}`}
+                className="btn-touch"
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
+                  width: '100%',
                   background: '#00f0ff',
                   color: '#000',
-                  padding: '16px',
+                  padding: '14px 20px',
                   borderRadius: '8px',
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: '15px',
+                  fontSize: 'clamp(13px, 2.5vw, 15px)',
                   fontWeight: 800,
                   textDecoration: 'none',
                   boxShadow: '0 0 24px rgba(0,240,255,0.35)',
-                  transition: 'transform 0.15s'
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  textAlign: 'center'
                 }}
               >
                 🚀 Claim & Hatch My Guardian Free
               </a>
-              <div style={{ textAlign: 'center', fontSize: '12px', color: '#53627a', marginTop: '10px' }}>
+              <div style={{ textAlign: 'center', fontSize: '11px', color: '#53627a', marginTop: '10px' }}>
                 ✓ Only the owner of @{profile.login} can claim this companion.
               </div>
             </div>

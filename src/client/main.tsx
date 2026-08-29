@@ -1,9 +1,9 @@
 // ============================================================================
 // GitHoot React Client Entrypoint (src/client/main.tsx)
 // ============================================================================
-
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+import './styles/responsive.css';
 import { PublicProfilePage } from './pages/PublicProfilePage';
 import { GachaRevealModal } from './components/GachaRevealModal';
 import { CheckoutModal } from './components/CheckoutModal';

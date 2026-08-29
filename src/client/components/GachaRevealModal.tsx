@@ -41,7 +41,7 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 2000,
-      padding: '24px',
+      padding: '16px',
       overflowY: 'auto'
     }}>
       {/* Particle Canvas */}
@@ -56,33 +56,26 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
       />
 
       {/* Main Reveal Card */}
-      <div style={{
-        position: 'relative',
-        zIndex: 2002,
-        maxWidth: '680px',
-        width: '100%',
-        background: '#0d111a',
-        border: `2px solid ${getRarityColor(guardian.rarity_tier)}`,
-        borderRadius: '24px',
-        padding: '36px',
-        boxShadow: `0 0 50px ${getRarityGlow(guardian.rarity_tier)}`,
-        textAlign: 'center',
-        color: '#f0f6fc',
-        fontFamily: "'Schibsted Grotesk', sans-serif"
-      }}>
+      <div
+        className="githoot-modal-card"
+        style={{
+          border: `2px solid ${getRarityColor(guardian.rarity_tier)}`,
+          boxShadow: `0 0 50px ${getRarityGlow(guardian.rarity_tier)}`
+        }}
+      >
         {/* Hologram Rarity Header */}
         <div style={{
           display: 'inline-block',
           background: getRarityGradient(guardian.rarity_tier),
           color: '#000',
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: '12px',
+          fontSize: '11px',
           fontWeight: 900,
-          padding: '6px 20px',
+          padding: '6px 18px',
           borderRadius: '9999px',
           textTransform: 'uppercase',
           letterSpacing: '0.1em',
-          marginBottom: '20px',
+          marginBottom: '16px',
           boxShadow: '0 4px 16px rgba(0,0,0,0.5)'
         }}>
           ★ ★ ★ {guardian.rarity_tier} HATCH ★ ★ ★
@@ -90,7 +83,7 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
 
         <h2 style={{
           fontFamily: "'Archivo', sans-serif",
-          fontSize: '32px',
+          fontSize: 'clamp(22px, 5vw, 32px)',
           fontWeight: 900,
           color: '#ffffff',
           marginBottom: '8px'
@@ -98,22 +91,22 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
           {guardian.name} Đã Thức Tỉnh!
         </h2>
 
-        <p style={{ fontSize: '15px', color: '#8b9bb4', marginBottom: '24px' }}>
+        <p style={{ fontSize: '13px', color: '#8b9bb4', marginBottom: '20px' }}>
           Linh thú hộ mệnh hệ <strong>{guardian.element}</strong> bảo vệ các dự án mã nguồn mở của <strong>@{username}</strong>.
         </p>
 
-        {/* Character Portrait */}
+        {/* Character Portrait (Responsive max 220px) */}
         <div style={{
           display: 'flex',
           justifyContent: 'center',
-          marginBottom: '28px'
+          marginBottom: '24px'
         }}>
           <img
             src={guardian.hero_image_url}
             alt={guardian.name}
             style={{
-              width: '240px',
-              height: '240px',
+              width: 'clamp(160px, 40vw, 220px)',
+              height: 'clamp(160px, 40vw, 220px)',
               objectFit: 'cover',
               borderRadius: '16px',
               border: `2px solid ${getRarityColor(guardian.rarity_tier)}`,
@@ -125,9 +118,10 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
         {/* Social Share Embedded Section */}
         <SocialSharePanel username={username} guardian={guardian} />
 
-        <div style={{ marginTop: '24px' }}>
+        <div style={{ marginTop: '20px' }}>
           <button
             onClick={onClose}
+            className="btn-touch"
             style={{
               background: '#00f0ff',
               color: '#000',
@@ -138,7 +132,9 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
               fontSize: '14px',
               fontWeight: 800,
               cursor: 'pointer',
-              boxShadow: '0 0 20px rgba(0,240,255,0.35)'
+              boxShadow: '0 0 20px rgba(0,240,255,0.35)',
+              width: '100%',
+              maxWidth: '320px'
             }}
           >
             Vào Trang Profile Chính Thức →
