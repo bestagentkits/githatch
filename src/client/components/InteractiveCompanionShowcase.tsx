@@ -1,9 +1,9 @@
 // ============================================================================
-// GitHoot Interactive Companion Showcase Component
+// GitHoot Interactive Companion Showcase with Real Spritesheet Canvas Engine
 // (src/client/components/InteractiveCompanionShowcase.tsx)
 // ============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { EggArchetype } from '../assets/eggs/manifest';
 import { useEggAudio } from '../hooks/useEggAudio';
 
@@ -18,24 +18,54 @@ export const InteractiveCompanionShowcase: React.FC<InteractiveCompanionProps> =
 }) => {
   const [currentPose, setCurrentPose] = useState<string>(defaultPose);
   const [isHovered, setIsHovered] = useState(false);
-  const [bouncing, setBouncing] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
   const { playWobbleSound } = useEggAudio();
 
   const poses = [
-    { id: 'idle', label: 'Idle', icon: '✦' },
-    { id: 'happy', label: 'Happy', icon: '😊' },
-    { id: 'sleepy', label: 'Sleepy', icon: '😴' },
-    { id: 'proud', label: 'Proud', icon: '👑' },
-    { id: 'angry', label: 'Combat', icon: '⚔️' },
-    { id: 'work', label: 'Work', icon: '💻' },
-    { id: 'celebrate', label: 'Celebrate', icon: '🎉' }
+    { id: 'idle', label: 'Idle', icon: '✦', col: 1, row: 0 },
+    { id: 'happy', label: 'Happy', icon: '😊', col: 2, row: 0 },
+    { id: 'sleepy', label: 'Sleepy', icon: '😴', col: 3, row: 0 },
+    { id: 'proud', label: 'Proud', icon: '👑', col: 0, row: 1 },
+    { id: 'angry', label: 'Combat', icon: '⚔️', col: 1, row: 1 },
+    { id: 'work', label: 'Work', icon: '💻', col: 2, row: 1 },
+    { id: 'celebrate', label: 'Celebrate', icon: '🎉', col: 3, row: 1 }
   ];
+
+  // Draw current frame onto canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const activePose = poses.find(p => p.id === currentPose) || poses[0]!;
+
+    const img = new Image();
+    const sheetSrc = `/assets/sample-pets/${archetype.id}-spritesheet.png`;
+    img.src = sheetSrc;
+    img.onload = () => {
+      imageRef.current = img;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Source: 256x256 sub-region
+      const srcX = activePose.col * 256;
+      const srcY = activePose.row * 256;
+      ctx.drawImage(img, srcX, srcY, 256, 256, 0, 0, canvas.width, canvas.height);
+    };
+    img.onerror = () => {
+      // Fallback to static hero image
+      const fallbackImg = new Image();
+      fallbackImg.src = archetype.companionImageUrl;
+      fallbackImg.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(fallbackImg, 0, 0, canvas.width, canvas.height);
+      };
+    };
+  }, [archetype.id, currentPose, archetype.companionImageUrl]);
 
   const handlePoseChange = (poseId: string) => {
     setCurrentPose(poseId);
-    setBouncing(true);
     playWobbleSound();
-    setTimeout(() => setBouncing(false), 250);
   };
 
   return (
@@ -54,26 +84,30 @@ export const InteractiveCompanionShowcase: React.FC<InteractiveCompanionProps> =
         position: 'relative'
       }}
     >
-      {/* Visual Image Container with Glow Aura */}
+      {/* Visual Canvas Container with Spritesheet Engine */}
       <div style={{
         position: 'relative',
         borderRadius: '12px',
         overflow: 'hidden',
         background: 'radial-gradient(circle at center, #1c2637 0%, #07090e 100%)',
         marginBottom: '16px',
-        border: `1px solid ${archetype.color.primary}44`
+        border: `1px solid ${archetype.color.primary}44`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '220px'
       }}>
-        <img
-          src={archetype.companionImageUrl}
-          alt={archetype.species}
+        <canvas
+          ref={canvasRef}
+          width={256}
+          height={256}
           style={{
             width: '100%',
+            maxWidth: '240px',
             aspectRatio: '1/1',
-            objectFit: 'cover',
             display: 'block',
-            transform: bouncing ? 'scale(1.06)' : isHovered ? 'scale(1.02)' : 'scale(1)',
-            filter: currentPose === 'sleepy' ? 'brightness(0.85) contrast(0.95)' : currentPose === 'angry' ? 'contrast(1.2) saturate(1.3)' : 'none',
-            transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.3s ease'
+            imageRendering: 'pixelated',
+            transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
           }}
         />
 
@@ -93,7 +127,7 @@ export const InteractiveCompanionShowcase: React.FC<InteractiveCompanionProps> =
           backdropFilter: 'blur(8px)',
           textTransform: 'uppercase'
         }}>
-          Pose: [{currentPose}]
+          Spritesheet Frame: [{currentPose}]
         </div>
 
         {/* Element Tag */}
@@ -128,7 +162,7 @@ export const InteractiveCompanionShowcase: React.FC<InteractiveCompanionProps> =
       {/* Interactive Emotion Bar */}
       <div>
         <div style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", color: '#53627a', marginBottom: '6px', fontWeight: 700 }}>
-          CLICK ĐỂ THAY ĐỔI BIỂU CẢM (SPRITESHEET):
+          CLICK ĐỂ ĐỔI KHUNG HÌNH (SPRITESHEET):
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
           {poses.map(p => (
