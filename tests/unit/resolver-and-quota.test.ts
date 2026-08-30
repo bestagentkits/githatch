@@ -182,4 +182,50 @@ describe('Public Config & Quota Endpoint Contracts', () => {
     expect(profile.guardian).toBeDefined();
     expect(profile.guardian?.hero_image_url).toBe('/assets/sample-pets/celestialdrake.webp');
   });
+
+  it('normalizes legacy sample pet heroUrl on KV fresh and stale cache hits', async () => {
+    const cachedProfileWithLegacyJpg: ResolvedProfile = {
+      github_user_id: 6857382,
+      login: 'mrgoonie',
+      name: 'Duy',
+      bio: null,
+      avatar_url: 'https://avatars.githubusercontent.com/u/6857382',
+      public_repos: 122,
+      followers: 942,
+      total_stars: 0,
+      top_languages: ['TypeScript'],
+      dna_seed: 'seed123',
+      egg_archetype_id: 'celestial-echo',
+      estimated_rarity: 'Common',
+      claimed: true,
+      guardian: {
+        id: 'g-1',
+        name: 'Zenith Celestial Drake',
+        species: 'Zenith Celestial Drake',
+        element: 'Mythic',
+        rarity_tier: 'Common',
+        level: 1,
+        experience: 0,
+        energy_state: 'Active',
+        hero_image_url: '/assets/sample-pets/verdant.jpg',
+        spritesheet_url: null
+      },
+      source: 'github_live',
+      last_synced_at: Date.now()
+    };
+
+    const mockEnvKvCached = {
+      CACHE_KV: {
+        get: async () => ({
+          timestamp: Date.now() - 5000,
+          data: cachedProfileWithLegacyJpg
+        }),
+        put: async () => {}
+      }
+    } as unknown as Env;
+
+    const profile = await resolveGitHubProfile('mrgoonie', mockEnvKvCached);
+    expect(profile.source).toBe('cache_fresh');
+    expect(profile.guardian?.hero_image_url).toBe('/assets/sample-pets/celestialdrake.webp');
+  });
 });
