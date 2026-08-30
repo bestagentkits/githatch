@@ -1,6 +1,6 @@
 # GitHoot Autonomous QA & Verification Report
 
-- **Date:** 2026-08-30T04:11:58.867Z
+- **Date:** 2026-08-30T04:28:59.883Z
 - **Target Domain:** `https://githoot.com`
 - **Supervisor:** Subagent Kongming (Zero Assumptions Policy)
 - **Total Tests Executed:** 11
@@ -10,13 +10,13 @@
 
 | Category | Test Name | Status | Duration | Details |
 |---|---|---|---|---|
-| **API** | Healthcheck Endpoint GET /health | ✅ PASS | 12ms | Status: ok, Domain: githoot.com |
+| **API** | Healthcheck Endpoint GET /health | ✅ PASS | 11ms | Status: ok, Domain: githoot.com |
 | **API** | Early Access Status GET /api/early-access/status | ✅ PASS | 0ms | Total Slots: 100, Free Available: true |
-| **API** | Dynamic SVG README Badge GET /badge/octocat.svg | ✅ PASS | 843ms | SVG Length: 1010 bytes, Cache-Control: public, max-age=43200, s-maxage=43200 |
-| **API** | Dynamic OpenGraph Card GET /og/octocat | ✅ PASS | 128ms | OG Image Size: 1200x630, Bytes: 3339 |
+| **API** | Dynamic SVG README Badge GET /badge/octocat.svg | ✅ PASS | 291ms | SVG Length: 1010 bytes, Cache-Control: public, max-age=43200, s-maxage=43200 |
+| **API** | Dynamic OpenGraph Card GET /og/octocat | ✅ PASS | 134ms | OG Image Size: 1200x630, Bytes: 3339 |
 | **DNA** | Deterministic DNA Hash Consistency | ✅ PASS | 1ms | Species: Aether Neon Byte, Element: Cyber, Rarity: Common |
-| **Resolver** | GitHub Profile Resolution GET /api/profile/octocat | ✅ PASS | 128ms | Source: github_live, Egg: solar-flare, Login: @octocat |
-| **Resolver** | 404 User Not Found Propagation for Non-existent User | ✅ PASS | 319ms | HTTP 404 correctly returned for non-existent user |
+| **Resolver** | GitHub Profile Resolution GET /api/profile/octocat | ✅ PASS | 134ms | Source: github_live, Egg: solar-flare, Login: @octocat |
+| **Resolver** | 404 User Not Found Propagation for Non-existent User | ✅ PASS | 67ms | HTTP 404 correctly returned for non-existent user |
 | **Image** | Chroma Green Removal & Edge De-Spill | ✅ PASS | 0ms | Green background Alpha=0, Edge green de-spilled from 190 to 150 |
 | **Image** | Pure TS PNG Encode/Decode Roundtrip | ✅ PASS | 2ms | Encoded: 77 bytes -> Decoded: 2x1 RGBA |
 | **Image** | Smart Bounding Box Detection & Centering | ✅ PASS | 1ms | Original Bbox: [5,5..14,14] -> Centered at (128, 128) |

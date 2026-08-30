@@ -82,7 +82,7 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     if (res.status === 403 || res.status === 429) {
       console.warn(`[Resolver] GitHub API Rate Limited (${res.status}). Attempting public profile scrape fallback...`);
       const scraped = await scrapeGitHubPublicProfile(cleanUsername);
-      if (scraped) {
+      if (scraped && scraped.userId > 0) {
         const dna = await deriveGuardianDNA(scraped.userId, cleanUsername, scraped.topLanguages);
         const guardianRecord = await getGuardianFromDb(scraped.userId, env);
         const profile: ResolvedProfile = {
@@ -105,7 +105,7 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
         };
         try {
           await env.CACHE_KV.put(cacheKey, JSON.stringify({ timestamp: now, data: profile }), {
-            expirationTtl: 86400 * 3
+            expirationTtl: 3600 * 24 // 24 hours for scraped fallback
           });
         } catch {}
         return profile;
@@ -182,10 +182,9 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     }
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[Resolver] Error resolving ${username}:`, message);
-    
     // Try scraping fallback on network/API failure
     const scraped = await scrapeGitHubPublicProfile(cleanUsername);
-    if (scraped) {
+    if (scraped && scraped.userId > 0) {
       const dna = await deriveGuardianDNA(scraped.userId, cleanUsername, scraped.topLanguages);
       const guardianRecord = await getGuardianFromDb(scraped.userId, env);
       return {
