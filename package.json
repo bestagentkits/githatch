@@ -9,6 +9,9 @@
     "build": "node scripts/build.js",
     "typecheck": "tsc --noEmit",
     "test": "npx tsx scripts/run-autonomous-qa.ts",
+    "landing:gen": "node scripts/gen-landing16.mjs neonbyte",
+    "landing:build": "node scripts/build-hatch-mockup-html.js",
+    "landing:verify": "node scripts/verify-landing16.mjs",
     "deploy": "wrangler pages deploy dist --project-name=githoot",
     "d1:migrate:local": "wrangler d1 migrations apply githoot_db --local",
     "d1:migrate:prod": "wrangler d1 migrations apply githoot_db_prod --remote"
@@ -24,6 +27,7 @@
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "esbuild": "^0.25.0",
+    "puppeteer": "^23.11.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sharp": "^0.35.4",
