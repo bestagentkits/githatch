@@ -65,8 +65,8 @@ authRouter.get('/callback', async (c) => {
     // 4. Execute atomic claim transaction
     const claimRes = await executeClaimTransaction(authUser, c.env);
 
-    // 5. Redirect to Hatch Reveal ritual
-    return c.redirect(`/${encodeURIComponent(authUser.login)}?hatch=true&guardian_id=${claimRes.guardian.id}`);
+    // 5. Redirect to Hatch Reveal ritual with server-authoritative slot status
+    return c.redirect(`/${encodeURIComponent(authUser.login)}?hatch=true&guardian_id=${claimRes.guardian.id}&is_free=${claimRes.isFree ? '1' : '0'}`);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Claim transaction failed';
     if (msg.includes('EARLY_ACCESS_FULL')) {

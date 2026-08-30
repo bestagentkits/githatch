@@ -69,6 +69,6 @@
 36. `DocsPage.tsx` contains anchor IDs (`#architecture`, `#api-reference`, `#determinism`) for clean navigation.
 
 ### Telemetry & Privacy
-37. No `posthog-js` SDK in `package.json`; privacy-preserving `trackEvent` wrapper implemented in `src/client/utils/analytics.ts`.
+37. No `posthog-js` SDK in `package.json`; privacy-preserving `track` wrapper implemented in `src/client/lib/analytics.ts`.
 38. Event taxonomy allow-list recorded in `plans/reports/screenshots/landing-events.json` with zero PII (no usernames or emails).
 39. When `posthog_configured` is false, zero outbound analytics network requests occur.
