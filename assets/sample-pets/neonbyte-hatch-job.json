@@ -1,0 +1,28 @@
+{
+  "guardianId": "neonbyte",
+  "githubUserId": 11829471,
+  "telemetry": {
+    "topLanguages": ["typescript", "rust", "go"],
+    "stars": 1420,
+    "forks": 210,
+    "publicRepos": 48,
+    "followers": 380,
+    "accountAgeYears": 9,
+    "mergedExternalPRs": 24,
+    "releases": 11,
+    "reviewRatio": 0.62,
+    "collaborators": 18,
+    "activeWeeks": 34,
+    "nightCommitRatio": 0.71
+  },
+  "identityPin": {
+    "silhouette": "humanoid biped",
+    "build": "stocky",
+    "crest": "flame crest",
+    "markings": "circuit traces",
+    "material": "plated armor",
+    "aura": "scanline shimmer"
+  },
+  "referencePath": "assets/sample-pets/neonbyte-gemini-raw.jpg",
+  "outDir": "assets/sample-pets"
+}
