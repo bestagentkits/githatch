@@ -63,11 +63,11 @@ export async function executeClaimTransaction(
     'ember-core': 'emberfox',
     'neon-byte': 'neonbyte',
     'abyssal-pearl': 'abyssal',
+    'verdant-spore': 'verdant',
     'solar-flare': 'solargriffin',
-    'celestial-ray': 'celestialdrake',
-    'void-rift': 'voidstalker',
-    'rust-gear': 'rustgolem',
-    'verdant-sprout': 'verdant'
+    'void-shard': 'voidstalker',
+    'rust-dynamo': 'rustgolem',
+    'celestial-echo': 'celestialdrake'
   };
   const petSlug = archetypeMap[dna.egg_archetype_id] || 'neonbyte';
   let heroUrl = `/assets/sample-pets/${petSlug}.webp`;
