@@ -80,7 +80,36 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     }
 
     if (res.status === 403 || res.status === 429) {
-      console.warn(`[Resolver] GitHub API Rate Limited (${res.status}). Switching to Degraded Mode.`);
+      console.warn(`[Resolver] GitHub API Rate Limited (${res.status}). Attempting public profile scrape fallback...`);
+      const scraped = await scrapeGitHubPublicProfile(cleanUsername);
+      if (scraped) {
+        const dna = await deriveGuardianDNA(scraped.userId, cleanUsername, scraped.topLanguages);
+        const guardianRecord = await getGuardianFromDb(scraped.userId, env);
+        const profile: ResolvedProfile = {
+          github_user_id: scraped.userId,
+          login: cleanUsername,
+          name: scraped.name,
+          bio: scraped.bio,
+          avatar_url: scraped.avatarUrl,
+          public_repos: scraped.publicRepos,
+          followers: scraped.followers,
+          total_stars: 0,
+          top_languages: scraped.topLanguages,
+          dna_seed: dna.dna_seed,
+          egg_archetype_id: dna.egg_archetype_id,
+          estimated_rarity: dna.rarity_tier,
+          claimed: guardianRecord !== null,
+          guardian: guardianRecord,
+          source: 'github_live',
+          last_synced_at: now
+        };
+        try {
+          await env.CACHE_KV.put(cacheKey, JSON.stringify({ timestamp: now, data: profile }), {
+            expirationTtl: 86400 * 3
+          });
+        } catch {}
+        return profile;
+      }
       return generateDegradedProfile(cleanUsername);
     }
 
@@ -153,6 +182,31 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     }
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[Resolver] Error resolving ${username}:`, message);
+    
+    // Try scraping fallback on network/API failure
+    const scraped = await scrapeGitHubPublicProfile(cleanUsername);
+    if (scraped) {
+      const dna = await deriveGuardianDNA(scraped.userId, cleanUsername, scraped.topLanguages);
+      const guardianRecord = await getGuardianFromDb(scraped.userId, env);
+      return {
+        github_user_id: scraped.userId,
+        login: cleanUsername,
+        name: scraped.name,
+        bio: scraped.bio,
+        avatar_url: scraped.avatarUrl,
+        public_repos: scraped.publicRepos,
+        followers: scraped.followers,
+        total_stars: 0,
+        top_languages: scraped.topLanguages,
+        dna_seed: dna.dna_seed,
+        egg_archetype_id: dna.egg_archetype_id,
+        estimated_rarity: dna.rarity_tier,
+        claimed: guardianRecord !== null,
+        guardian: guardianRecord,
+        source: 'github_live',
+        last_synced_at: now
+      };
+    }
     return generateDegradedProfile(cleanUsername);
   }
 }
@@ -202,4 +256,80 @@ export async function generateDegradedProfile(username: string): Promise<Resolve
     source: 'degraded_seed',
     last_synced_at: Date.now()
   };
+}
+
+export async function scrapeGitHubPublicProfile(username: string): Promise<{
+  userId: number;
+  name: string;
+  bio: string;
+  avatarUrl: string;
+  publicRepos: number;
+  followers: number;
+  topLanguages: string[];
+} | null> {
+  try {
+    const res = await fetch(`https://github.com/${encodeURIComponent(username)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      }
+    });
+
+    if (res.status === 404 || !res.ok) return null;
+
+    const html = await res.text();
+
+    const userIdMatch = html.match(/&quot;profile_user_id&quot;:(\d+)/) || html.match(/data-scope-id="(\d+)"/);
+    const userId = userIdMatch ? parseInt(userIdMatch[1], 10) : 0;
+
+    const nameMatch = html.match(/class="p-name vcard-fullname[^"]*"[^>]*itemprop="name">\s*([^<]+)\s*<\/span>/s) 
+      || html.match(/itemprop="name">\s*([^<]+)\s*<\/span>/);
+    const name = nameMatch ? nameMatch[1].trim() : username;
+
+    const bioMatch = html.match(/<div class="p-note user-profile-bio[^"]*"[^>]*><div>\s*([\s\S]*?)\s*<\/div><\/div>/)
+      || html.match(/<meta property="og:description" content="([^"]+)"/);
+    let bio = bioMatch ? bioMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+    bio = bio.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+    const avatarMatch = html.match(/<meta property="og:image" content="([^"]+)"/)
+      || html.match(/class="avatar user-profile-avatar[^"]*"[^>]*src="([^"]+)"/);
+    const avatarUrl = avatarMatch ? avatarMatch[1] : `https://github.com/${username}.png`;
+
+    const reposMatch = html.match(/tab=repositories.*?<span[^>]*class="Counter[^"]*"[^>]*>\s*([0-9kKmM,.]+)\s*<\/span>/is)
+      || html.match(/Repositories\s*<span[^>]*class="Counter[^"]*"[^>]*>\s*([0-9kKmM,.]+)\s*<\/span>/is);
+    let publicRepos = 0;
+    if (reposMatch) {
+      const raw = reposMatch[1].replace(/,/g, '').trim();
+      if (raw.toLowerCase().endsWith('k')) publicRepos = Math.round(parseFloat(raw) * 1000);
+      else publicRepos = parseInt(raw, 10) || 0;
+    }
+
+    const followersMatch = html.match(/followers">.*?<span[^>]*class="text-bold[^"]*"[^>]*>\s*([0-9kKmM,.]+)\s*<\/span>/is)
+      || html.match(/href="[^"]*tab=followers"[^>]*>.*?<span[^>]*class="[^"]*Counter[^"]*"[^>]*>\s*([0-9kKmM,.]+)\s*<\/span>/is);
+    let followers = 0;
+    if (followersMatch) {
+      const raw = followersMatch[1].replace(/,/g, '').trim();
+      if (raw.toLowerCase().endsWith('k')) followers = Math.round(parseFloat(raw) * 1000);
+      else followers = parseInt(raw, 10) || 0;
+    }
+
+    const langMatches = [...html.matchAll(/itemprop="programmingLanguage">([^<]+)<\/span>/g)].map(m => m[1]);
+    const langCounts: Record<string, number> = {};
+    for (const l of langMatches) {
+      langCounts[l] = (langCounts[l] || 0) + 1;
+    }
+    const topLanguages = Object.keys(langCounts).sort((a, b) => (langCounts[b] ?? 0) - (langCounts[a] ?? 0)).slice(0, 3);
+
+    return {
+      userId,
+      name,
+      bio,
+      avatarUrl,
+      publicRepos,
+      followers,
+      topLanguages
+    };
+  } catch {
+    return null;
+  }
 }
