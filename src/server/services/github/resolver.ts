@@ -20,6 +20,35 @@ interface CachedEntry {
   notFound?: boolean;
 }
 
+export function normalizeGuardianSummary(guardian: GuardianSummary | null): GuardianSummary | null {
+  if (!guardian) return null;
+
+  let heroUrl = guardian.hero_image_url;
+  if (heroUrl && heroUrl.includes('/assets/sample-pets/')) {
+    const speciesMap: Record<string, string> = {
+      'Ignis Emberfox': 'emberfox',
+      'Aether Neon Byte': 'neonbyte',
+      'Nox Abyssal Pearl': 'abyssal',
+      'Sylvan Verdant Golem': 'verdant',
+      'Helios Solar Griffin': 'solargriffin',
+      'Astral Void Stalker': 'voidstalker',
+      'Ferrum Rust Golem': 'rustgolem',
+      'Zenith Celestial Drake': 'celestialdrake'
+    };
+    const slug = speciesMap[guardian.species] || speciesMap[guardian.name];
+    if (slug) {
+      heroUrl = `/assets/sample-pets/${slug}.webp`;
+    } else {
+      heroUrl = heroUrl.replace(/\.jpg$/, '.webp');
+    }
+  }
+
+  return {
+    ...guardian,
+    hero_image_url: heroUrl
+  };
+}
+
 export async function resolveGitHubProfile(username: string, env: Env): Promise<ResolvedProfile> {
   const cleanUsername = username.trim().toLowerCase();
   const cacheKey = `gh:profile:${cleanUsername}`;
@@ -41,7 +70,12 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
 
   // Fresh cache hit (< 1 hour)
   if (cached?.data && now - cached.timestamp < 3600 * 1000) {
-    return { ...cached.data, source: 'cache_fresh' };
+    const data = cached.data;
+    return {
+      ...data,
+      guardian: normalizeGuardianSummary(data.guardian),
+      source: 'cache_fresh'
+    };
   }
 
   // Stale cache hit (1 hour to 24 hours): Return stale immediately, enqueue revalidation
@@ -49,10 +83,13 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     if (env.AI_QUEUE) {
       env.AI_QUEUE.send({ type: 'REVALIDATE_PROFILE', username: cleanUsername }).catch(() => {});
     }
-    return { ...cached.data, source: 'cache_stale' };
+    const data = cached.data;
+    return {
+      ...data,
+      guardian: normalizeGuardianSummary(data.guardian),
+      source: 'cache_stale'
+    };
   }
-
-  // 2. Fetch from GitHub API via Token Pool
   try {
     const token = await getHealthyGitHubToken(env);
     const headers: Record<string, string> = {
@@ -218,38 +255,18 @@ async function getGuardianFromDb(githubUserId: number, env: Env): Promise<Guardi
 
     if (!row) return null;
 
-    let heroUrl = row.hero_image_url;
-    if (heroUrl && heroUrl.includes('/assets/sample-pets/')) {
-      const speciesMap: Record<string, string> = {
-        'Ignis Emberfox': 'emberfox',
-        'Aether Neon Byte': 'neonbyte',
-        'Nox Abyssal Pearl': 'abyssal',
-        'Sylvan Verdant Golem': 'verdant',
-        'Helios Solar Griffin': 'solargriffin',
-        'Astral Void Stalker': 'voidstalker',
-        'Ferrum Rust Golem': 'rustgolem',
-        'Zenith Celestial Drake': 'celestialdrake'
-      };
-      const slug = speciesMap[row.species] || speciesMap[row.name];
-      if (slug) {
-        heroUrl = `/assets/sample-pets/${slug}.webp`;
-      } else {
-        heroUrl = heroUrl.replace(/\.jpg$/, '.webp');
-      }
-    }
-
-    return {
+    return normalizeGuardianSummary({
       id: row.id,
       name: row.name,
       species: row.species,
       element: row.element,
       rarity_tier: row.rarity_tier,
-      level: row.level,
-      experience: row.experience,
-      energy_state: row.energy_state,
-      hero_image_url: heroUrl,
+      level: row.level || 1,
+      experience: row.experience || 0,
+      energy_state: row.energy_state || 'Active',
+      hero_image_url: row.hero_image_url,
       spritesheet_url: row.spritesheet_url
-    };
+    });
   } catch {
     return null;
   }
