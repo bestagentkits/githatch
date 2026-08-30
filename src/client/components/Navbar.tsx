@@ -8,12 +8,13 @@ import type { EarlyAccessStatus } from '../../server/types';
 
 export interface NavbarProps {
   quota: EarlyAccessStatus | null;
+  quotaLoading?: boolean;
   activeRoute: string;
   onRouteChange: (route: string) => void;
 }
-
 export const Navbar: React.FC<NavbarProps> = ({
   quota,
+  quotaLoading,
   activeRoute,
   onRouteChange
 }) => {
@@ -91,7 +92,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Section: Quota Pill + Search Input + Mobile Menu Toggle */}
         <div className="nav-right">
-          {quota && (
+          {quotaLoading ? (
+            <div className="quota-pill" id="nav-quota-pill" aria-busy="true">
+              <span className="quota-dot" style={{ animation: 'pulse 1s infinite' }} />
+              <span style={{ opacity: 0.7 }}>Early Access: checking slots...</span>
+            </div>
+          ) : quota ? (
             <div className="quota-pill" id="nav-quota-pill">
               <span className="quota-dot" />
               <span>
@@ -100,7 +106,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : `Early Access: ${quota.remaining}/${quota.total} slots left`}
               </span>
             </div>
-          )}
+          ) : null}
 
           {/* Quick Search Form */}
           <form onSubmit={handleSearchSubmit} className="nav-search">
@@ -134,18 +140,23 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Persistent mobile quota line under brand row (Contract S0) */}
-      {quota && (
         <div className="mobile-quota-row">
-          <div className="quota-pill">
-            <span className="quota-dot" />
-            <span>
-              {quota.degraded || quota.remaining === null
-                ? 'Early Access status unavailable'
-                : `Early Access: ${quota.remaining}/${quota.total} slots left`}
-            </span>
-          </div>
+          {quotaLoading ? (
+            <div className="quota-pill" aria-busy="true">
+              <span className="quota-dot" style={{ animation: 'pulse 1s infinite' }} />
+              <span style={{ opacity: 0.7 }}>Early Access: checking slots...</span>
+            </div>
+          ) : quota ? (
+            <div className="quota-pill">
+              <span className="quota-dot" />
+              <span>
+                {quota.degraded || quota.remaining === null
+                  ? 'Early Access status unavailable'
+                  : `Early Access: ${quota.remaining}/${quota.total} slots left`}
+              </span>
+            </div>
+          ) : null}
         </div>
-      )}
 
       {/* Mobile Drawer Disclosure Panel */}
       <div className={`mobile-nav-panel ${mobileMenuOpen ? 'open' : ''}`} id="mobile-nav-panel">

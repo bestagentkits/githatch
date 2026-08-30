@@ -195,12 +195,14 @@ function App() {
     <>
       <Navbar
         quota={quotaState.data}
+        quotaLoading={quotaState.loading}
         activeRoute={routeState.route === '/profile' && routeState.profileUsername ? `/${routeState.profileUsername}` : routeState.route}
         onRouteChange={handleRouteChange}
       />
       {renderActivePage()}
       <Footer
         quota={quotaState.data}
+        quotaLoading={quotaState.loading}
         config={configState.data}
         configLoading={configState.loading}
         configError={configState.error}
