@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import type { ResolvedProfile } from '../../server/types';
 import { EggSpritesheetPlayer } from '../components/EggSpritesheetPlayer';
+import { trackEvent } from '../utils/analytics';
 
 export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) => {
   const [profile, setProfile] = useState<ResolvedProfile | null>(null);
@@ -31,6 +32,13 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
         const profileData = (await profileRes.json()) as ResolvedProfile;
         if (!isMounted) return;
         setProfile(profileData);
+        trackEvent({
+          name: 'egg_viewed',
+          properties: {
+            archetype_id: profileData.egg_archetype_id,
+            is_claimed: profileData.claimed
+          }
+        });
       } catch (err: unknown) {
         if (!isMounted) return;
         const msg = err instanceof Error ? err.message : 'Failed to load profile';

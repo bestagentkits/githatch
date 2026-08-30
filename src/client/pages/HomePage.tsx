@@ -106,6 +106,7 @@ export const HomePage: React.FC<HomePageProps> = ({
         source: 'popular_chip'
       }
     });
+    window.location.pathname = `/${encodeURIComponent(username)}`;
   };
 
   const isReducedMotion = () =>
@@ -564,13 +565,13 @@ export const HomePage: React.FC<HomePageProps> = ({
                   <td>
                     {quotaLoading ? (
                       <span className="mono" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Checking D1...</span>
-                    ) : quota?.degraded || quota?.remaining === null ? (
-                      <span className="trust-badge" style={{ color: 'var(--accent-amber)' }}>Early Access status unavailable (Database degraded)</span>
-                    ) : (
+                    ) : quota && !quota.degraded && quota.remaining !== null && quota.claimed !== null ? (
                       <>
-                        <span className="trust-val">{quota?.remaining ?? 100} / {quota?.total ?? 100} Free</span>{' '}
-                        <span className="mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({quota?.claimed ?? 0} slots claimed · live early_access_slots)</span>
+                        <span className="trust-val">{quota.remaining} / {quota.total} Free</span>{' '}
+                        <span className="mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({quota.claimed} slots claimed · live early_access_slots)</span>
                       </>
+                    ) : (
+                      <span className="trust-badge" style={{ color: 'var(--accent-amber)' }}>Early Access status unavailable (Database degraded)</span>
                     )}
                   </td>
                   <td>D1 Database query (<code>early_access_slots</code>). Claimed slots only.</td>
@@ -668,7 +669,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               }}>
                 ✦ Synchronizing Genesis cohort ledger with D1...
               </div>
-            ) : quota?.degraded || quota?.claimed === null ? (
+            ) : !quota || quota.degraded || quota.claimed === null ? (
               <div style={{
                 padding: '24px 16px',
                 background: 'rgba(255, 168, 0, 0.08)',
@@ -685,7 +686,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             ) : (
               <div className="dot-matrix">
                 {Array.from({ length: 100 }, (_, i) => {
-                  const isClaimed = i < (quota?.claimed ?? 0);
+                  const isClaimed = i < quota.claimed!;
                   return (
                     <div
                       key={i}

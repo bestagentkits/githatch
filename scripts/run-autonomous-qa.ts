@@ -236,7 +236,16 @@ ${results.map(r => `| **${r.category}** | ${r.name} | ${r.status === 'PASSED' ? 
   const reportPath = path.join(reportsDir, 'qa-verification-report.md');
   fs.writeFileSync(reportPath, reportMd, 'utf-8');
   console.log(`\n✦ QA Report written to: ${reportPath}`);
-  console.log(`✦ Result: ${passedCount}/${totalCount} Passed (0 Failures). Ready for Final Ship!`);
+  console.log(`✦ Result: ${passedCount}/${totalCount} Passed (${failedCount} Failures).`);
+
+  if (failedCount > 0) {
+    console.error(`\n❌ Autonomous QA Failed with ${failedCount} failure(s).`);
+    process.exit(1);
+  }
+  console.log(`✦ Ready for Final Ship!`);
 }
 
-runAutonomousQa().catch(console.error);
+runAutonomousQa().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

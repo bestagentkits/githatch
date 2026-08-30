@@ -851,7 +851,7 @@ section {
 /* S4: EIGHT ELEMENTS & ODDS */
 .archetype-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
   gap: 36px;
   align-items: start;
 }

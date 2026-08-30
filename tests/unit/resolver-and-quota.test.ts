@@ -7,8 +7,9 @@ import { describe, it, expect } from 'vitest';
 import { generateDegradedProfile } from '../../src/server/services/github/resolver';
 import { parseTokenPool, recordTokenResponse } from '../../src/server/services/github/token-pool';
 import { calculateGuardianMood } from '../../src/server/services/progression/mood-engine';
-import type { Env } from '../../src/server/types';
-
+import type { Env, PublicConfig, EarlyAccessStatus } from '../../src/server/types';
+import app from '../../src/server/index';
+import { getEarlyAccessStatus } from '../../src/server/services/claim/quota';
 describe('SWR Resolver & Degraded Seed Fallback', () => {
   it('generates a valid degraded profile from username alone when GitHub is throttled', async () => {
     const degraded = await generateDegradedProfile('torvalds');
@@ -83,5 +84,67 @@ describe('Tamagotchi Mood Engine', () => {
     const now = Date.now();
     const mood = calculateGuardianMood(now - 1000 * 3600 * 24 * 45); // 45 days ago
     expect(mood.state).toBe('Hungry_for_code');
+  });
+});
+
+describe('Public Config & Quota Endpoint Contracts', () => {
+  it('returns full public configuration with all 8 contract fields from /api/config', async () => {
+    const mockEnv = {
+      ENVIRONMENT: 'production',
+      DOMAIN: 'githoot.com',
+      CDN_DOMAIN: 'cdn.githoot.com',
+      EARLY_ACCESS_TOTAL_SLOTS: '100',
+      POSTHOG_API_KEY: 'ph_test_key'
+    } as unknown as Env;
+
+    const res = await app.request('/api/config', {}, mockEnv);
+    expect(res.status).toBe(200);
+
+    const config = (await res.json()) as PublicConfig;
+    expect(config.free_until).toBe(100);
+    expect(config.charge_after_usd).toBe(0.99);
+    expect(config.posthog_configured).toBe(true);
+    expect(config.analytics_enabled).toBe(true);
+    expect(config.environment).toBe('production');
+    expect(config.domain).toBe('githoot.com');
+    expect(config.cdn_domain).toBe('cdn.githoot.com');
+  });
+
+  it('returns degraded: true and claimed: null, remaining: null on database failure', async () => {
+    const mockEnvBrokenDb = {
+      EARLY_ACCESS_TOTAL_SLOTS: '100',
+      DB: {
+        prepare: () => {
+          throw new Error('D1 connection broken');
+        }
+      }
+    } as unknown as Env;
+
+    const res = await app.request('/api/early-access/status', {}, mockEnvBrokenDb);
+    expect(res.status).toBe(200);
+
+    const status = (await res.json()) as EarlyAccessStatus;
+    expect(status.claimed).toBeNull();
+    expect(status.remaining).toBeNull();
+    expect(status.total).toBe(100);
+    expect(status.is_free).toBe(true);
+  });
+
+  it('returns degraded: false and exact claimed/remaining numbers on healthy database', async () => {
+    const mockEnvHealthyDb = {
+      EARLY_ACCESS_TOTAL_SLOTS: '100',
+      DB: {
+        prepare: () => ({
+          first: async () => ({ count: 42 })
+        })
+      }
+    } as unknown as Env;
+
+    const status = await getEarlyAccessStatus(mockEnvHealthyDb);
+    expect(status.degraded).toBe(false);
+    expect(status.claimed).toBe(42);
+    expect(status.remaining).toBe(58);
+    expect(status.total).toBe(100);
+    expect(status.is_free).toBe(true);
   });
 });
