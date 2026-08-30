@@ -77,4 +77,31 @@ Hệ màu tuân thủ tỷ lệ phân bổ thị giác 60 / 30 / 10 và sử d�
 ## 6. Spritesheet Specifications
 
 - **Egg Spritesheet:** 4 dải hoạt ảnh (`idle` 6 frames, `wobble` 8 frames, `crack` 10 frames, `hatch_burst` 16 frames).
-- **Pet Spritesheet (Gemini Nano Banana 2):** Lưới 4x2 chuẩn hóa gồm Hero Portrait (512x512) và 7 tư thế (`idle`, `happy`, `sleepy`, `proud`, `angry`, `work`, `celebrate`) đã xử lý tách nền Alpha và Green De-spill.
+- **Pet Emotion Spritesheet (Gemini Nano Banana 2):** Lưới 4x2 chuẩn hóa gồm Hero Portrait (512x512) và 7 tư thế (`idle`, `happy`, `sleepy`, `proud`, `angry`, `work`, `celebrate`) đã xử lý tách nền Alpha và Green De-spill.
+- **Superhero Landing Spritesheet (16 pose):** Lưới **4x4**, frame **256x256**, dùng cho hoạt ảnh tiếp đất lúc Gacha Reveal. Thứ tự khung (reading order):
+  1. `hover` — bay lơ lửng
+  2. `dive_start` — lao xuống
+  3. `dive_steep` — bổ nhào dốc (motion streaks)
+  4. `plunge` — rơi nhanh
+  5. `approach` — tiếp cận mặt đất
+  6. `pre_impact` — vươn tay xuống trước va chạm
+  7. `three_point_landing` — **tiếp đất 3 điểm** (khung nhấn, đồng bộ camera shake + VFX)
+  8. `impact_crouch` — khựng, nứt sàn
+  9. `shockwave` — sóng xung kích
+  10. `recoil` — bật lại
+  11. `rise_knee` — nhấc gối
+  12. `rise_aura` — vươn lên, hào quang nhóm
+  13. `stand_up` — đứng dậy
+  14. `aura_flare` — bừng hào quang
+  15. `settle` — ưỡn ngực
+  16. `hero_stance` — thế đứng anh hùng (khung giữ cuối)
+
+  Asset xuất ra: `{id}-landing16-sheet.png` (4x4, 1024x1024) + `{id}-landing16-strip.png` (4096x256) cho CSS `steps(15)` player. Web player phát ở ~1.1s (slow-mo 4.4s).
+
+### 6.1 Quy trình sinh 16 pose (bắt buộc)
+
+- Sinh **từng frame riêng lẻ** (1 pose / 1 lần gọi), **không** yêu cầu model tự vẽ cả lưới: model thường sai số cột/hàng (đã gặp 5x4 thay vì 4x4) và lặp pose.
+- Mỗi lần gọi **phải kèm ảnh Guardian đã commit làm reference** (`{id}-gemini-raw.jpg`) để giữ bất biến danh tính (1 GitHub ID = 1 Guardian DNA). Prompt phải ghi rõ reference chỉ dùng cho style/identity, **không** copy layout/label/pose.
+- Sau khi sinh: tách chroma `#00FF00` + Green De-spill, dò **contour toàn ảnh** rồi căn giữa vào frame 256x256. **Không** cắt theo offset lưới cố định.
+- Cổng kiểm duyệt mỗi frame (kể cả frame lấy từ cache): loại bỏ ảnh collage (>4 vùng lớn), ảnh nhiều nhân vật (vùng lớn thứ 2 > 30% vùng chính), subject quá nhỏ (<6% khung) hoặc bbox quá rộng (aspect > 3.2). Fail thì render lại, tối đa 3 lần.
+- Kiểm tra danh tính bằng mắt trên sheet 4x4 trước khi đưa vào UI (silhouette, tỉ lệ, palette, crest phải khớp reference).

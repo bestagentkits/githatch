@@ -38,15 +38,22 @@ npm run deploy             # Deploy dist to production on Cloudflare Pages
    - Only authenticated users via GitHub OAuth within the first 100 Early Access slots (or verified credit) trigger Gemini Nano Banana 2 API calls.
    - 1 GitHub ID = 1 immutable Guardian DNA. Never allow free rerolls.
 
-4. **Sprite Grid Slicing & Alpha Masking:**
-   - Gemini Nano Banana 2 produces 4x2 grid images on `#00FF00` chroma background.
-   - **Never slice with fixed pixel offsets**. Use **WASM Smart Bounding-Box Detection** to locate character contours and center them onto `256 x 256 px` frames.
+4. **Sprite Grid Slicing & Alpha Masking (Image models drift pixels):**
+   - Gemini Nano Banana 2 produces multi-pose grid images on `#00FF00` chroma background.
+   - **Never slice with fixed pixel offsets** (e.g. `col * 256`). Use **Smart Bounding-Box / contour detection** to locate actual character contours and center them onto `256 x 256 px` frames.
+   - **Never trust the model to emit an exact grid.** Empirically it returns wrong geometry (asked 4x4, returned 5x4 with dividers) and repeats poses. For multi-pose sets, generate **one pose per API call** and composite the grid locally — that makes geometry deterministic and removes grid-slicing risk entirely.
    - Always apply the **Green De-Spill filter** ($g = \min(g, (r+b)/2)$) before saving transparent WebP assets to R2 (`chroma-removal.ts:34`).
+   - Every generated frame MUST pass an acceptance gate before use — reject collage echoes (>4 large components), multi-subject frames (2nd component > 30% of main), too-small subjects (<6% frame fill), and over-wide bboxes (aspect > 3.2). Re-validate cached frames on every run; a cache is never implicitly accepted.
+   - Reference-condition every character render on the committed Guardian art (`assets/sample-pets/{id}-gemini-raw.jpg`) so `1 GitHub ID = 1 Guardian DNA` holds. State in the prompt that the reference is style/identity ONLY (do not copy its layout, panels, labels, or poses). Verify identity visually on the composited sheet before wiring it into UI.
 
 5. **Cloudflare Runtime Secrets Pipeline:**
+   - Passing secrets in GitHub Actions `env:` only sets them in the CI runner, not the edge runtime.
    - Secrets MUST be uploaded via direct stdin pipe:
      `printf '%s' "$SECRET" | npx wrangler pages secret put <KEY> --project-name=githoot`.
    - Never use `wrangler-action@v3` command input for secrets (prepends `wrangler` and corrupts shell pipes).
+   - Production secrets (`GEMINI_API_KEY`, `GITHUB_TOKENS`, `AUTH_SECRET`, `R2_*`) must be bound explicitly to Cloudflare Pages Functions.
+   - **Local dev on this PC only:** `GEMINI_API_KEY` may be sourced out-of-band from the untracked file `D:/www/oss/githatch/.env` — this absolute path is valid ONLY on this machine (Windows dev box where that file exists). Scripts MUST read it at runtime (override via `GITHOOT_ENV_PATH`), MUST fail closed when the file or key is missing, and MUST NEVER print the key or copy it into tracked files, reports, screenshots, logs, or chat output. On any other machine/CI, provide the key through the environment or the Cloudflare secret above instead.
+   - **Model allowlist:** image generation MUST target a Nano Banana 2/Pro id (`nano-banana-pro-preview`, `gemini-3-pro-image`, `gemini-3-pro-image-preview`), confirmed against live `ListModels`. Reject non-allowlisted overrides and never silently fall back to Nano Banana 1 (`gemini-2.5-flash-image`).
 
 6. **Tamagotchi Inactivity Policy:**
    - Never penalize users or kill pets during GitHub inactivity — only adjust visual mood states (`mood-engine.ts:calculateGuardianMood`).
