@@ -1,23 +1,29 @@
 // ============================================================================
 // GitHoot Discovery & Explore Page (src/client/pages/ExplorePage.tsx)
+// Interactive companion archetypes directory in English.
 // ============================================================================
 
 import React, { useState } from 'react';
 import { EGG_MANIFEST, type EggArchetype } from '../assets/eggs/manifest';
-import { EggSpritesheetPlayer } from '../components/EggSpritesheetPlayer';
 
 export const ExplorePage: React.FC = () => {
-  const [selectedLang, setSelectedLang] = useState<string>('All');
-  const [selectedArchetype, setSelectedArchetype] = useState<EggArchetype>(EGG_MANIFEST['ember-core']!);
+  const [selectedArchetype, setSelectedArchetype] = useState<EggArchetype>(EGG_MANIFEST['neon-byte']!);
   const [searchVal, setSearchVal] = useState('');
+  const [wobbleState, setWobbleState] = useState(false);
 
-  const languages = ['All', 'Rust & Go', 'TypeScript & Web', 'Python & AI', 'Open Source', 'Low-level C/C++', 'Security'];
+  const archetypesList = Object.values(EGG_MANIFEST);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchVal.trim()) {
-      window.location.pathname = `/${encodeURIComponent(searchVal.trim())}`;
+    const clean = searchVal.trim().replace(/^@/, '');
+    if (clean) {
+      window.location.pathname = `/${encodeURIComponent(clean)}`;
     }
+  };
+
+  const triggerEggWobble = () => {
+    setWobbleState(true);
+    setTimeout(() => setWobbleState(false), 300);
   };
 
   return (
@@ -26,127 +32,175 @@ export const ExplorePage: React.FC = () => {
         
         {/* Header */}
         <div style={{ marginBottom: '40px', textAlign: 'center' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', fontWeight: 800, color: '#00f0ff', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>
-            ✦ Companion Archetype Directory ✦
+          <div className="eyebrow" style={{ marginBottom: '12px' }}>
+            <span>✦</span>
+            <span>COMPANION ARCHETYPE DIRECTORY</span>
+            <span>✦</span>
           </div>
-          <h1 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '36px', fontWeight: 900, marginBottom: '12px' }}>
-            Khám Phá 8 Đại Diện Linh Thú GitHoot
+          <h1 style={{ fontFamily: "'Archivo', sans-serif", fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 900, marginBottom: '12px' }}>
+            Explore 8 GitHoot Guardian Elements
           </h1>
-          <p style={{ color: '#8b9bb4', fontSize: '15px', maxWidth: '640px', margin: '0 auto' }}>
-            Mỗi hệ nguyên tố được tôi luyện từ những phong cách viết mã và công nghệ đặc trưng của lập trình viên.
+          <p style={{ color: '#8b9bb4', fontSize: '15px', maxWidth: '640px', margin: '0 auto', lineHeight: 1.6 }}>
+            Every elemental archetype is forged from developer coding affinities, programming language stacks, and open-source contribution patterns.
           </p>
         </div>
 
         {/* Search Bar */}
-        <form onSubmit={handleSearch} style={{ maxWidth: '480px', margin: '0 auto 36px', display: 'flex', gap: '8px', background: '#0d111a', padding: '6px', borderRadius: '10px', border: '1px solid rgba(0,240,255,0.3)' }}>
+        <form onSubmit={handleSearch} style={{ maxWidth: '480px', margin: '0 auto 40px', display: 'flex', gap: '8px', background: '#0d111a', padding: '6px', borderRadius: '10px', border: '1px solid rgba(0,240,255,0.3)', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+          <label htmlFor="explore-search-input" className="sr-only">Look up any GitHub username</label>
+          <span style={{ display: 'flex', alignItems: 'center', paddingLeft: '10px', color: '#53627a', fontFamily: "'JetBrains Mono', monospace", fontSize: '14px' }}>
+            githoot.com/
+          </span>
           <input
             type="text"
-            placeholder="Tra cứu GitHub username bất kỳ..."
+            id="explore-search-input"
+            placeholder="octocat..."
             value={searchVal}
             onChange={(e) => setSearchVal(e.target.value)}
-            style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', padding: '8px 12px', outline: 'none', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' }}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: 'none',
+              color: '#fff',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '14px',
+              fontWeight: 700,
+              outline: 'none',
+              minWidth: 0
+            }}
           />
           <button
             type="submit"
-            style={{ background: '#00f0ff', color: '#000', border: 'none', padding: '8px 18px', borderRadius: '6px', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', fontWeight: 800, cursor: 'pointer' }}
+            style={{
+              background: '#00f0ff',
+              border: 'none',
+              color: '#000',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '13px',
+              fontWeight: 800,
+              padding: '8px 18px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
           >
-            Tra cứu →
+            Preview
           </button>
         </form>
 
         {/* Detail Showcase Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: '32px', marginBottom: '48px', background: '#0d111a', border: '1px solid rgba(0,240,255,0.15)', borderRadius: '20px', padding: '32px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
-          
-          {/* Egg Interactive Preview */}
-          <div style={{ background: '#141b27', borderRadius: '16px', border: `2px solid ${selectedArchetype.color.primary}`, padding: '20px', textAlign: 'center', boxShadow: `0 0 24px ${selectedArchetype.color.glow}` }}>
-            <EggSpritesheetPlayer archetypeId={selectedArchetype.id} />
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: '32px',
+          marginBottom: '48px',
+          background: '#0d111a',
+          border: '1px solid rgba(0,240,255,0.15)',
+          borderRadius: '20px',
+          padding: '32px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+          alignItems: 'center'
+        }}>
+          {/* Egg Interactive Canvas Simulator */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <div
+              className="pure-css-egg"
+              onClick={triggerEggWobble}
+              style={{
+                '--egg-primary': selectedArchetype.color.primary,
+                '--egg-glow': selectedArchetype.color.glow,
+                width: '120px',
+                height: '160px',
+                transform: wobbleState ? 'scale(1.1) rotate(8deg)' : 'scale(1) rotate(0deg)'
+              } as React.CSSProperties}
+            >
+              <div className="crack" />
+            </div>
+            <div style={{ marginTop: '16px', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#8b9bb4' }}>
+              Click to wobble (0 bytes CSS)
+            </div>
           </div>
 
-          {/* Archetype Lore & Stats */}
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-              <span style={{ background: selectedArchetype.color.primary, color: '#000', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', fontWeight: 900, padding: '4px 12px', borderRadius: '9999px', textTransform: 'uppercase' }}>
-                Hệ {selectedArchetype.element}
-              </span>
-              <span style={{ color: '#8b9bb4', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}>
-                Archetype #{selectedArchetype.id}
-              </span>
+          {/* Archetype Description & Traits */}
+          <div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', fontWeight: 800, color: selectedArchetype.color.primary, marginBottom: '6px' }}>
+              {selectedArchetype.element.toUpperCase()}
             </div>
-
-            <h2 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '28px', fontWeight: 900, marginBottom: '12px' }}>
+            <h2 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '28px', fontWeight: 900, marginBottom: '12px', color: '#fff' }}>
               {selectedArchetype.name}
             </h2>
-
-            <p style={{ fontSize: '15px', color: '#f0f6fc', lineHeight: 1.6, marginBottom: '20px' }}>
+            <p style={{ color: '#8b9bb4', fontSize: '15px', lineHeight: 1.6, marginBottom: '20px' }}>
               {selectedArchetype.description}
             </p>
 
-            {/* Trait Matrix */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-              <div style={{ background: '#141b27', padding: '12px 16px', borderRadius: '8px' }}>
-                <div style={{ fontSize: '11px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Nguyên tố chủ đạo</div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '15px', fontWeight: 800, color: selectedArchetype.color.primary, marginTop: '2px' }}>
-                  {selectedArchetype.element}
-                </div>
+              <div style={{ background: '#141b27', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#53627a', textTransform: 'uppercase' }}>Companion Species</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{selectedArchetype.species}</div>
               </div>
-              <div style={{ background: '#141b27', padding: '12px 16px', borderRadius: '8px' }}>
-                <div style={{ fontSize: '11px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Màu phát sáng</div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '15px', fontWeight: 800, color: selectedArchetype.color.particle, marginTop: '2px' }}>
-                  {selectedArchetype.color.primary}
-                </div>
+              <div style={{ background: '#141b27', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#53627a', textTransform: 'uppercase' }}>Element Affinity</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px', color: selectedArchetype.color.primary }}>{selectedArchetype.element.split('/')[0]}</div>
               </div>
             </div>
 
-            <a
-              href={`/octocat`}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                background: selectedArchetype.color.primary,
-                color: '#000',
-                padding: '12px 24px',
-                borderRadius: '8px',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: '13px',
-                fontWeight: 800,
-                textDecoration: 'none',
-                maxWidth: '280px',
-                boxShadow: `0 0 16px ${selectedArchetype.color.glow}`
-              }}
-            >
-              Xem Thử Trứng Mẫu →
-            </a>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <a
+                href="/octocat"
+                style={{
+                  background: 'rgba(0,240,255,0.1)',
+                  border: '1px solid #00f0ff',
+                  color: '#00f0ff',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  textDecoration: 'none',
+                  fontSize: '13px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: 700
+                }}
+              >
+                Preview @octocat ➔
+              </a>
+            </div>
           </div>
-
         </div>
 
         {/* Archetypes Selector Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-          {Object.values(EGG_MANIFEST).map(egg => (
-            <div
-              key={egg.id}
-              onClick={() => setSelectedArchetype(egg)}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }} role="tablist" aria-label="Archetype list">
+          {archetypesList.map((arch) => (
+            <button
+              key={arch.id}
+              type="button"
+              role="tab"
+              aria-selected={selectedArchetype.id === arch.id}
+              aria-label={`${arch.name} — ${arch.element}`}
+              onClick={() => setSelectedArchetype(arch)}
               style={{
-                background: selectedArchetype.id === egg.id ? '#1c2637' : '#0d111a',
-                border: selectedArchetype.id === egg.id ? `2px solid ${egg.color.primary}` : '1px solid rgba(0,240,255,0.12)',
+                background: selectedArchetype.id === arch.id ? '#1c2637' : '#0d111a',
+                border: selectedArchetype.id === arch.id ? `2px solid ${arch.color.primary}` : '1px solid rgba(255,255,255,0.08)',
                 borderRadius: '12px',
-                padding: '20px',
+                padding: '18px',
                 cursor: 'pointer',
-                transition: 'all 0.15s',
-                boxShadow: selectedArchetype.id === egg.id ? `0 0 20px ${egg.color.glow}` : 'none'
+                textAlign: 'left',
+                transition: 'all 0.2s',
+                boxShadow: selectedArchetype.id === arch.id ? `0 0 20px ${arch.color.glow}` : 'none',
+                fontFamily: 'inherit',
+                color: 'inherit'
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '11px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: egg.color.primary }}>
-                  Hệ {egg.element}
+                <span style={{ fontSize: '11px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: arch.color.primary }}>
+                  {arch.element}
                 </span>
-                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: egg.color.primary }} />
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: arch.color.primary, boxShadow: `0 0 6px ${arch.color.primary}` }} />
               </div>
-              <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#fff', marginBottom: '4px' }}>{egg.name}</h3>
-              <p style={{ fontSize: '12px', color: '#8b9bb4', lineHeight: 1.4 }}>{egg.description}</p>
-            </div>
+              <div style={{ fontWeight: 800, fontSize: '15px', color: '#fff', marginBottom: '4px' }}>
+                {arch.name}
+              </div>
+              <div style={{ fontSize: '12px', color: '#8b9bb4', lineHeight: 1.4 }}>
+                {arch.description}
+              </div>
+            </button>
           ))}
         </div>
 

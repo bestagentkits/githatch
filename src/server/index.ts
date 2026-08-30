@@ -34,6 +34,22 @@ app.get('/health', (c) => {
   });
 });
 
+// Public Client Configuration & Status
+app.get('/api/config', (c) => {
+  const total = parseInt(c.env.EARLY_ACCESS_TOTAL_SLOTS || '100', 10);
+  const posthog = Boolean(c.env.POSTHOG_API_KEY);
+  return c.json({
+    quota_total: total,
+    free_until: total,
+    charge_after_usd: 0.99,
+    posthog_configured: posthog,
+    analytics_enabled: posthog,
+    environment: c.env.ENVIRONMENT || 'development',
+    domain: c.env.DOMAIN || 'githoot.com',
+    cdn_domain: c.env.CDN_DOMAIN || 'cdn.githoot.com'
+  });
+});
+
 // Profile Lookup API (SWR & Anti-throttling)
 app.get('/api/profile/:username', async (c) => {
   const username = c.req.param('username');
@@ -67,15 +83,19 @@ app.get('/api/early-access/status', async (c) => {
       total: totalSlots,
       claimed,
       remaining,
-      is_free: remaining > 0
+      is_free: remaining > 0,
+      user_has_claimed: false,
+      degraded: false
     });
   } catch {
-    // Fallback if DB not ready
+    // Fallback if DB not ready / degraded (never synthesize fake 0/100 numbers)
     return c.json({
       total: 100,
-      claimed: 0,
-      remaining: 100,
-      is_free: true
+      claimed: null,
+      remaining: null,
+      is_free: true,
+      user_has_claimed: false,
+      degraded: true
     });
   }
 });

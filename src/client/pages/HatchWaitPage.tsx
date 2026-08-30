@@ -15,7 +15,7 @@ export const HatchWaitPage: React.FC<HatchWaitPageProps> = ({
   guardianId,
   onReady
 }) => {
-  const [progressStep, setProgressStep] = useState('Đang kết nối Gemini Nano Banana 2...');
+  const [progressStep, setProgressStep] = useState('Connecting to Gemini Nano Banana 2 Pipeline...');
   const [dots, setDots] = useState('');
 
   useEffect(() => {
@@ -24,12 +24,12 @@ export const HatchWaitPage: React.FC<HatchWaitPageProps> = ({
     }, 400);
 
     const steps = [
-      'Đang phân tích 1,420 commits và top ngôn ngữ của bạn...',
-      'Đang biên dịch Prompt Matrix lưới 4x2 cho Gemini Nano Banana 2...',
-      'Đang sinh ảnh Hero Portrait & 7 biểu cảm chuyển động...',
-      'Đang tách nền Alpha Mask & khử viền xanh (Green De-Spill)...',
-      'Đang lưu trữ Assets lên Cloudflare R2 CDN...',
-      'Trứng đã sẵn sàng thức tỉnh!'
+      'Analyzing public commits and language fingerprint...',
+      'Compiling 4x2 Prompt Matrix for Gemini Nano Banana 2...',
+      'Synthesizing Hero Portrait & 7 expressive motion poses...',
+      'Extracting Alpha Mask & applying Green De-Spill filter...',
+      'Distributing WebP assets to Cloudflare R2 CDN...',
+      'Egg is ready to awaken!'
     ];
 
     let stepIndex = 0;
@@ -77,7 +77,7 @@ export const HatchWaitPage: React.FC<HatchWaitPageProps> = ({
       }} />
 
       <h2 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '28px', fontWeight: 900, marginBottom: '12px' }}>
-        Đang Khởi Tạo Linh Thú Của @{username}{dots}
+        Awakening Guardian for @{username}{dots}
       </h2>
 
       <div style={{

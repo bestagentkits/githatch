@@ -273,9 +273,10 @@ export async function scrapeGitHubPublicProfile(username: string): Promise<{
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
     });
-
-    if (res.status === 404 || !res.ok) return null;
-
+    if (res.status === 404) {
+      throw new UserNotFoundError(username);
+    }
+    if (!res.ok) return null;
     const html = await res.text();
 
     const userIdMatch = html.match(/&quot;profile_user_id&quot;:(\d+)/) || html.match(/data-scope-id="(\d+)"/);
@@ -328,7 +329,8 @@ export async function scrapeGitHubPublicProfile(username: string): Promise<{
       followers,
       topLanguages
     };
-  } catch {
+  } catch (err) {
+    if (err instanceof UserNotFoundError) throw err;
     return null;
   }
 }

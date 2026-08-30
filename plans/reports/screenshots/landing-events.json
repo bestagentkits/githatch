@@ -1,0 +1,52 @@
+{
+  "audit_date": "2026-08-30T07:50:00Z",
+  "privacy_guarantee": "Zero PII transmitted; no username, email, avatar URL, or free text stored in telemetry payloads.",
+  "allow_listed_events": [
+    {
+      "event": "landing_viewed",
+      "trigger": "Initial page mount on /",
+      "properties_allowed": ["viewport_width", "device_type", "is_reduced_motion"],
+      "pii_risk": "NONE"
+    },
+    {
+      "event": "profile_lookup_submitted",
+      "trigger": "Search input submitted on Hero, Nav, or Early Access",
+      "properties_allowed": ["input_length", "source"],
+      "pii_risk": "NONE (length integer only, handle string omitted)"
+    },
+    {
+      "event": "demo_interacted",
+      "trigger": "User plays, toggles slowmo, scrubs, or resets 16-pose player",
+      "properties_allowed": ["action", "frame"],
+      "pii_risk": "NONE"
+    },
+    {
+      "event": "archetype_selected",
+      "trigger": "User selects an elemental egg tab",
+      "properties_allowed": ["archetype_id", "element"],
+      "pii_risk": "NONE"
+    },
+    {
+      "event": "claim_started",
+      "trigger": "User clicks claim/preview on Early Access section",
+      "properties_allowed": ["slot_tier", "slots_remaining"],
+      "pii_risk": "NONE"
+    },
+    {
+      "event": "creator_link_clicked",
+      "trigger": "User clicks link in creator attribution block",
+      "properties_allowed": ["destination"],
+      "pii_risk": "NONE"
+    }
+  ],
+  "disallowed_properties": [
+    "username",
+    "handle",
+    "github_id",
+    "github_user_id",
+    "avatar_url",
+    "email",
+    "query",
+    "typed_text"
+  ]
+}

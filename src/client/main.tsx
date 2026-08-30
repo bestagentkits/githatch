@@ -2,10 +2,11 @@
 // GitHoot React Client Entrypoint & Router (src/client/main.tsx)
 // ============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/responsive.css';
 import { Navbar } from './components/Navbar';
+import { Footer } from './components/Footer';
 import { HomePage } from './pages/HomePage';
 import { ExplorePage } from './pages/ExplorePage';
 import { DesignSystemPage } from './pages/DesignSystemPage';
@@ -13,45 +14,108 @@ import { DocsPage } from './pages/DocsPage';
 import { PublicProfilePage } from './pages/PublicProfilePage';
 import { GachaRevealModal } from './components/GachaRevealModal';
 import { CheckoutModal } from './components/CheckoutModal';
-import type { GuardianSummary, EarlyAccessStatus } from '../server/types';
+import type { GuardianSummary, EarlyAccessStatus, PublicConfig } from '../server/types';
+
+interface RouteState {
+  route: string;
+  profileUsername: string | null;
+}
+
+function parsePath(pathStr: string): RouteState {
+  const path = pathStr.replace(/\/$/, '') || '/';
+  if (path === '/' || path === '') {
+    return { route: '/', profileUsername: null };
+  }
+  if (path === '/explore') {
+    return { route: '/explore', profileUsername: null };
+  }
+  if (path === '/design') {
+    return { route: '/design', profileUsername: null };
+  }
+  if (path === '/docs') {
+    return { route: '/docs', profileUsername: null };
+  }
+
+  // Profile Route: /:username
+  const rawUser = path.replace(/^\//, '');
+  if (!rawUser.includes('.')) {
+    return { route: '/profile', profileUsername: rawUser };
+  }
+
+  return { route: '/', profileUsername: null };
+}
 
 function App() {
-  const [currentRoute, setCurrentRoute] = useState<string>('/');
-  const [profileUsername, setProfileUsername] = useState<string | null>(null);
-  const [quota, setQuota] = useState<EarlyAccessStatus | null>(null);
+  const [routeState, setRouteState] = useState<RouteState>(() => parsePath(window.location.pathname));
+  const [quotaState, setQuotaState] = useState<{ data: EarlyAccessStatus | null; loading: boolean; error: boolean }>({
+    data: null,
+    loading: true,
+    error: false
+  });
+  const [configState, setConfigState] = useState<{ data: PublicConfig | null; loading: boolean; error: boolean }>({
+    data: null,
+    loading: true,
+    error: false
+  });
+
   const [hatchOpen, setHatchOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [guardian, setGuardian] = useState<GuardianSummary | null>(null);
 
+  const resolveRoute = useCallback((path: string) => {
+    setRouteState(parsePath(path));
+  }, []);
+
+  const handleRouteChange = useCallback((route: string) => {
+    window.history.pushState({}, '', route);
+    resolveRoute(route);
+  }, [resolveRoute]);
+
   useEffect(() => {
-    // 1. Fetch live early access status for Navbar
+    // 1. Fetch live early access status
     fetch('/api/early-access/status')
-      .then(res => res.json())
-      .then(data => setQuota(data as EarlyAccessStatus))
-      .catch(() => {});
+      .then((res) => {
+        if (!res.ok) throw new Error('Status HTTP ' + res.status);
+        return res.json();
+      })
+      .then((data) => {
+        setQuotaState({ data: data as EarlyAccessStatus, loading: false, error: false });
+      })
+      .catch(() => {
+        // Explicit degraded state on network / server failure (never synthesize fake numbers)
+        setQuotaState({
+          data: {
+            total: 100,
+            claimed: null,
+            remaining: null,
+            is_free: true,
+            user_has_claimed: false,
+            degraded: true
+          },
+          loading: false,
+          error: true
+        });
+      });
 
-    // 2. Parse Route from window.location
-    const path = window.location.pathname.replace(/\/$/, '') || '/';
+    // 2. Fetch public client configuration
+    fetch('/api/config')
+      .then((res) => {
+        if (!res.ok) throw new Error('Config HTTP ' + res.status);
+        return res.json();
+      })
+      .then((data) => {
+        setConfigState({ data: data as PublicConfig, loading: false, error: false });
+      })
+      .catch(() => {
+        setConfigState({
+          data: null,
+          loading: false,
+          error: true
+        });
+      });
+
+    // 3. Handle modal query triggers (?hatch=true / ?checkout=true)
     const params = new URLSearchParams(window.location.search);
-
-    if (path === '/' || path === '') {
-      setCurrentRoute('/');
-    } else if (path === '/explore') {
-      setCurrentRoute('/explore');
-    } else if (path === '/design') {
-      setCurrentRoute('/design');
-    } else if (path === '/docs') {
-      setCurrentRoute('/docs');
-    } else {
-      // User Profile Route: /:username
-      const rawUser = path.replace(/^\//, '');
-      if (!rawUser.includes('.')) {
-        setCurrentRoute('/profile');
-        setProfileUsername(rawUser);
-      }
-    }
-
-    // Check modal triggers
     if (params.get('hatch') === 'true') {
       const gId = params.get('guardian_id') || 'demo';
       setGuardian({
@@ -61,7 +125,7 @@ function App() {
         element: 'Fire',
         rarity_tier: 'Legendary',
         level: 1,
-        experience: 420,
+        experience: 0,
         energy_state: 'Active',
         hero_image_url: '/assets/sample-pets/emberfox.jpg',
         spritesheet_url: '/assets/sample-pets/emberfox.jpg'
@@ -72,17 +136,28 @@ function App() {
     if (params.get('checkout') === 'true') {
       setCheckoutOpen(true);
     }
-  }, []);
 
-  const handleRouteChange = (route: string) => {
-    setCurrentRoute(route);
-    window.history.pushState({}, '', route);
-  };
+    // 4. Browser history (back/forward navigation)
+    const handlePopState = () => {
+      resolveRoute(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [resolveRoute]);
 
   const renderActivePage = () => {
-    switch (currentRoute) {
+    switch (routeState.route) {
       case '/':
-        return <HomePage onRouteChange={handleRouteChange} />;
+        return (
+          <HomePage
+            quota={quotaState.data}
+            quotaLoading={quotaState.loading}
+            config={configState.data}
+            configLoading={configState.loading}
+            configError={configState.error}
+            onRouteChange={handleRouteChange}
+          />
+        );
       case '/explore':
         return <ExplorePage />;
       case '/design':
@@ -90,29 +165,60 @@ function App() {
       case '/docs':
         return <DocsPage />;
       case '/profile':
-        return profileUsername ? <PublicProfilePage username={profileUsername} /> : <HomePage onRouteChange={handleRouteChange} />;
+        return routeState.profileUsername ? (
+          <PublicProfilePage username={routeState.profileUsername} />
+        ) : (
+          <HomePage
+            quota={quotaState.data}
+            quotaLoading={quotaState.loading}
+            config={configState.data}
+            configLoading={configState.loading}
+            configError={configState.error}
+            onRouteChange={handleRouteChange}
+          />
+        );
       default:
-        return <HomePage onRouteChange={handleRouteChange} />;
+        return (
+          <HomePage
+            quota={quotaState.data}
+            quotaLoading={quotaState.loading}
+            config={configState.data}
+            configLoading={configState.loading}
+            configError={configState.error}
+            onRouteChange={handleRouteChange}
+          />
+        );
     }
   };
 
   return (
     <>
-      <Navbar quota={quota} activeRoute={currentRoute} onRouteChange={handleRouteChange} />
+      <Navbar
+        quota={quotaState.data}
+        activeRoute={routeState.route === '/profile' && routeState.profileUsername ? `/${routeState.profileUsername}` : routeState.route}
+        onRouteChange={handleRouteChange}
+      />
       {renderActivePage()}
+      <Footer
+        quota={quotaState.data}
+        config={configState.data}
+        configLoading={configState.loading}
+        configError={configState.error}
+        onRouteChange={handleRouteChange}
+      />
 
-      {guardian && profileUsername && (
+      {guardian && routeState.profileUsername && (
         <GachaRevealModal
-          username={profileUsername}
+          username={routeState.profileUsername}
           guardian={guardian}
           isOpen={hatchOpen}
           onClose={() => setHatchOpen(false)}
         />
       )}
 
-      {profileUsername && (
+      {routeState.profileUsername && (
         <CheckoutModal
-          username={profileUsername}
+          username={routeState.profileUsername}
           isOpen={checkoutOpen}
           onClose={() => setCheckoutOpen(false)}
         />
