@@ -4,10 +4,10 @@
 // ============================================================================
 
 import { describe, it, expect } from 'vitest';
-import { generateDegradedProfile, resolveGitHubProfile } from '../../src/server/services/github/resolver';
+import { generateDegradedProfile, normalizeGuardianSummary, resolveGitHubProfile } from '../../src/server/services/github/resolver';
 import { parseTokenPool, recordTokenResponse } from '../../src/server/services/github/token-pool';
 import { calculateGuardianMood } from '../../src/server/services/progression/mood-engine';
-import type { Env, PublicConfig, EarlyAccessStatus, ResolvedProfile } from '../../src/server/types';
+import type { Env, PublicConfig, EarlyAccessStatus, ResolvedProfile, GuardianSummary } from '../../src/server/types';
 import app from '../../src/server/index';
 import { getEarlyAccessStatus } from '../../src/server/services/claim/quota';
 describe('SWR Resolver & Degraded Seed Fallback', () => {
@@ -149,8 +149,8 @@ describe('Public Config & Quota Endpoint Contracts', () => {
     expect(status.is_free).toBe(true);
   });
 
-  it('normalizes sample pet heroUrl to canonical transparent .webp matching species', async () => {
-    const mockDbRow = {
+  it('normalizes sample pet heroUrl to canonical transparent .webp matching species', () => {
+    const rawGuardian: GuardianSummary = {
       id: 'test-guardian-id',
       name: 'Zenith Celestial Drake',
       species: 'Zenith Celestial Drake',
@@ -163,26 +163,41 @@ describe('Public Config & Quota Endpoint Contracts', () => {
       spritesheet_url: null
     };
 
-    const mockEnvWithClaimed = {
-      DB: {
-        prepare: () => ({
-          bind: () => ({
-            first: async () => mockDbRow
-          })
-        })
-      },
-      CACHE_KV: {
-        get: async () => null,
-        put: async () => {}
-      }
-    } as unknown as Env;
-
-    const profile = await resolveGitHubProfile('octocat', mockEnvWithClaimed);
-    expect(profile.claimed).toBe(true);
-    expect(profile.guardian).toBeDefined();
-    expect(profile.guardian?.hero_image_url).toBe('/assets/sample-pets/celestialdrake.webp');
+    const normalized = normalizeGuardianSummary(rawGuardian);
+    expect(normalized).toBeDefined();
+    expect(normalized?.hero_image_url).toBe('/assets/sample-pets/celestialdrake.webp');
+    expect(normalized?.species).toBe('Zenith Celestial Drake');
   });
 
+  it('normalizes all 8 canonical species correctly from legacy paths', () => {
+    const speciesList: Array<[string, string]> = [
+      ['Ignis Emberfox', 'emberfox'],
+      ['Aether Neon Byte', 'neonbyte'],
+      ['Nox Abyssal Pearl', 'abyssal'],
+      ['Sylvan Verdant Golem', 'verdant'],
+      ['Helios Solar Griffin', 'solargriffin'],
+      ['Astral Void Stalker', 'voidstalker'],
+      ['Ferrum Rust Golem', 'rustgolem'],
+      ['Zenith Celestial Drake', 'celestialdrake']
+    ];
+
+    for (const [species, slug] of speciesList) {
+      const g: GuardianSummary = {
+        id: 'g-test',
+        name: species,
+        species,
+        element: 'Fire',
+        rarity_tier: 'Legendary',
+        level: 1,
+        experience: 0,
+        energy_state: 'Active',
+        hero_image_url: `/assets/sample-pets/${slug}.jpg`,
+        spritesheet_url: null
+      };
+      const res = normalizeGuardianSummary(g);
+      expect(res?.hero_image_url).toBe(`/assets/sample-pets/${slug}.webp`);
+    }
+  });
   it('normalizes legacy sample pet heroUrl on KV fresh and stale cache hits', async () => {
     const cachedProfileWithLegacyJpg: ResolvedProfile = {
       github_user_id: 6857382,
