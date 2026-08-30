@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-30T07:45:00.000Z",
+  "timestamp": "2026-08-30T09:35:00.000Z",
   "domain": "https://githoot.com",
   "cdn": "https://cdn.githoot.com",
   "pages_project": "https://githoot.pages.dev",
@@ -68,6 +68,33 @@
       "purpose": "S2 Signature demo lazy-loaded on intersection"
     }
   ],
+  "bundle_measurements": {
+    "dist_total_bytes": 24059188,
+    "previous_unfiltered_bytes": 34835846,
+    "dead_weight_excluded_bytes": 10776658,
+    "critical_client_entry": {
+      "html_raw_bytes": 847,
+      "html_gzip_bytes": 501,
+      "css_raw_bytes": 21250,
+      "css_gzip_bytes": 4920,
+      "js_raw_bytes": 283280,
+      "js_gzip_bytes": 81860
+    }
+  },
+  "touch_target_measurements": {
+    "brand_height": 44,
+    "scrubber_height": 44,
+    "chip_height": 44,
+    "min_footer_link_height": 44,
+    "all_pass_44px": true
+  },
+  "accessibility_and_motion": {
+    "document_lang": "en",
+    "reduced_motion_player_animation": "none",
+    "reduced_motion_player_position": "-3840px 0px",
+    "reduced_motion_egg_wobble_suppressed": true,
+    "reduced_motion_scroll_behavior": "auto"
+  },
   "screenshots_captured": [
     "landing-desktop-1440-first-viewport.png",
     "landing-desktop-1440-full.png",
@@ -76,6 +103,9 @@
     "landing-mobile-375-first-viewport.png",
     "landing-mobile-375-full.png",
     "landing-mobile-375-menu-open.png",
+    "landing-375x812-reduced-motion.png",
+    "landing-keyboard-focus.png",
+    "landing-live-quota.png",
     "live-home-healthy-d1.png",
     "live-home-full-verified.png",
     "live-page-explore.png",
