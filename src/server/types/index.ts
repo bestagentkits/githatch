@@ -17,8 +17,9 @@ export interface Env {
   EARLY_ACCESS_TOTAL_SLOTS: string;
   AI_MODEL_TIER: string;
 
-  // Encrypted Runtime Secrets
+  // Encrypted Runtime Secrets & Keys
   GEMINI_API_KEY?: string;
+  POSTHOG_API_KEY?: string;
   GITHUB_TOKENS?: string; // JSON string array of PATs
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
@@ -27,6 +28,17 @@ export interface Env {
   R2_SECRET_ACCESS_KEY?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
+}
+
+export interface PublicConfig {
+  quota_total: number;
+  free_until: number;
+  charge_after_usd: number;
+  posthog_configured: boolean;
+  analytics_enabled: boolean;
+  environment: string;
+  domain: string;
+  cdn_domain: string;
 }
 
 export interface GitHubUserRaw {
@@ -96,8 +108,9 @@ export interface GuardianDNA {
 
 export interface EarlyAccessStatus {
   total: number;
-  claimed: number;
-  remaining: number;
+  claimed: number | null;
+  remaining: number | null;
   is_free: boolean;
   user_has_claimed: boolean;
+  degraded: boolean;
 }

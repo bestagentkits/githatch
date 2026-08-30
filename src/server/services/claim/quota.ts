@@ -33,16 +33,18 @@ export async function getEarlyAccessStatus(env: Env, currentUserId?: number): Pr
       claimed,
       remaining,
       is_free: remaining > 0,
-      user_has_claimed: userHasClaimed
+      user_has_claimed: userHasClaimed,
+      degraded: false
     };
   } catch (err) {
     console.warn('[Quota] Failed to get quota status:', err);
     return {
       total: 100,
-      claimed: 0,
-      remaining: 100,
+      claimed: null,
+      remaining: null,
       is_free: true,
-      user_has_claimed: false
+      user_has_claimed: false,
+      degraded: true
     };
   }
 }

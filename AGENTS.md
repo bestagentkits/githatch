@@ -63,6 +63,7 @@ npm run deploy             # Deploy dist to production on Cloudflare Pages
 
 8. **Option 1 Design System (Cyber-Arcade Fantasy):**
    - Strictly follow Option 1 Design System: `Archivo` headers, `JetBrains Mono` numbers/stats, 4pt spacing scale, and neon cyan (`#00f0ff`) / magenta (`#ff2a85`) glowing accents.
+   - **One-off approved exception (2026-08-30, user-authorized, does NOT generalize):** the single file `plans/reports/brainstorm-260830-marketing-website-redesign-ACCEPTED.html` renders in an industrial document register instead of Option 1, because it is a forensic audit dossier rather than a product surface. It still keeps the 4pt spacing scale and a project-tinted neutral ramp, and states the deviation in-page. This exception covers that one artifact only. Every other artifact, current or future, product surface or internal report, still requires Option 1 or a fresh explicit user approval.
 
 9. **MVP Scope Boundary (Hard Guard):**
    - NEVER build heavyweight out-of-scope features during MVP: Arena combat, in-game store/inventory, Guilds, or real-time webhook ingestion.

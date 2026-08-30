@@ -7,6 +7,9 @@ import path from 'path';
 import { execSync } from 'child_process';
 
 const distDir = path.join(process.cwd(), 'dist');
+if (fs.existsSync(distDir)) {
+  fs.rmSync(distDir, { recursive: true, force: true });
+}
 fs.mkdirSync(distDir, { recursive: true });
 
 // 1. Build React Client Bundle with Vite
@@ -16,22 +19,32 @@ try {
   console.log('✓ React Client compiled to dist/');
 } catch (err) {
   console.error('Vite build failed:', err.message);
+  process.exit(1);
 }
 
-// 2. Copy design showcase HTML as design.html
+// 2. Copy design showcase HTML as design-overview.html (avoiding clean-url collision with SPA /design route)
 const srcShowcase = path.join(process.cwd(), 'githoot-design-overview.html');
-const destShowcase = path.join(distDir, 'design.html');
+const destShowcase = path.join(distDir, 'design-overview.html');
 if (fs.existsSync(srcShowcase)) {
   fs.copyFileSync(srcShowcase, destShowcase);
-  console.log('✓ Copied githoot-design-overview.html to dist/design.html');
+  console.log('✓ Copied githoot-design-overview.html to dist/design-overview.html');
 }
 
-// 3. Copy static assets if present
+// 3. Copy static assets if present (excluding unreferenced raw generation artifacts)
 const srcAssets = path.join(process.cwd(), 'assets');
 const destAssets = path.join(distDir, 'assets');
 if (fs.existsSync(srcAssets)) {
-  fs.cpSync(srcAssets, destAssets, { recursive: true });
-  console.log('✓ Copied assets to dist/assets');
+  fs.cpSync(srcAssets, destAssets, {
+    recursive: true,
+    filter: (src) => {
+      const rel = path.relative(process.cwd(), src).replace(/\\/g, '/');
+      if (/-gemini-raw\.jpg$/i.test(rel)) return false;
+      if (/landing16-frames/i.test(rel)) return false;
+      if (/-landing16-.*\.png$/i.test(rel)) return false;
+      return true;
+    }
+  });
+  console.log('✓ Copied filtered production assets to dist/assets');
 }
 
 // 4. Bundle Cloudflare Pages Edge Worker
