@@ -105,6 +105,7 @@ describe('Public Config & Quota Endpoint Contracts', () => {
     expect(config.free_until).toBe(100);
     expect(config.charge_after_usd).toBe(0.99);
     expect(config.analytics_enabled).toBe(true);
+    expect(config.posthog_configured).toBe(true);
     expect(config.environment).toBe('production');
     expect(config.domain).toBe('githoot.com');
     expect(config.cdn_domain).toBe('cdn.githoot.com');

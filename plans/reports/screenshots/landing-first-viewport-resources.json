@@ -1,26 +1,40 @@
 {
+  "audit_date": "2026-08-30T10:01:47.817Z",
+  "cache_state": "cold_disabled_cache",
   "preScrollFirstViewport": {
     "count": 1,
     "images": [
       {
         "name": "neonbyte-poster.webp",
         "url": "http://localhost:8788/assets/sample-pets/neonbyte-poster.webp",
-        "encodedBodySize": 0,
-        "transferSize": 300
+        "encodedBodySize": 37848,
+        "decodedBodySize": 37848,
+        "transferSize": 38148,
+        "initiatorType": "img"
       }
     ],
     "passExactlyOneImage": true
   },
   "postScrollSignatureDemo": {
-    "count": 1,
+    "count": 2,
     "images": [
       {
         "name": "neonbyte-poster.webp",
         "url": "http://localhost:8788/assets/sample-pets/neonbyte-poster.webp",
-        "encodedBodySize": 0,
-        "transferSize": 300
+        "encodedBodySize": 37848,
+        "decodedBodySize": 37848,
+        "transferSize": 38148,
+        "initiatorType": "img"
+      },
+      {
+        "name": "neonbyte-landing16-strip.webp",
+        "url": "http://localhost:8788/assets/sample-pets/neonbyte-landing16-strip.webp",
+        "encodedBodySize": 286362,
+        "decodedBodySize": 286362,
+        "transferSize": 286662,
+        "initiatorType": "css"
       }
     ],
-    "stripLoadedAfterScroll": false
+    "stripLoadedAfterScroll": true
   }
 }

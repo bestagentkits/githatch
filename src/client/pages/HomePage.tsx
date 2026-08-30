@@ -73,7 +73,6 @@ export const HomePage: React.FC<HomePageProps> = ({
         }
       });
     }, { rootMargin: '0px' });
-
     observer.observe(demoSectionRef.current);
     return () => observer.disconnect();
   }, [isStripLoaded]);
@@ -103,17 +102,13 @@ export const HomePage: React.FC<HomePageProps> = ({
     typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const playSequence = (speed: 'normal' | 'slow') => {
-    if (!isStripLoaded) setIsStripLoaded(true);
+    setIsStripLoaded(true);
     clearTimeout(animTimerRef.current as number);
 
-    // If reduced motion is requested, lock cleanly onto Frame 16 (Hero Stance)
     if (isReducedMotion()) {
-      setIsPlaying(false);
-      setIsSlowmo(false);
       setActiveFrame(16);
       return;
     }
-
     // Reset animation state momentarily so same-speed replay triggers a clean restart
     setIsPlaying(false);
     void playerRef.current?.offsetWidth;
@@ -144,6 +139,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   };
 
   const scrubFrame = (frame: number) => {
+    setIsStripLoaded(true);
     clearTimeout(animTimerRef.current as number);
     setIsPlaying(false);
     setIsSlowmo(false);
