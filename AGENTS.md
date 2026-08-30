@@ -53,3 +53,12 @@ npm run deploy             # Deploy dist to production on Cloudflare Pages
 
 7. **Evidence-First Verification (Zero Assumptions):**
    - UI and layout claims require fresh browser-driven screenshot evidence saved in `plans/reports/screenshots/`.
+
+8. **Option 1 Design System (Cyber-Arcade Fantasy):**
+   - Strictly follow Option 1 Design System: `Archivo` headers, `JetBrains Mono` numbers/stats, 4pt spacing scale, and neon cyan (`#00f0ff`) / magenta (`#ff2a85`) glowing accents.
+
+9. **MVP Scope Boundary (Hard Guard):**
+   - NEVER build heavyweight out-of-scope features during MVP: Arena combat, in-game store/inventory, Guilds, or real-time webhook ingestion.
+
+10. **Kongming Supervisory Signoff:**
+    - Major verification loops and fix cycles are supervised by subagent `kongming` and require a formal **GO Verdict** with 0 defects before final ship.
