@@ -117,65 +117,31 @@ function App() {
     // 3. Handle modal query triggers (?hatch=true / ?checkout=true)
     const params = new URLSearchParams(window.location.search);
     if (params.get('hatch') === 'true') {
-      const gId = params.get('guardian_id') || 'demo';
+      const gId = params.get('guardian_id');
+      const isFreeParam = params.get('is_free');
       const usernameMatch = window.location.pathname.replace(/^\//, '').split('/')[0];
-      if (usernameMatch && usernameMatch !== 'explore' && usernameMatch !== 'design' && usernameMatch !== 'docs') {
+      if (gId && usernameMatch && usernameMatch !== 'explore' && usernameMatch !== 'design' && usernameMatch !== 'docs') {
         fetch(`/api/profile/${encodeURIComponent(usernameMatch)}`)
           .then((res) => (res.ok ? res.json() : null))
           .then((profileData: ResolvedProfile | null) => {
-            if (profileData && profileData.claimed && profileData.guardian) {
+            if (profileData && profileData.claimed && profileData.guardian && profileData.guardian.id === gId) {
               setGuardian(profileData.guardian);
               setHatchOpen(true);
-              track('claim_completed', {
-                archetype_id: profileData.egg_archetype_id,
-                rarity_tier: profileData.guardian.rarity_tier,
-                slot_is_free: quotaState.data ? quotaState.data.is_free : true
-              });
-            } else {
-              setGuardian({
-                id: gId,
-                name: 'Ignis Emberfox',
-                species: 'Ignis Emberfox',
-                element: 'Fire',
-                rarity_tier: 'Legendary',
-                level: 1,
-                experience: 0,
-                energy_state: 'Active',
-                hero_image_url: '/assets/sample-pets/emberfox.jpg',
-                spritesheet_url: '/assets/sample-pets/emberfox.jpg'
-              });
-              setHatchOpen(true);
+              const claimStorageKey = `githoot_claim_${gId}`;
+              if (!sessionStorage.getItem(claimStorageKey)) {
+                sessionStorage.setItem(claimStorageKey, '1');
+                track('claim_completed', {
+                  archetype_id: profileData.egg_archetype_id,
+                  rarity_tier: profileData.guardian.rarity_tier,
+                  slot_is_free: isFreeParam === '0' ? false : true
+                });
+              }
+              window.history.replaceState({}, '', window.location.pathname);
             }
           })
           .catch(() => {
-            setGuardian({
-              id: gId,
-              name: 'Ignis Emberfox',
-              species: 'Ignis Emberfox',
-              element: 'Fire',
-              rarity_tier: 'Legendary',
-              level: 1,
-              experience: 0,
-              energy_state: 'Active',
-              hero_image_url: '/assets/sample-pets/emberfox.jpg',
-              spritesheet_url: '/assets/sample-pets/emberfox.jpg'
-            });
-            setHatchOpen(true);
+            // Ignore fetch errors; no fake guardian rendered
           });
-      } else {
-        setGuardian({
-          id: gId,
-          name: 'Ignis Emberfox',
-          species: 'Ignis Emberfox',
-          element: 'Fire',
-          rarity_tier: 'Legendary',
-          level: 1,
-          experience: 0,
-          energy_state: 'Active',
-          hero_image_url: '/assets/sample-pets/emberfox.jpg',
-          spritesheet_url: '/assets/sample-pets/emberfox.jpg'
-        });
-        setHatchOpen(true);
       }
     }
     if (params.get('checkout') === 'true') {

@@ -209,9 +209,9 @@ async function runAutonomousQa() {
 
 - **Date:** ${new Date().toISOString()}
 - **Target Domain:** \`https://githoot.com\`
-- **Supervisor:** Subagent Kongming (Zero Assumptions Policy)
+- **Runner:** Autonomous Edge QA Suite (scripts/run-autonomous-qa.ts)
 - **Total Tests Executed:** ${totalCount}
-- **Status:** ${failedCount === 0 ? '✅ 100% PASSED (ZERO DEFECTS)' : '❌ FAILURES DETECTED'}
+- **Status:** ${failedCount === 0 ? '✅ 100% PASSED (0 TEST FAILURES)' : `❌ FAILED (${failedCount} FAILURES)`}
 
 ## 1. Test Results Summary
 
@@ -227,12 +227,11 @@ ${results.map(r => `| **${r.category}** | ${r.name} | ${r.status === 'PASSED' ? 
 4. **Tamagotchi Positive Progression:** 4 energy mood states verified mathematically from activity timestamps.
 5. **Edge Social Assets:** \`/badge/:username.svg\` and \`/og/:username\` SVG/PNG renderers verified with correct cache headers.
 
-## 3. Subagent Kongming Verdict
+## 3. Automated Test Suite Verdict
 
-- **Assessment:** All 8 plan phases have been executed with real working source code, authentic image processing, resilient rate-limiting fallbacks, and complete type safety.
-- **Verdict:** **FORMAL GO APPROVAL GRANTED** 🚀
+- **Test Result:** ${failedCount === 0 ? '0 Test Failures across all 4 verification tiers.' : `${failedCount} failure(s) detected during automated suite run.`}
+- **Status:** ${failedCount === 0 ? 'AUTOMATED SUITE PASSED' : 'SUITE FAILED'}
 `.trim();
-
   const reportPath = path.join(reportsDir, 'qa-verification-report.md');
   fs.writeFileSync(reportPath, reportMd, 'utf-8');
   console.log(`\n✦ QA Report written to: ${reportPath}`);
