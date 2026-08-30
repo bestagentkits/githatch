@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import type { GuardianSummary } from '../../server/types';
+import { track } from '../lib/analytics';
 
 export interface SocialSharePanelProps {
   username: string;
@@ -19,11 +20,11 @@ export const SocialSharePanel: React.FC<SocialSharePanelProps> = ({
   const profileUrl = `https://githoot.com/${encodeURIComponent(username)}`;
   const badgeMarkdown = `[![GitHoot Guardian](https://githoot.com/badge/${encodeURIComponent(username)}.svg)](${profileUrl})`;
 
-  const twitterText = `Vừa mở khóa được Linh thú ${guardian.species} bậc [${guardian.rarity_tier}] hệ ${guardian.element} trên @GitHoot! 🔥 Đang bảo hộ các dự án mã nguồn mở của tôi. Nhận nuôi miễn phí Linh thú của bạn tại đây:`;
+  const twitterText = `I just unlocked ${guardian.species} [${guardian.rarity_tier}] (${guardian.element}) on @GitHoot! 🔥 Protecting my open-source repos. Preview yours:`;
   const twitterIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(twitterText)}&url=${encodeURIComponent(profileUrl)}`;
   const linkedInIntentUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(profileUrl)}`;
-
   const handleCopyBadge = async () => {
+    track('share_clicked', { network: 'badge' });
     try {
       await navigator.clipboard.writeText(badgeMarkdown);
       setCopied(true);
@@ -47,9 +48,8 @@ export const SocialSharePanel: React.FC<SocialSharePanelProps> = ({
     }}>
       <h3 style={{ fontFamily: "'Archivo', sans-serif", fontSize: 'clamp(15px, 2.5vw, 18px)', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
         <span>🚀</span>
-        <span>Lan Truyền & Khoe Linh Thú Lên Mạng Xã Hội</span>
+        <span>Share & Showcase Guardian</span>
       </h3>
-
       {/* Share Buttons Row (Responsive 1-col on mobile, 2-col on tablet/desktop) */}
       <div className="githoot-share-grid" style={{ marginBottom: '20px' }}>
         <a
@@ -57,6 +57,7 @@ export const SocialSharePanel: React.FC<SocialSharePanelProps> = ({
           target="_blank"
           rel="noopener noreferrer"
           className="btn-touch"
+          onClick={() => track('share_clicked', { network: 'x' })}
           style={{
             background: '#000',
             border: '1px solid rgba(255, 255, 255, 0.25)',
@@ -74,12 +75,12 @@ export const SocialSharePanel: React.FC<SocialSharePanelProps> = ({
           <span>𝕏</span>
           <span>Share to X</span>
         </a>
-
         <a
           href={linkedInIntentUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="btn-touch"
+          onClick={() => track('share_clicked', { network: 'linkedin' })}
           style={{
             background: '#0a66c2',
             color: '#fff',

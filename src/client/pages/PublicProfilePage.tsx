@@ -11,7 +11,6 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
   const [profile, setProfile] = useState<ResolvedProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const eggCardRef = useRef<HTMLDivElement | null>(null);
   const eggTrackedRef = useRef(false);
 
@@ -51,16 +50,56 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
     };
   }, [username]);
 
-  // Track egg_viewed ONLY on /:username when real profile egg is rendered (Contract §7)
+  // Track egg_viewed ONLY when real profile egg card becomes >=50% visible (Contract §7)
   useEffect(() => {
     if (!profile || loading || eggTrackedRef.current) return;
-    eggTrackedRef.current = true;
-    track('egg_viewed', {
-      archetype_id: profile.egg_archetype_id,
-      rarity_tier: profile.estimated_rarity
-    });
-  }, [profile, loading]);
+    const node = eggCardRef.current || (document.querySelector('.githoot-card') as HTMLElement | null);
+    if (!node) return;
 
+    const checkVisibility = () => {
+      if (eggTrackedRef.current) return;
+      const rect = node.getBoundingClientRect();
+      const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+      const visibleHeight = Math.max(0, Math.min(rect.bottom, windowHeight) - Math.max(rect.top, 0));
+      const ratio = rect.height > 0 ? visibleHeight / rect.height : 0;
+
+      if (ratio >= 0.5 && !eggTrackedRef.current) {
+        eggTrackedRef.current = true;
+        track('egg_viewed', {
+          archetype_id: profile.egg_archetype_id,
+          rarity_tier: profile.estimated_rarity
+        });
+      }
+    };
+
+    // Immediate check if card is already >=50% in initial viewport
+    checkVisibility();
+
+    const hasObserver = typeof IntersectionObserver !== 'undefined';
+    if (!hasObserver) {
+      window.addEventListener('scroll', checkVisibility, { passive: true });
+      return () => window.removeEventListener('scroll', checkVisibility);
+    }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.5 && !eggTrackedRef.current) {
+          eggTrackedRef.current = true;
+          track('egg_viewed', {
+            archetype_id: profile.egg_archetype_id,
+            rarity_tier: profile.estimated_rarity
+          });
+          observer.disconnect();
+        }
+      });
+    }, { threshold: 0.5 });
+
+    observer.observe(node);
+    window.addEventListener('scroll', checkVisibility, { passive: true });
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', checkVisibility);
+    };
+  }, [profile, loading]);
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07090e', color: '#00f0ff', fontFamily: "'JetBrains Mono', monospace", padding: '24px', textAlign: 'center' }}>

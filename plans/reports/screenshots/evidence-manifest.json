@@ -70,15 +70,19 @@
   ],
   "bundle_measurements": {
     "dist_total_bytes": 24059188,
-    "previous_unfiltered_bytes": 34835846,
-    "dead_weight_excluded_bytes": 10776658,
+    "previous_unfiltered_bytes": 34876151,
+    "dead_weight_excluded_bytes": 10816963,
     "critical_client_entry": {
       "html_raw_bytes": 847,
-      "html_gzip_bytes": 501,
-      "css_raw_bytes": 21250,
-      "css_gzip_bytes": 4920,
-      "js_raw_bytes": 283280,
-      "js_gzip_bytes": 81860
+      "html_gzip_bytes": 499,
+      "css_raw_bytes": 20778,
+      "css_gzip_bytes": 4808,
+      "js_raw_bytes": 277225,
+      "js_gzip_bytes": 81041,
+      "total_client_gzip_bytes": 86348,
+      "baseline_client_gzip_bytes": 77897,
+      "gzip_delta_bytes": 8451,
+      "gzip_increase_itemization": "Added Cyber-Arcade interactive 8-section UI, 16-frame superhero landing scrubber controls, Dot Matrix Genesis grid, and non-PII analytics telemetry runtime."
     }
   },
   "touch_target_measurements": {

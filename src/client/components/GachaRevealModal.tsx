@@ -4,6 +4,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import type { GuardianSummary } from '../../server/types';
+import { track } from '../lib/analytics';
 import { launchConfettiBurst } from '../utils/particles';
 import { SocialSharePanel } from './SocialSharePanel';
 
@@ -21,14 +22,12 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
   onClose
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
   useEffect(() => {
     if (isOpen && canvasRef.current) {
       const stopConfetti = launchConfettiBurst(canvasRef.current, getRarityColor(guardian.rarity_tier));
       return stopConfetti;
     }
   }, [isOpen, guardian.rarity_tier]);
-
   if (!isOpen) return null;
 
   return (
