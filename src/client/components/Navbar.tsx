@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import type { EarlyAccessStatus } from '../../server/types';
-
+import { track } from '../lib/analytics';
 export interface NavbarProps {
   quota: EarlyAccessStatus | null;
   quotaLoading?: boolean;
@@ -25,6 +25,10 @@ export const Navbar: React.FC<NavbarProps> = ({
     e.preventDefault();
     const clean = searchVal.trim().replace(/^@/, '');
     if (clean) {
+      track('profile_lookup_submitted', {
+        cta_source: 'navbar',
+        input_length: clean.length
+      });
       window.location.pathname = `/${encodeURIComponent(clean)}`;
     }
   };
