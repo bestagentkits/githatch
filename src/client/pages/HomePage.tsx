@@ -4,9 +4,9 @@
 // ============================================================================
 
 import React, { useState, useEffect, useRef } from 'react';
-import { EGG_MANIFEST, type EggArchetype } from '../assets/eggs/manifest';
 import type { EarlyAccessStatus, PublicConfig } from '../../server/types';
-import { trackEvent } from '../utils/analytics';
+import { EGG_MANIFEST, type EggArchetype } from '../assets/eggs/manifest';
+import { track } from '../lib/analytics';
 
 export interface HomePageProps {
   quota?: EarlyAccessStatus | null;
@@ -51,13 +51,9 @@ export const HomePage: React.FC<HomePageProps> = ({
   }, []);
   // 1. Landing viewed analytics
   useEffect(() => {
-    trackEvent({
-      name: 'landing_viewed',
-      properties: {
-        viewport_width: typeof window !== 'undefined' ? window.innerWidth : 1440,
-        device_type: typeof window !== 'undefined' && window.innerWidth <= 640 ? 'mobile' : typeof window !== 'undefined' && window.innerWidth <= 900 ? 'tablet' : 'desktop',
-        is_reduced_motion: typeof window !== 'undefined' ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false
-      }
+    track('landing_viewed', {
+      viewport_bucket: typeof window !== 'undefined' && window.innerWidth <= 640 ? 'mobile' : typeof window !== 'undefined' && window.innerWidth <= 900 ? 'tablet' : 'desktop',
+      reduced_motion: typeof window !== 'undefined' ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false
     });
   }, []);
 
@@ -82,16 +78,13 @@ export const HomePage: React.FC<HomePageProps> = ({
     return () => observer.disconnect();
   }, [isStripLoaded]);
 
-  const handleLookupSubmit = (e: React.FormEvent, rawUsername: string, source: 'hero_form' | 'early_access_form' = 'hero_form') => {
+  const handleLookupSubmit = (e: React.FormEvent, rawUsername: string, source: 'hero' | 'early_access' = 'hero') => {
     e.preventDefault();
     const clean = rawUsername.trim().replace(/^@/, '');
     if (clean) {
-      trackEvent({
-        name: 'profile_lookup_submitted',
-        properties: {
-          input_length: clean.length,
-          source
-        }
+      track('profile_lookup_submitted', {
+        cta_source: source,
+        input_length: clean.length
       });
       window.location.pathname = `/${encodeURIComponent(clean)}`;
     }
@@ -99,12 +92,9 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const selectDevChip = (username: string) => {
     setHeroUsername(username);
-    trackEvent({
-      name: 'profile_lookup_submitted',
-      properties: {
-        input_length: username.length,
-        source: 'popular_chip'
-      }
+    track('profile_lookup_submitted', {
+      cta_source: 'example_link',
+      input_length: username.length
     });
     window.location.pathname = `/${encodeURIComponent(username)}`;
   };
@@ -131,11 +121,9 @@ export const HomePage: React.FC<HomePageProps> = ({
     setIsPlaying(true);
     setIsSlowmo(speed === 'slow');
 
-    trackEvent({
-      name: 'demo_interacted',
-      properties: {
-        action: speed === 'slow' ? 'slowmo' : 'play'
-      }
+    track('demo_interacted', {
+      control: speed === 'slow' ? 'slowmo' : 'play',
+      frame_index: 1
     });
 
     const duration = speed === 'slow' ? 4400 : 1100;
@@ -149,28 +137,22 @@ export const HomePage: React.FC<HomePageProps> = ({
     setIsPlaying(false);
     setIsSlowmo(false);
     setActiveFrame(16);
-    trackEvent({
-      name: 'demo_interacted',
-      properties: {
-        action: 'reset',
-        frame: 16
-       }
-     });
-   };
+    track('demo_interacted', {
+      control: 'replay',
+      frame_index: 16
+    });
+  };
 
-   const scrubFrame = (frame: number) => {
+  const scrubFrame = (frame: number) => {
     clearTimeout(animTimerRef.current as number);
-     setIsPlaying(false);
-     setIsSlowmo(false);
-     setActiveFrame(frame);
-     trackEvent({
-       name: 'demo_interacted',
-       properties: {
-         action: 'scrub',
-         frame
-       }
-     });
-   };
+    setIsPlaying(false);
+    setIsSlowmo(false);
+    setActiveFrame(frame);
+    track('demo_interacted', {
+      control: 'scrub',
+      frame_index: frame
+    });
+  };
 
    const triggerEggWobble = () => {
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -182,12 +164,9 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const handleArchetypeClick = (arch: EggArchetype) => {
     setActiveArchetype(arch);
-    trackEvent({
-      name: 'archetype_selected',
-      properties: {
-        archetype_id: arch.id,
-        element: arch.element
-      }
+    track('archetype_selected', {
+      archetype_id: arch.id,
+      element: arch.element
     });
   };
 
@@ -266,7 +245,7 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
 
           {/* Hero Form */}
-          <form className="hero-form" onSubmit={(e) => handleLookupSubmit(e, heroUsername, 'hero_form')}>
+          <form className="hero-form" onSubmit={(e) => handleLookupSubmit(e, heroUsername, 'hero')}>
             <label htmlFor="hero-username-input" className="sr-only">GitHub username</label>
             <div className="hero-prefix">githoot.com/</div>
             <input
@@ -349,6 +328,7 @@ export const HomePage: React.FC<HomePageProps> = ({
             <div className="demo-controls">
               <button
                 type="button"
+                id="btn-play"
                 className={`control-btn ${isPlaying && !isSlowmo ? 'active' : ''}`}
                 onClick={() => playSequence('normal')}
               >
@@ -356,6 +336,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               </button>
               <button
                 type="button"
+                id="btn-slow"
                 className={`control-btn ${isPlaying && isSlowmo ? 'active' : ''}`}
                 onClick={() => playSequence('slow')}
               >
@@ -363,6 +344,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               </button>
               <button
                 type="button"
+                id="btn-pause"
                 className="control-btn"
                 onClick={pauseSequence}
               >
@@ -633,7 +615,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                 "I wanted the thing developers already share — their GitHub profile — to be worth looking at twice. A Guardian you didn't choose, that came out of your own account and stays yours, is a better souvenir than a follower count."
               </blockquote>
               <p className="creator-byline">
-                From the creator of <a href="https://agentkit.best" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-cyan)', textDecoration: 'none', fontWeight: 700 }}>AgentKit.best</a>, NextLevelBuilder.io, GoClaw.sh & <a href="https://github.com/nextlevelbuilder/ui-ux-pro-max-skill" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-cyan)', textDecoration: 'none', fontWeight: 700 }}>UI UX Pro Max Skill</a>.
+                From the creator of <a href="https://agentkit.best" target="_blank" rel="noopener noreferrer" onClick={() => track('creator_link_clicked', { destination: 'agentkit' })} style={{ color: 'var(--accent-cyan)', textDecoration: 'none', fontWeight: 700 }}>AgentKit.best</a>, <a href="https://nextlevelbuilder.io" target="_blank" rel="noopener noreferrer" onClick={() => track('creator_link_clicked', { destination: 'nextlevelbuilder' })} style={{ color: 'var(--accent-cyan)', textDecoration: 'none', fontWeight: 700 }}>NextLevelBuilder.io</a>, <a href="https://goclaw.sh" target="_blank" rel="noopener noreferrer" onClick={() => track('creator_link_clicked', { destination: 'goclaw' })} style={{ color: 'var(--accent-cyan)', textDecoration: 'none', fontWeight: 700 }}>GoClaw.sh</a> & <a href="https://github.com/nextlevelbuilder/ui-ux-pro-max-skill" target="_blank" rel="noopener noreferrer" onClick={() => track('creator_link_clicked', { destination: 'ui_ux_pro_max' })} style={{ color: 'var(--accent-cyan)', textDecoration: 'none', fontWeight: 700 }}>UI UX Pro Max Skill</a>.
               </p>
             </div>
           </div>
@@ -649,7 +631,6 @@ export const HomePage: React.FC<HomePageProps> = ({
               <span>EARLY ACCESS</span>
               <span>✦</span>
             </div>
-            <h2 className="section-title">The first 100 developers hatch free.</h2>
             <p className="section-desc" style={{ maxWidth: '600px', margin: '0 auto' }}>
               One hundred free slots, one per GitHub account. After slot 100, a hatch costs ${config?.charge_after_usd ?? '0.99'} — that covers the Gemini model call, nothing more. We would rather tell you the price now than surprise you at the reveal.
             </p>
@@ -698,7 +679,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               </div>
             )}
 
-            <form className="hero-form" onSubmit={(e) => handleLookupSubmit(e, heroUsername, 'early_access_form')}>
+            <form className="hero-form" onSubmit={(e) => handleLookupSubmit(e, heroUsername, 'early_access')}>
               <label htmlFor="ea-username-input" className="sr-only">GitHub username for Early Access</label>
               <div className="hero-prefix">githoot.com/</div>
               <input

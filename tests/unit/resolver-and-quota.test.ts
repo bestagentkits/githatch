@@ -101,9 +101,9 @@ describe('Public Config & Quota Endpoint Contracts', () => {
     expect(res.status).toBe(200);
 
     const config = (await res.json()) as PublicConfig;
+    expect(config.quota_total).toBe(100);
     expect(config.free_until).toBe(100);
     expect(config.charge_after_usd).toBe(0.99);
-    expect(config.posthog_configured).toBe(true);
     expect(config.analytics_enabled).toBe(true);
     expect(config.environment).toBe('production');
     expect(config.domain).toBe('githoot.com');
@@ -124,10 +124,10 @@ describe('Public Config & Quota Endpoint Contracts', () => {
     expect(res.status).toBe(200);
 
     const status = (await res.json()) as EarlyAccessStatus;
+    expect(status.degraded).toBe(true);
     expect(status.claimed).toBeNull();
     expect(status.remaining).toBeNull();
     expect(status.total).toBe(100);
-    expect(status.is_free).toBe(true);
   });
 
   it('returns degraded: false and exact claimed/remaining numbers on healthy database', async () => {

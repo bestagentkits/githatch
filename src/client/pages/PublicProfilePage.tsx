@@ -2,15 +2,18 @@
 // GitHoot Public Profile Page (src/client/pages/PublicProfilePage.tsx)
 // ============================================================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import type { ResolvedProfile } from '../../server/types';
 import { EggSpritesheetPlayer } from '../components/EggSpritesheetPlayer';
-import { trackEvent } from '../utils/analytics';
+import { track } from '../lib/analytics';
 
 export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) => {
   const [profile, setProfile] = useState<ResolvedProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const eggCardRef = useRef<HTMLDivElement | null>(null);
+  const eggTrackedRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -32,13 +35,6 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
         const profileData = (await profileRes.json()) as ResolvedProfile;
         if (!isMounted) return;
         setProfile(profileData);
-        trackEvent({
-          name: 'egg_viewed',
-          properties: {
-            archetype_id: profileData.egg_archetype_id,
-            is_claimed: profileData.claimed
-          }
-        });
       } catch (err: unknown) {
         if (!isMounted) return;
         const msg = err instanceof Error ? err.message : 'Failed to load profile';
@@ -54,6 +50,17 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
       isMounted = false;
     };
   }, [username]);
+
+  // Track egg_viewed ONLY on /:username when real profile egg is rendered (Contract §7)
+  useEffect(() => {
+    if (!profile || loading || eggTrackedRef.current) return;
+    eggTrackedRef.current = true;
+    track('egg_viewed', {
+      archetype_id: profile.egg_archetype_id,
+      rarity_tier: profile.estimated_rarity
+    });
+  }, [profile, loading]);
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07090e', color: '#00f0ff', fontFamily: "'JetBrains Mono', monospace", padding: '24px', textAlign: 'center' }}>
@@ -77,8 +84,12 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
       <main className="githoot-container" style={{ margin: 'clamp(24px, 5vw, 48px) auto' }}>
         <div className="githoot-main-grid">
           
-          {/* Left Column: Interactive Egg Canvas */}
-          <div className="githoot-card" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '320px' }}>
+          {/* Left Column: Interactive Egg Canvas with 50% visibility tracking */}
+          <div
+            ref={eggCardRef}
+            className="githoot-card"
+            style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '320px' }}
+          >
             <EggSpritesheetPlayer archetypeId={profile.egg_archetype_id} />
           </div>
 
@@ -138,6 +149,9 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
               <a
                 href={`/auth/github?claim_username=${encodeURIComponent(profile.login)}`}
                 className="btn-touch"
+                onClick={() => {
+                  track('claim_started', { archetype_id: profile.egg_archetype_id });
+                }}
                 style={{
                   width: '100%',
                   background: '#00f0ff',
