@@ -17,11 +17,28 @@ let roundRobinIndex = 0;
 export function parseTokenPool(env: Env): string[] {
   if (!env.GITHUB_TOKENS) return [];
   try {
-    const trimmed = env.GITHUB_TOKENS.trim();
-    if (trimmed.startsWith('[')) {
-      return JSON.parse(trimmed) as string[];
+    let raw = env.GITHUB_TOKENS.trim();
+    
+    // Handle double-escaped or quoted wrapper
+    if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
+      raw = raw.slice(1, -1).trim();
     }
-    return trimmed.split(',').map(t => t.trim()).filter(Boolean);
+
+    // 1. Try parsing as JSON array
+    if (raw.startsWith('[')) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((t: unknown) => String(t).trim().replace(/^Bearer\s+/i, '').replace(/^['"]|['"]$/g, ''))
+          .filter((t: string) => t.length > 0);
+      }
+    }
+
+    // 2. Try parsing as comma or newline separated values
+    return raw
+      .split(/[\r\n,]+/)
+      .map(t => t.trim().replace(/^Bearer\s+/i, '').replace(/^['"]|['"]$/g, ''))
+      .filter(t => t.length > 0);
   } catch (err) {
     console.warn('[TokenPool] Failed to parse GITHUB_TOKENS:', err);
     return [];

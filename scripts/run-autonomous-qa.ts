@@ -123,14 +123,20 @@ async function runAutonomousQa() {
     return `Species: ${dna1.species}, Element: ${dna1.element}, Rarity: ${dna1.rarity_tier}`;
   });
 
-  await runTest('Resolver', 'Degraded Seed Mode on GitHub Throttling', async () => {
-    const res = await app.fetch(new Request('http://localhost/api/profile/unknown_user_test_429'), mockEnv);
+  await runTest('Resolver', 'GitHub Profile Resolution GET /api/profile/octocat', async () => {
+    const res = await app.fetch(new Request('http://localhost/api/profile/octocat'), mockEnv);
     if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-    const profile = (await res.json()) as { source: string; egg_archetype_id: string };
+    const profile = (await res.json()) as { source: string; egg_archetype_id: string; login: string };
     if (!profile.egg_archetype_id) throw new Error('Missing egg archetype');
-    return `Source: ${profile.source}, Egg Archetype: ${profile.egg_archetype_id}`;
+    if (profile.login !== 'octocat') throw new Error('Incorrect login');
+    return `Source: ${profile.source}, Egg: ${profile.egg_archetype_id}, Login: @${profile.login}`;
   });
 
+  await runTest('Resolver', '404 User Not Found Propagation for Non-existent User', async () => {
+    const res = await app.fetch(new Request('http://localhost/api/profile/nonexistent_user_xyz_99999'), mockEnv);
+    if (res.status !== 404) throw new Error(`Expected HTTP 404, got ${res.status}`);
+    return `HTTP 404 correctly returned for non-existent user`;
+  });
   // --- Tier 3: Image Processing, Chroma Removal & PNG Codec ---
   console.log('\n► Tier 3: Real Image Decoder, Chroma Key & Slicing');
   await runTest('Image', 'Chroma Green Removal & Edge De-Spill', async () => {

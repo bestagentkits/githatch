@@ -5,7 +5,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from './types';
-import { resolveGitHubProfile } from './services/github/resolver';
+import { resolveGitHubProfile, UserNotFoundError } from './services/github/resolver';
 import { authRouter } from './routes/auth';
 import { badgeRouter } from './routes/badge';
 import { ogRouter } from './routes/og';
@@ -46,6 +46,9 @@ app.get('/api/profile/:username', async (c) => {
     return c.json(profile);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to resolve profile';
+    if (err instanceof UserNotFoundError || (err instanceof Error && err.name === 'UserNotFoundError')) {
+      return c.json({ error: message }, 404);
+    }
     return c.json({ error: message }, 500);
   }
 });

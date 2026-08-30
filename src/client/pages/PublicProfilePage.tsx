@@ -3,44 +3,49 @@
 // ============================================================================
 
 import React, { useEffect, useState } from 'react';
-import type { ResolvedProfile, EarlyAccessStatus } from '../../server/types';
+import type { ResolvedProfile } from '../../server/types';
 import { EggSpritesheetPlayer } from '../components/EggSpritesheetPlayer';
 
 export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) => {
   const [profile, setProfile] = useState<ResolvedProfile | null>(null);
-  const [quota, setQuota] = useState<EarlyAccessStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadData() {
       try {
         setLoading(true);
-        const [profileRes, quotaRes] = await Promise.all([
-          fetch(`/api/profile/${encodeURIComponent(username)}`),
-          fetch('/api/early-access/status')
-        ]);
+        const profileRes = await fetch(`/api/profile/${encodeURIComponent(username)}`);
+
+        if (profileRes.status === 404) {
+          throw new Error(`GitHub user "@${username}" not found.`);
+        }
 
         if (!profileRes.ok) {
-          throw new Error('User not found on GitHub');
+          const errData = (await profileRes.json().catch(() => ({}))) as { error?: string };
+          throw new Error(errData.error || 'Failed to load profile');
         }
 
         const profileData = (await profileRes.json()) as ResolvedProfile;
-        const quotaData = (await quotaRes.json()) as EarlyAccessStatus;
-
+        if (!isMounted) return;
         setProfile(profileData);
-        setQuota(quotaData);
       } catch (err: unknown) {
+        if (!isMounted) return;
         const msg = err instanceof Error ? err.message : 'Failed to load profile';
         setError(msg);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
     loadData();
-  }, [username]);
 
+    return () => {
+      isMounted = false;
+    };
+  }, [username]);
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07090e', color: '#00f0ff', fontFamily: "'JetBrains Mono', monospace", padding: '24px', textAlign: 'center' }}>
@@ -59,22 +64,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#07090e', color: '#f0f6fc', fontFamily: "'Schibsted Grotesk', sans-serif" }}>
-      {/* Top Navigation */}
-      <header className="githoot-header">
-        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: '#fff', fontWeight: 900, fontSize: '20px', fontFamily: "'Archivo', sans-serif" }}>
-          <span style={{ width: '32px', height: '32px', background: 'linear-gradient(135deg, #00f0ff, #ff2a85)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🦉</span>
-          <span>GitHoot</span>
-        </a>
-
-        {quota && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(0,240,255,0.08)', border: '1px solid #00f0ff', padding: '6px 14px', borderRadius: '9999px', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', fontWeight: 700, color: '#00f0ff' }}>
-            <span style={{ width: '8px', height: '8px', background: '#00f0ff', borderRadius: '50%', boxShadow: '0 0 8px #00f0ff' }} />
-            <span>Early Access: {quota.remaining}/{quota.total} slots left</span>
-          </div>
-        )}
-      </header>
-
+    <div style={{ minHeight: 'calc(100vh - 72px)', background: '#07090e', color: '#f0f6fc', fontFamily: "'Schibsted Grotesk', sans-serif" }}>
       {/* Main Responsive Container */}
       <main className="githoot-container" style={{ margin: 'clamp(24px, 5vw, 48px) auto' }}>
         <div className="githoot-main-grid">

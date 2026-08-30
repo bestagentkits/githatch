@@ -35,6 +35,18 @@ describe('Token Pool Manager', () => {
     expect(parseTokenPool(mockEnvCsv)).toEqual(['ghp_tokenA', 'ghp_tokenB']);
   });
 
+  it('handles escaped quotes, bearer prefix, and newline-separated tokens', () => {
+    const mockEnvEscaped: Env = {
+      GITHUB_TOKENS: '"[\"Bearer ghp_token1\", \"ghp_token2\"]"'
+    } as Env;
+    expect(parseTokenPool(mockEnvEscaped)).toEqual(['ghp_token1', 'ghp_token2']);
+
+    const mockEnvNewlines: Env = {
+      GITHUB_TOKENS: 'Bearer ghp_alpha\nBearer ghp_beta\r\nghp_gamma'
+    } as Env;
+    expect(parseTokenPool(mockEnvNewlines)).toEqual(['ghp_alpha', 'ghp_beta', 'ghp_gamma']);
+  });
+
   it('records rate limit response headers correctly', () => {
     const headers = new Headers({
       'x-ratelimit-remaining': '4950',

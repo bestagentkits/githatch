@@ -7,9 +7,17 @@ import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary } from '../..
 import { getHealthyGitHubToken, recordTokenResponse } from './token-pool';
 import { deriveGuardianDNA } from '../dna/seed';
 
+export class UserNotFoundError extends Error {
+  constructor(username: string) {
+    super(`GitHub user "${username}" not found.`);
+    this.name = 'UserNotFoundError';
+  }
+}
+
 interface CachedEntry {
   timestamp: number;
-  data: ResolvedProfile;
+  data?: ResolvedProfile;
+  notFound?: boolean;
 }
 
 export async function resolveGitHubProfile(username: string, env: Env): Promise<ResolvedProfile> {
@@ -26,13 +34,18 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
 
   const now = Date.now();
 
+  // Check negative cache hit
+  if (cached?.notFound && now - cached.timestamp < 300 * 1000) {
+    throw new UserNotFoundError(cleanUsername);
+  }
+
   // Fresh cache hit (< 1 hour)
-  if (cached && now - cached.timestamp < 3600 * 1000) {
+  if (cached?.data && now - cached.timestamp < 3600 * 1000) {
     return { ...cached.data, source: 'cache_fresh' };
   }
 
   // Stale cache hit (1 hour to 24 hours): Return stale immediately, enqueue revalidation
-  if (cached && now - cached.timestamp < 86400 * 1000) {
+  if (cached?.data && now - cached.timestamp < 86400 * 1000) {
     if (env.AI_QUEUE) {
       env.AI_QUEUE.send({ type: 'REVALIDATE_PROFILE', username: cleanUsername }).catch(() => {});
     }
@@ -58,7 +71,12 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     }
 
     if (res.status === 404) {
-      throw new Error(`GitHub user "${username}" not found.`);
+      try {
+        await env.CACHE_KV.put(cacheKey, JSON.stringify({ timestamp: now, notFound: true }), {
+          expirationTtl: 300
+        });
+      } catch {}
+      throw new UserNotFoundError(cleanUsername);
     }
 
     if (res.status === 403 || res.status === 429) {
@@ -72,16 +90,20 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
 
     const rawUser = (await res.json()) as GitHubUserRaw;
 
-    // Fetch top languages from user repos (optional enhancement)
+    // Fetch top languages and stars from user repos
     let topLanguages: string[] = [];
+    let totalStars = 0;
     try {
-      const reposRes = await fetch(`https://api.github.com/users/${encodeURIComponent(cleanUsername)}/repos?per_page=10&sort=updated`, { headers });
+      const reposRes = await fetch(`https://api.github.com/users/${encodeURIComponent(cleanUsername)}/repos?per_page=30&sort=updated`, { headers });
       if (reposRes.ok) {
-        const repos = (await reposRes.json()) as Array<{ language: string | null }>;
+        const repos = (await reposRes.json()) as Array<{ language: string | null; stargazers_count?: number }>;
         const langCounts: Record<string, number> = {};
         for (const r of repos) {
           if (r.language) {
             langCounts[r.language] = (langCounts[r.language] || 0) + 1;
+          }
+          if (typeof r.stargazers_count === 'number') {
+            totalStars += r.stargazers_count;
           }
         }
         topLanguages = Object.keys(langCounts).sort((a, b) => (langCounts[b] ?? 0) - (langCounts[a] ?? 0)).slice(0, 3);
@@ -104,7 +126,7 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
       avatar_url: rawUser.avatar_url,
       public_repos: rawUser.public_repos,
       followers: rawUser.followers,
-      total_stars: 0,
+      total_stars: totalStars,
       top_languages: topLanguages,
       dna_seed: dna.dna_seed,
       egg_archetype_id: dna.egg_archetype_id,
@@ -126,6 +148,9 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
 
     return profile;
   } catch (err: unknown) {
+    if (err instanceof UserNotFoundError) {
+      throw err;
+    }
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[Resolver] Error resolving ${username}:`, message);
     return generateDegradedProfile(cleanUsername);

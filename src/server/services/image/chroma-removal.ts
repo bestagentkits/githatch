@@ -21,15 +21,16 @@ export function removeChromaGreen(
     const g = output[i + 1] ?? 0;
     const b = output[i + 2] ?? 0;
 
-    // Solid Chroma Green detection: pure bright green background
-    const isSolidChroma = g > 180 && g > r * 1.6 && g > b * 1.6;
+    // 1. Solid Chroma Green background detection (pure bright green screen)
+    const isSolidChroma = g > 180 && g > r * 1.6 && g > b * 1.6 && (r < 80 || b < 80);
     const isPureGreen = g > 210 && r < 80 && b < 80;
 
     if (isSolidChroma || isPureGreen) {
       // Background pixel -> make 100% transparent
       output[i + 3] = 0;
+      output[i + 1] = Math.min(g, Math.round((r + b) / 2));
     } else {
-      // Character/Edge pixel -> apply Green De-Spill filter
+      // 2. Character/Edge pixel -> apply Green De-Spill filter to remove green fringe halos
       const avgRb = (r + b) / 2;
       if (g > avgRb) {
         output[i + 1] = Math.min(g, Math.round(avgRb));

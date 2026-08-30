@@ -9,6 +9,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src')
     }
   },
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8788',
+      '/badge': 'http://localhost:8788',
+      '/og': 'http://localhost:8788',
+      '/auth': 'http://localhost:8788'
+    }
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: false,
