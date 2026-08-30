@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import {
   VERSIONS, POSE_SET, POSE_PROMPT, FRAME, CHROMA,
   ELEMENTS, LANGUAGE_ELEMENT, BUILDS, BUILD_PROMPT, SILHOUETTES, CRESTS,
-  MARKINGS, MATERIALS, AURAS, TEMPERAMENTS, RARITIES, RARITY_CUTS, MERIT_WEIGHTS,
+  MARKINGS, MATERIALS, AURAS, TEMPERAMENTS, RARITIES, RARITY_CUTS, MERIT_WEIGHTS, SPECIES, SPECIES_PHENOTYPE, SPECIES_BUILDS,
   IDENTITY_TELEMETRY_FIELDS
 } from './contracts.mjs';
 
@@ -108,6 +108,17 @@ export function elementFor(seedHex, snap) {
   return tied.length === 1 ? tied[0] : pick(seedHex, 'element-tie', tied);
 }
 
+/**
+ * Species is fully determined by the element (one canonical species per element),
+ * so it inherits the element's GitHub-evidence derivation. Bounded table only —
+ * the model never invents a species.
+ */
+export function speciesFor(element) {
+  const s = SPECIES.find(x => x.element === element);
+  if (!s) throw new Error(`no canonical species for element: ${element}`);
+  return s;
+}
+
 /** Fields a pre-existing Guardian may pin to match a reference that predates the compiler. */
 export const PINNABLE = Object.freeze(['element', 'rarity', 'build', 'silhouette', 'crest', 'markings', 'material', 'aura', 'temperament']);
 
@@ -130,6 +141,9 @@ export function compileIdentitySpec({ githubUserId, telemetry, pin }) {
   const snap = normalizeTelemetry(telemetry);
   const seed = dnaSeed(githubUserId);
   const merit = meritScore(snap);
+  const element = elementFor(seed, snap);
+  const sp = speciesFor(element);
+  const pheno = SPECIES_PHENOTYPE[sp.id];
 
   const spec = {
     identitySpecVersion: VERSIONS.identitySpec,
@@ -138,12 +152,15 @@ export function compileIdentitySpec({ githubUserId, telemetry, pin }) {
     githubUserId: String(githubUserId),
     dnaSeed: seed,
     telemetrySnapshotHash: sha256(canonicalJson(snap)),
-    element: elementFor(seed, snap),
+    element,
     rarity: rarityFor(merit),
     merit,
-    build: pick(seed, 'build', BUILDS),
-    silhouette: pick(seed, 'silhouette', SILHOUETTES),
-    crest: pick(seed, 'crest', CRESTS),
+    species: sp.id,
+    speciesName: sp.name,
+    anatomy: sp.anatomy,
+    build: pick(seed, 'build', SPECIES_BUILDS[sp.id]),
+    silhouette: pick(seed, 'silhouette', pheno.silhouettes),
+    crest: pick(seed, 'crest', pheno.crests),
     markings: pick(seed, 'markings', MARKINGS),
     material: pick(seed, 'material', MATERIALS),
     aura: pick(seed, 'aura', AURAS),
@@ -152,12 +169,39 @@ export function compileIdentitySpec({ githubUserId, telemetry, pin }) {
 
   const pinnedFields = [];
   if (pin) {
-    for (const [k, v] of Object.entries(pin)) {
+    // Element must be applied FIRST: species/anatomy derive from it, so pinning
+    // element without resyncing them would leave the spec self-contradictory.
+    const order = Object.keys(pin).sort((a, b) => (a === 'element' ? -1 : b === 'element' ? 1 : 0));
+    for (const k of order) {
+      const v = pin[k];
       if (!PINNABLE.includes(k)) throw new Error(`identity pin not allowed for field: ${k}`);
       const allowed = k === 'rarity' ? RARITIES : ENUM_OF[k];
       if (!allowed.includes(v)) throw new Error(`identity pin "${k}" must be one of: ${allowed.join(', ')}`);
       spec[k] = v;
       pinnedFields.push(k);
+
+      if (k === 'element') {
+        const resynced = speciesFor(v);
+        spec.species = resynced.id;
+        spec.speciesName = resynced.name;
+        spec.anatomy = resynced.anatomy;
+        // Re-derive species-constrained loci unless they are themselves pinned.
+        const ph = SPECIES_PHENOTYPE[resynced.id];
+        if (!pin.silhouette) spec.silhouette = pick(seed, 'silhouette', ph.silhouettes);
+        if (!pin.crest) spec.crest = pick(seed, 'crest', ph.crests);
+        if (!pin.build) spec.build = pick(seed, 'build', SPECIES_BUILDS[resynced.id]);
+      }
+    }
+    // Reject pins that contradict the resolved species.
+    const ph = SPECIES_PHENOTYPE[spec.species];
+    if (!ph.silhouettes.includes(spec.silhouette)) {
+      throw new Error(`silhouette "${spec.silhouette}" is incompatible with species ${spec.species} (allowed: ${ph.silhouettes.join(', ')})`);
+    }
+    if (!ph.crests.includes(spec.crest)) {
+      throw new Error(`crest "${spec.crest}" is incompatible with species ${spec.species} (allowed: ${ph.crests.join(', ')})`);
+    }
+    if (!SPECIES_BUILDS[spec.species].includes(spec.build)) {
+      throw new Error(`build "${spec.build}" is incompatible with species ${spec.species} (allowed: ${SPECIES_BUILDS[spec.species].join(', ')})`);
     }
   }
   spec.pinnedFields = pinnedFields.sort();
@@ -165,16 +209,41 @@ export function compileIdentitySpec({ githubUserId, telemetry, pin }) {
   return spec;
 }
 
-/** Byte-identical identity block. Enum expansions only — no per-species prose. */
-export function identityBlock(spec) {
-  return [
-    `Character identity (immutable): a ${spec.temperament} ${spec.element}-element guardian creature.`,
+/**
+ * Byte-identical identity block. Enum expansions only — no hand-written
+ * per-character prose. `withReference` is false for the bootstrap render, which
+ * has no reference yet and must define the character from the spec alone.
+ */
+export function identityBlock(spec, { withReference = true } = {}) {
+  const lines = [
+    `Character identity (immutable): "${spec.speciesName}", a ${spec.temperament} ${spec.element}-element guardian creature.`,
+    `Species anatomy: ${spec.anatomy}.`,
     `Silhouette: ${spec.silhouette}. Head feature: ${spec.crest}. Surface: ${spec.material} with ${spec.markings}.`,
     `Aura: ${spec.aura}. Rarity treatment: ${spec.rarity}.`,
-    BUILD_PROMPT[spec.build],
-    'MATCH the attached reference image EXACTLY: same silhouette, same palette, same art style, same proportions.',
-    'Immutable identity: do not redesign the character, do not change species, do not change body type.'
+    BUILD_PROMPT[spec.build]
+  ];
+  if (withReference) {
+    lines.push('MATCH the attached reference image EXACTLY: same silhouette, same palette, same art style, same proportions.');
+  }
+  lines.push('Immutable identity: do not redesign the character, do not change species, do not change body type.');
+  return lines.join('\n');
+}
+
+/**
+ * Bootstrap prompt for a brand-new Guardian: renders the canonical identity
+ * portrait from the spec alone. Its accepted output becomes the pinned
+ * reference, so this prompt must be as deterministic as the pose prompts.
+ */
+export function compileReferencePrompt(spec) {
+  const text = [
+    'Draw ONE single-character reference portrait for a game sprite sheet.',
+    identityBlock(spec, { withReference: false }),
+    'Neutral standing A-pose, facing slightly to one side, FULL BODY head to feet, centered and large.',
+    'Output exactly ONE character. No grid, no panels, no borders, no text, no extra characters.',
+    `Background: pure solid chroma key ${CHROMA.keyHex}, flat, no shadows on the background, hard clean silhouette edges, no green spill on the character.`,
+    'Creative allowance: invent only subordinate texture, lighting, and particle detail consistent with the immutable identity. Do not alter anatomy, build, silhouette, palette, crest, or subject count.'
   ].join('\n');
+  return { poseId: 'reference', text, promptHash: sha256(text) };
 }
 
 /**

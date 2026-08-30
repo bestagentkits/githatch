@@ -53,7 +53,8 @@ generation unrelated to Guardians, or editing published manifests by hand.
 - Node 20+ and the repo's `sharp` dependency (do not add a skill-local install).
 - `GEMINI_API_KEY` from `process.env` first; local dev may fall back to an
   untracked dotenv at `GITHOOT_ENV_PATH`. Missing key → exit `2`, fail closed.
-- A pinned identity reference image for the Guardian (see step 3).
+- A pinned identity reference for the Guardian, OR none: `bootstrap` mints a
+  candidate for a brand-new Guardian and `approve-reference` promotes it.
 - Model: exactly one id from the allowlist in `scripts/lib/contracts.mjs`.
   Nano Banana 1 (`gemini-2.5-flash-image`) is never acceptable, not even as a fallback.
 
@@ -71,10 +72,18 @@ generation unrelated to Guardians, or editing published manifests by hand.
    `githoot:dna:v1:<github_user_id>` — never change it without a migration.
    Element/rarity come from real GitHub evidence; cosmetics come from
    domain-separated seed hashes.
-3. **Pin the reference.** The first accepted identity render becomes the
-   immutable, content-addressed reference (`reference_sha256`). Store it durably;
-   never overwrite in place. Sample Guardians use
-   `assets/sample-pets/{id}-gemini-raw.jpg`. Missing reference → exit `5`.
+3. **Mint and approve the reference.** A brand-new Guardian has none, so
+   `bootstrap` renders the identity portrait from the spec alone and writes a
+   **candidate** (`{id}-reference-candidate.png`, state `VERIFYING`). The
+   structural gate proves geometry, not identity, so the candidate is NOT the
+   reference yet. Inspect it against the compiled spec, then
+   `approve-reference --verdict pass --reviewer <name> --sha <candidateSha256>`
+   promotes it to `{id}-reference.png` with the verdict bound to those exact
+   bytes. `render` refuses a candidate or any non-`APPROVED` state. Approval is
+   local and needs no credential. Re-bootstrap or re-approve after a canonical
+   reference exists is refused: a Guardian reference is immutable. Sample
+   Guardians reuse the committed `assets/sample-pets/{id}-gemini-raw.jpg`.
+   Missing reference → exit `5`.
 4. **Compile prompts.** `compileAllPosePrompts(spec)` → one byte-identical prompt
    per pose with `promptHash`. Never let an LLM rewrite, translate, or embellish a
    prompt. Creativity is bounded to subordinate texture/lighting/particles.
@@ -119,7 +128,7 @@ generation unrelated to Guardians, or editing published manifests by hand.
 | Layer | Deterministic? |
 |---|---|
 | Telemetry snapshot + normalization | Yes — frozen at hatch, hashed |
-| Identity spec (species/element/rarity/cosmetics) | Yes — pure function of seed + snapshot |
+| Identity spec (species/element/rarity/cosmetics) | Yes — pure function of seed + snapshot; phenotype loci are species-constrained so a spec cannot contradict itself |
 | Prompt bytes | Yes — templated from enums, snapshot-tested |
 | Frame geometry, gates, composition, publication | Yes — code-owned constants |
 | Pixel rendering (texture, lighting, particles) | No — generative, bounded by prompt |
@@ -144,17 +153,26 @@ SKILL=.agents/skills/githoot-hatch/scripts
 # deterministic only: identity spec + prompt hashes. No spend, no network.
 node $SKILL/hatch.mjs compile --job <job.json>
 
+# brand-new Guardian: mint a reference CANDIDATE from the spec (1 render)
+node $SKILL/hatch.mjs bootstrap --job <job.json>
+
+# promote a reviewed candidate to the canonical reference (local, no credential)
+node $SKILL/hatch.mjs approve-reference --job <job.json> \
+  --verdict pass --reviewer "<name>" --sha <candidateSha256>
+
 # render N poses, raw-gate each, compose sheet+strip (png+webp), write manifest
 node $SKILL/hatch.mjs render  --job <job.json> [--resume]
 
-# deterministic layer + gate boundaries (27 assertions)
+# deterministic layer, identity constraints, gate boundaries (35 assertions)
 node --test $SKILL/tests/determinism.test.mjs
 ```
 
-`job.json`: `guardianId`, `githubUserId`, `telemetry`, `referencePath`, `outDir`,
-and optional `identityPin`. Use `identityPin` **only** for a Guardian whose
+`job.json`: `guardianId`, `githubUserId`, `telemetry`, `outDir`, plus
+`referencePath` (required by `render` only) and optional `identityPin`. Use `identityPin` **only** for a Guardian whose
 canonical reference predates this compiler, so the spec matches the reference
-instead of fighting it; pins are recorded in `spec.pinnedFields` for audit. A new
+instead of fighting it; pins are recorded in `spec.pinnedFields` for audit. A pin that contradicts the
+resolved species is rejected, and pinning `element` resyncs species and its
+phenotype rather than leaving them desynced. A new
 Guardian omits it — its reference is rendered from the spec, so they already agree.
 Example: `assets/sample-pets/neonbyte-hatch-job.json`.
 

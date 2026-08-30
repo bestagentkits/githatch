@@ -99,6 +99,48 @@ export const LANGUAGE_ELEMENT = Object.freeze({
   dockerfile: 'Metal', hcl: 'Metal', shell: 'Metal', makefile: 'Metal'
 });
 
+// Canonical species, one per element. Bounded on purpose: the art direction is
+// already established for these eight, so the pipeline never asks a model to
+// invent an unshippable ninth base creature. Species is derived, never rolled
+// free-form, and never taken from model output.
+export const SPECIES = Object.freeze([
+  { id: 'emberfox', element: 'Fire', name: 'Ignis Emberfox', anatomy: 'agile vulpine quadruped with flame tails' },
+  { id: 'neonbyte', element: 'Cyber', name: 'Aether Neonbyte', anatomy: 'humanoid cyber-elemental with a flame-like energy crest' },
+  { id: 'abyssal', element: 'Water', name: 'Nox Abyssal Pearl', anatomy: 'deep-sea leviathan with translucent fins' },
+  { id: 'verdant', element: 'Nature', name: 'Sylvan Verdant Golem', anatomy: 'botanical guardian with bark plating and branch antlers' },
+  { id: 'solargriffin', element: 'Light', name: 'Helios Solar Griffin', anatomy: 'winged griffin with gold plating and feathered light wings' },
+  { id: 'voidstalker', element: 'Void', name: 'Astral Void Stalker', anatomy: 'umbral predator with obsidian horns and tattered shadow wings' },
+  { id: 'rustgolem', element: 'Metal', name: 'Ferrum Rust Golem', anatomy: 'ferrous golem with riveted plating and vent ports' },
+  { id: 'celestialdrake', element: 'Cosmic', name: 'Zenith Celestial Drake', anatomy: 'astral dragon with a crystalline antler crown and aurora wings' }
+]);
+
+// Phenotype loci must be COMPATIBLE with the species, or the prompt contradicts
+// itself (a vulpine quadruped cannot also be a humanoid biped — the model then
+// invents a hybrid). Each species declares the silhouettes and crests it admits;
+// unconstrained loci (markings, material, aura, temperament) stay global.
+export const SPECIES_PHENOTYPE = Object.freeze({
+  emberfox:       { silhouettes: ['quadruped beast', 'agile biped'],      crests: ['flame crest', 'horned crown'] },
+  neonbyte:       { silhouettes: ['humanoid biped'],                      crests: ['flame crest', 'antenna fins', 'halo ring'] },
+  abyssal:        { silhouettes: ['serpentine', 'quadruped beast'],       crests: ['smooth carapace', 'antenna fins'] },
+  verdant:        { silhouettes: ['humanoid biped', 'quadruped beast'],   crests: ['antler branches', 'horned crown'] },
+  solargriffin:   { silhouettes: ['winged biped', 'quadruped beast'],     crests: ['horned crown', 'halo ring'] },
+  voidstalker:    { silhouettes: ['quadruped beast', 'floating wisp'],    crests: ['horned crown', 'smooth carapace'] },
+  rustgolem:      { silhouettes: ['humanoid biped', 'towering hulk'],     crests: ['horned crown', 'smooth carapace'] },
+  celestialdrake: { silhouettes: ['serpentine', 'winged biped'],          crests: ['antler branches', 'halo ring'] }
+});
+
+// Builds a species admits. Keeps "towering" off a compact sprite and vice versa.
+export const SPECIES_BUILDS = Object.freeze({
+  emberfox: ['lithe', 'compact'],
+  neonbyte: ['stocky', 'compact'],
+  abyssal: ['lithe', 'towering'],
+  verdant: ['stocky', 'towering'],
+  solargriffin: ['lithe', 'stocky'],
+  voidstalker: ['lithe', 'compact'],
+  rustgolem: ['stocky', 'towering'],
+  celestialdrake: ['towering', 'lithe']
+});
+
 export const BUILDS = Object.freeze(['stocky', 'lithe', 'towering', 'compact']);
 
 // Empirically necessary: body type drifts without explicit negative wording.

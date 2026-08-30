@@ -24,7 +24,7 @@ import {
   MODEL_ALLOWLIST, GEMINI_ENDPOINT, FRAME, GATES, POSE_SET, VERSIONS, EXIT
 } from './lib/contracts.mjs';
 import {
-  compileIdentitySpec, compileAllPosePrompts, requestFingerprint, canonicalJson, sha256
+  compileIdentitySpec, compileAllPosePrompts, compileReferencePrompt, requestFingerprint, canonicalJson, sha256
 } from './lib/determinism.mjs';
 import { removeChroma, validateFrame, contourBBox, framePlacement } from './lib/images.mjs';
 
@@ -52,10 +52,15 @@ function resolveCredentials() {
   return { key, model, source };
 }
 
-/** Parse ONLY the expected inlineData part. Model text is untrusted and ignored. */
+/**
+ * Parse ONLY the expected inlineData part. Model text is untrusted and ignored.
+ * `ref` is null for the bootstrap render (no reference exists yet); every pose
+ * render MUST pass one.
+ */
 async function renderPose(promptText, key, modelId, ref) {
   const url = `${GEMINI_ENDPOINT}/${modelId}:generateContent?key=${encodeURIComponent(key)}`;
-  const parts = [{ text: promptText }, { inlineData: { mimeType: ref.mime, data: ref.b64 } }];
+  const parts = [{ text: promptText }];
+  if (ref) parts.push({ inlineData: { mimeType: ref.mime, data: ref.b64 } });
   const res = await fetch(url, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } })
@@ -94,9 +99,11 @@ async function acceptRawRender(buf) {
 
 function loadJob(argv) {
   const i = argv.indexOf('--job');
-  if (i === -1 || !argv[i + 1]) die(EXIT.usage, 'usage: hatch.mjs <compile|render> --job <job.json> [--resume]');
+  if (i === -1 || !argv[i + 1]) die(EXIT.usage, 'usage: hatch.mjs <compile|bootstrap|approve-reference|render> --job <job.json> [--resume]');
   const job = JSON.parse(fs.readFileSync(argv[i + 1], 'utf8'));
-  for (const f of ['guardianId', 'githubUserId', 'telemetry', 'referencePath', 'outDir']) {
+  const required = ['guardianId', 'githubUserId', 'telemetry', 'outDir'];
+  if (!['compile', 'bootstrap', 'approve-reference'].includes(process.argv[2])) required.push('referencePath');
+  for (const f of required) {
     if (job[f] === undefined) die(EXIT.usage, `job.json missing required field: ${f}`);
   }
   // Path confinement: outputs must stay inside the repo.
@@ -109,8 +116,8 @@ function loadJob(argv) {
 
 async function main() {
   const [cmd] = process.argv.slice(2);
-  if (!['compile', 'render'].includes(cmd)) {
-    die(EXIT.usage, 'usage: hatch.mjs <compile|render> --job <job.json> [--resume]');
+  if (!['compile', 'bootstrap', 'approve-reference', 'render'].includes(cmd)) {
+    die(EXIT.usage, 'usage: hatch.mjs <compile|bootstrap|approve-reference|render> --job <job.json> [--resume]');
   }
   const job = loadJob(process.argv);
 
@@ -124,6 +131,60 @@ async function main() {
       identity: spec,
       poses: prompts.map(p => ({ poseId: p.poseId, promptHash: p.promptHash }))
     }));
+    return;
+  }
+
+  // ---- approve-reference: promote a candidate to the canonical reference ----
+  // The structural gate proves geometry, not identity. A candidate becomes the
+  // immutable identity anchor ONLY with an independent verdict bound to its hash.
+  // The generating model may never supply this verdict.
+  if (cmd === 'approve-reference') {
+    const arg = n => { const i = process.argv.indexOf(n); return i === -1 ? undefined : process.argv[i + 1]; };
+    const verdict = arg('--verdict');
+    const reviewer = arg('--reviewer');
+    const sha = arg('--sha');
+    if (verdict !== 'pass' || !reviewer || !sha) {
+      die(EXIT.usage,
+        'usage: hatch.mjs approve-reference --job <job.json> --verdict pass --reviewer "<name>" --sha <candidateSha256>\n' +
+        'Every argument is required. Only --verdict pass promotes; anything else leaves the candidate quarantined.');
+    }
+    const candPng = path.join(job._outAbs, `${job.guardianId}-reference-candidate.png`);
+    const candJson = path.join(job._outAbs, `${job.guardianId}-reference-candidate.json`);
+    if (!fs.existsSync(candPng) || !fs.existsSync(candJson)) {
+      die(EXIT.referenceMissing, `BLOCKED: no reference candidate for ${job.guardianId}. Run bootstrap first.`);
+    }
+    const cand = JSON.parse(fs.readFileSync(candJson, 'utf8'));
+    const actual = sha256(fs.readFileSync(candPng).toString('base64'));
+    if (actual !== cand.referenceSha256) {
+      die(EXIT.gateFailed, `BLOCKED: candidate bytes changed since bootstrap (recorded ${cand.referenceSha256.slice(0, 12)}, actual ${actual.slice(0, 12)}).`);
+    }
+    if (sha !== actual) {
+      die(EXIT.gateFailed, `BLOCKED: --sha does not match the candidate. The verdict must be bound to the exact bytes reviewed (candidate is ${actual.slice(0, 12)}...).`);
+    }
+    if (cand.identityHash !== spec.identityHash) {
+      die(EXIT.gateFailed, 'BLOCKED: the identity spec changed since this candidate was minted. Re-bootstrap before approving.');
+    }
+    const finalPng = path.join(job._outAbs, `${job.guardianId}-reference.png`);
+    if (fs.existsSync(finalPng) && !process.argv.includes('--force')) {
+      die(EXIT.usage, `BLOCKED: canonical reference already exists: ${finalPng}. A Guardian reference is immutable.`);
+    }
+    fs.copyFileSync(candPng, finalPng);
+    fs.writeFileSync(path.join(job._outAbs, `${job.guardianId}-reference.json`), JSON.stringify({
+      ...cand,
+      referencePath: path.relative(process.cwd(), finalPng).replaceAll('\\', '/'),
+      state: 'APPROVED',
+      semanticIdentityVerdict: {
+        verdict: 'pass',
+        reviewer,
+        boundToSha256: actual,
+        boundToIdentityHash: spec.identityHash,
+        covers: ['species', 'anatomy/build', 'silhouette', 'palette', 'crest', 'style', 'subject count'],
+        approvedBy: 'independent reviewer (not the generating model)'
+      }
+    }, null, 2));
+    console.log(`promoted to canonical reference: ${path.basename(finalPng)}`);
+    console.log(`verdict bound to sha256 ${actual.slice(0, 16)}... by ${reviewer}`);
+    console.log('Set this path as "referencePath" in the job, then run: hatch.mjs render');
     return;
   }
 
@@ -143,8 +204,77 @@ async function main() {
   console.log(`credential source: ${source}`); // name only, never the value
   console.log(`model: ${modelId}`);
 
+  // ---- bootstrap: mint the canonical reference for a brand-new Guardian ----
+  // Without this a new GitHub user cannot be hatched, and whichever species the
+  // model happened to draw would become the identity. Here the spec defines the
+  // character, and the accepted render is pinned by hash.
+  if (cmd === 'bootstrap') {
+    fs.mkdirSync(job._outAbs, { recursive: true });
+    const canonical = path.join(job._outAbs, `${job.guardianId}-reference.png`);
+    if (fs.existsSync(canonical) && !process.argv.includes('--force')) {
+      die(EXIT.usage,
+        `BLOCKED: an approved canonical reference already exists: ${canonical}\n` +
+        'A Guardian reference is immutable. Re-bootstrapping would change identity.');
+    }
+    const outPath = path.join(job._outAbs, `${job.guardianId}-reference-candidate.png`);
+    if (fs.existsSync(outPath) && !process.argv.includes('--force')) {
+      die(EXIT.usage,
+        `BLOCKED: reference already exists: ${outPath}\n` +
+        'A Guardian reference is immutable. Re-minting would change identity; pass --force only for a deliberate, recorded re-bootstrap.');
+    }
+    const refPrompt = compileReferencePrompt(spec);
+    let accepted = null, lastErr = '';
+    for (let attempt = 1; attempt <= GATES.maxAttemptsPerPose && !accepted; attempt++) {
+      let raw;
+      try { raw = await renderPose(refPrompt.text, key, modelId, null); }
+      catch (e) { lastErr = e.message; console.log(`reference attempt ${attempt}: render failed (${lastErr})`); continue; }
+      try { accepted = await acceptRawRender(raw); }
+      catch (e) { lastErr = e.message; console.log(`reference attempt ${attempt}: raw gate rejected — ${lastErr}`); }
+    }
+    if (!accepted) die(EXIT.gateFailed, `BLOCKED: reference failed raw acceptance after ${GATES.maxAttemptsPerPose} attempts (${lastErr})`);
+    fs.writeFileSync(outPath, accepted.frame);
+    const referenceSha256 = sha256(accepted.frame.toString('base64'));
+    fs.writeFileSync(path.join(job._outAbs, `${job.guardianId}-reference-candidate.json`), JSON.stringify({
+      guardianId: job.guardianId,
+      referencePath: path.relative(process.cwd(), outPath).replaceAll('\\', '/'),
+      referenceSha256,
+      identityHash: spec.identityHash,
+      species: spec.species,
+      promptHash: refPrompt.promptHash,
+      modelId,
+      rawSha256: accepted.rawSha256,
+      rawGate: accepted.metrics,
+      versions: VERSIONS,
+      state: 'VERIFYING',
+      semanticIdentityVerdict: null
+    }, null, 2));
+    console.log(`minted reference CANDIDATE: ${path.basename(outPath)}`);
+    console.log(`referenceSha256: ${referenceSha256}`);
+    console.log('This is NOT yet the canonical reference. Inspect it against the compiled spec, then run:');
+    console.log(`  hatch.mjs approve-reference --job <job.json> --verdict pass --reviewer "<name>" --sha ${referenceSha256}`);
+    console.log('Only an approved candidate may be used by render (structural gate cannot judge identity).');
+    return;
+  }
+
+
   const refAbs = path.resolve(process.cwd(), job.referencePath);
   if (!fs.existsSync(refAbs)) die(EXIT.referenceMissing, `BLOCKED: pinned identity reference missing: ${job.referencePath}`);
+  // Refuse to anchor 16 poses on a candidate that no reviewer has approved.
+  if (/-reference-candidate\.(png|jpe?g)$/i.test(refAbs)) {
+    die(EXIT.referenceMissing,
+      'BLOCKED: referencePath points at an unapproved reference CANDIDATE.\n' +
+      'Run approve-reference first — the structural gate cannot judge identity, so an\n' +
+      'unreviewed candidate must never become the anchor for a whole pose set.');
+  }
+  {
+    const sidecar = refAbs.replace(/\.(png|jpe?g)$/i, '.json');
+    if (fs.existsSync(sidecar)) {
+      const meta = JSON.parse(fs.readFileSync(sidecar, 'utf8'));
+      if (meta.state && meta.state !== 'APPROVED') {
+        die(EXIT.referenceMissing, `BLOCKED: reference state is "${meta.state}", not APPROVED. Run approve-reference.`);
+      }
+    }
+  }
   const refBuf = fs.readFileSync(refAbs);
   const referenceSha256 = sha256(refBuf.toString('base64'));
   const ref = {

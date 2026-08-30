@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 
 import {
   dnaSeed, normalizeTelemetry, canonicalJson, compileIdentitySpec,
-  compilePosePrompt, compileAllPosePrompts, requestFingerprint, meritScore, rarityFor
+  compilePosePrompt, compileAllPosePrompts, compileReferencePrompt, requestFingerprint, meritScore, rarityFor
 } from '../lib/determinism.mjs';
 import { validateFrame } from '../lib/images.mjs';
-import { GATES, POSE_SET, MODEL_ALLOWLIST } from '../lib/contracts.mjs';
+import { GATES, POSE_SET, MODEL_ALLOWLIST, SPECIES, SPECIES_PHENOTYPE, SPECIES_BUILDS } from '../lib/contracts.mjs';
 
 const TELEMETRY = {
   topLanguages: ['TypeScript', 'Rust', 'Go'],
@@ -254,11 +254,48 @@ test('identity pin overrides only pinnable enum fields and is audited', () => {
 });
 
 test('identity pin is deterministic and rejects junk', () => {
-  const args = { githubUserId: 7, telemetry: TELEMETRY, pin: { build: 'towering' } };
+  // temperament is an unconstrained locus, valid for any species
+  const args = { githubUserId: 7, telemetry: TELEMETRY, pin: { temperament: 'regal' } };
   assert.equal(compileIdentitySpec(args).identityHash, compileIdentitySpec(args).identityHash);
+  assert.equal(compileIdentitySpec(args).temperament, 'regal');
   assert.throws(() => compileIdentitySpec({ ...args, pin: { build: 'gelatinous' } }), /must be one of/);
   assert.throws(() => compileIdentitySpec({ ...args, pin: { dnaSeed: 'deadbeef' } }), /not allowed/);
   assert.throws(() => compileIdentitySpec({ ...args, pin: { githubUserId: '1' } }), /not allowed/);
+});
+
+test('species-incompatible pins are rejected, not silently reconciled', () => {
+  // neonbyte (Cyber) is a humanoid biped; serpentine and towering contradict it.
+  const base = { githubUserId: 11829471, telemetry: { topLanguages: ['typescript'] } };
+  assert.equal(compileIdentitySpec(base).species, 'neonbyte');
+  assert.throws(() => compileIdentitySpec({ ...base, pin: { silhouette: 'serpentine' } }), /incompatible with species neonbyte/);
+  assert.throws(() => compileIdentitySpec({ ...base, pin: { build: 'towering' } }), /incompatible with species neonbyte/);
+  assert.throws(() => compileIdentitySpec({ ...base, pin: { crest: 'antler branches' } }), /incompatible with species neonbyte/);
+});
+
+test('pinning element resyncs species and its phenotype', () => {
+  const base = { githubUserId: 11829471, telemetry: { topLanguages: ['typescript'] } };
+  assert.equal(compileIdentitySpec(base).species, 'neonbyte');
+  const pinned = compileIdentitySpec({ ...base, pin: { element: 'Fire' } });
+  assert.equal(pinned.element, 'Fire');
+  assert.equal(pinned.species, 'emberfox', 'species must follow the pinned element');
+  assert.equal(SPECIES.find(s => s.id === pinned.species).element, pinned.element, 'no element/species desync');
+  // phenotype must be re-derived from the new species, not left over from the old one
+  assert.ok(SPECIES_PHENOTYPE[pinned.species].silhouettes.includes(pinned.silhouette));
+  assert.ok(SPECIES_BUILDS[pinned.species].includes(pinned.build));
+});
+
+test('no generated spec can contradict its own species', () => {
+  for (let i = 0; i < 400; i++) {
+    const spec = compileIdentitySpec({
+      githubUserId: 200000 + i,
+      telemetry: { topLanguages: [['rust', 'typescript', 'python', 'go', 'java', 'assembly', 'dockerfile', 'kotlin'][i % 8]], stars: i * 7, accountAgeYears: i % 11 }
+    });
+    const ph = SPECIES_PHENOTYPE[spec.species];
+    assert.ok(ph.silhouettes.includes(spec.silhouette), `${spec.species} + ${spec.silhouette}`);
+    assert.ok(ph.crests.includes(spec.crest), `${spec.species} + ${spec.crest}`);
+    assert.ok(SPECIES_BUILDS[spec.species].includes(spec.build), `${spec.species} + ${spec.build}`);
+    assert.equal(SPECIES.find(s => s.id === spec.species).element, spec.element);
+  }
 });
 
 test('pinned identity reaches the prompt text', () => {
@@ -270,4 +307,48 @@ test('pinned identity reaches the prompt text', () => {
   assert.match(p.text, /humanoid biped/);
   assert.match(p.text, /STOCKY and CHUNKY/);
   assert.match(p.text, /NOT slim, NOT thin/);
+});
+
+test('species is derived deterministically, one per element', () => {
+  const spec = compileIdentitySpec({ githubUserId: 11829471, telemetry: TELEMETRY });
+  assert.ok(SPECIES.some(s => s.id === spec.species), 'species must come from the bounded table');
+  assert.equal(spec.element, SPECIES.find(s => s.id === spec.species).element, 'species must match element');
+  assert.ok(spec.speciesName && spec.anatomy, 'name and anatomy must be present for the prompt');
+  // every element has exactly one canonical species — no unshippable ninth base
+  assert.equal(new Set(SPECIES.map(s => s.element)).size, SPECIES.length);
+});
+
+test('a brand-new user with no reference still gets a full identity', () => {
+  // Rust/C evidence => Fire => emberfox, with no reference image involved.
+  const spec = compileIdentitySpec({
+    githubUserId: 987654321,
+    telemetry: { topLanguages: ['rust', 'c'], stars: 42, publicRepos: 7, accountAgeYears: 2 }
+  });
+  assert.equal(spec.element, 'Fire');
+  assert.equal(spec.species, 'emberfox');
+  assert.ok(spec.identityHash);
+});
+
+test('bootstrap prompt defines the character without a reference', () => {
+  const spec = compileIdentitySpec({ githubUserId: 987654321, telemetry: { topLanguages: ['rust'] } });
+  const boot = compileReferencePrompt(spec);
+  assert.doesNotMatch(boot.text, /MATCH the attached reference/, 'no reference exists yet');
+  assert.match(boot.text, new RegExp(spec.speciesName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(boot.text, /Species anatomy:/);
+  assert.match(boot.text, /exactly ONE character/);
+  assert.match(boot.text, /do not change species/);
+});
+
+test('pose prompts still require the reference, and both prompt kinds are stable', () => {
+  const spec = compileIdentitySpec({ githubUserId: 987654321, telemetry: { topLanguages: ['rust'] } });
+  assert.match(compilePosePrompt(spec, 'hover').text, /MATCH the attached reference/);
+  assert.equal(compileReferencePrompt(spec).promptHash, compileReferencePrompt(spec).promptHash);
+  assert.notEqual(compileReferencePrompt(spec).promptHash, compilePosePrompt(spec, 'hover').promptHash);
+});
+
+test('species appears in every pose prompt so identity cannot silently drift', () => {
+  const spec = compileIdentitySpec({ githubUserId: 11829471, telemetry: TELEMETRY });
+  for (const p of compileAllPosePrompts(spec)) {
+    assert.match(p.text, /Species anatomy:/);
+  }
 });
