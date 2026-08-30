@@ -27,10 +27,10 @@ export const Footer: React.FC<FooterProps> = ({
     if (onRouteChange) {
       e.preventDefault();
       onRouteChange(route);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const isReduced = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: isReduced ? 'auto' : 'smooth' });
     }
   };
-
   return (
     <footer style={{
       background: '#05070B',

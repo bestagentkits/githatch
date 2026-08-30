@@ -108,9 +108,20 @@ export const HomePage: React.FC<HomePageProps> = ({
     });
   };
 
+  const isReducedMotion = () =>
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   const playSequence = (speed: 'normal' | 'slow') => {
     if (!isStripLoaded) setIsStripLoaded(true);
     clearTimeout(animTimerRef.current as number);
+
+    // If reduced motion is requested, lock cleanly onto Frame 16 (Hero Stance)
+    if (isReducedMotion()) {
+      setIsPlaying(false);
+      setIsSlowmo(false);
+      setActiveFrame(16);
+      return;
+    }
 
     // Reset animation state momentarily so same-speed replay triggers a clean restart
     setIsPlaying(false);
@@ -132,7 +143,6 @@ export const HomePage: React.FC<HomePageProps> = ({
       setActiveFrame(16);
     }, duration);
   };
-
   const pauseSequence = () => {
     clearTimeout(animTimerRef.current as number);
     setIsPlaying(false);
@@ -184,7 +194,8 @@ export const HomePage: React.FC<HomePageProps> = ({
     const el = document.getElementById('hero-username-input');
     if (el) {
       el.focus();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const behavior = isReducedMotion() ? 'auto' : 'smooth';
+      window.scrollTo({ top: 0, behavior });
     }
   };
 
@@ -642,8 +653,22 @@ export const HomePage: React.FC<HomePageProps> = ({
               One hundred free slots, one per GitHub account. After slot 100, a hatch costs ${config?.charge_after_usd ?? '0.99'} — that covers the Gemini model call, nothing more. We would rather tell you the price now than surprise you at the reveal.
             </p>
 
-            {/* 10x10 Dot Matrix or Degraded State */}
-            {quota?.degraded || quota?.claimed === null ? (
+            {/* 10x10 Dot Matrix, Loading, or Degraded State */}
+            {quotaLoading ? (
+              <div style={{
+                padding: '24px 16px',
+                background: 'rgba(0, 240, 255, 0.04)',
+                border: '1px solid rgba(0, 240, 255, 0.15)',
+                borderRadius: '12px',
+                color: 'var(--text-secondary)',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '13px',
+                margin: '28px auto',
+                maxWidth: '420px'
+              }}>
+                ✦ Synchronizing Genesis cohort ledger with D1...
+              </div>
+            ) : quota?.degraded || quota?.claimed === null ? (
               <div style={{
                 padding: '24px 16px',
                 background: 'rgba(255, 168, 0, 0.08)',
