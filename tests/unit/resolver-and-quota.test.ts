@@ -4,10 +4,10 @@
 // ============================================================================
 
 import { describe, it, expect } from 'vitest';
-import { generateDegradedProfile } from '../../src/server/services/github/resolver';
+import { generateDegradedProfile, resolveGitHubProfile } from '../../src/server/services/github/resolver';
 import { parseTokenPool, recordTokenResponse } from '../../src/server/services/github/token-pool';
 import { calculateGuardianMood } from '../../src/server/services/progression/mood-engine';
-import type { Env, PublicConfig, EarlyAccessStatus } from '../../src/server/types';
+import type { Env, PublicConfig, EarlyAccessStatus, ResolvedProfile } from '../../src/server/types';
 import app from '../../src/server/index';
 import { getEarlyAccessStatus } from '../../src/server/services/claim/quota';
 describe('SWR Resolver & Degraded Seed Fallback', () => {
@@ -147,5 +147,39 @@ describe('Public Config & Quota Endpoint Contracts', () => {
     expect(status.remaining).toBe(58);
     expect(status.total).toBe(100);
     expect(status.is_free).toBe(true);
+  });
+
+  it('normalizes sample pet heroUrl to canonical transparent .webp matching species', async () => {
+    const mockDbRow = {
+      id: 'test-guardian-id',
+      name: 'Zenith Celestial Drake',
+      species: 'Zenith Celestial Drake',
+      element: 'Mythic',
+      rarity_tier: 'Common',
+      level: 1,
+      experience: 0,
+      energy_state: 'Active',
+      hero_image_url: '/assets/sample-pets/verdant.jpg',
+      spritesheet_url: null
+    };
+
+    const mockEnvWithClaimed = {
+      DB: {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => mockDbRow
+          })
+        })
+      },
+      CACHE_KV: {
+        get: async () => null,
+        put: async () => {}
+      }
+    } as unknown as Env;
+
+    const profile = await resolveGitHubProfile('octocat', mockEnvWithClaimed);
+    expect(profile.claimed).toBe(true);
+    expect(profile.guardian).toBeDefined();
+    expect(profile.guardian?.hero_image_url).toBe('/assets/sample-pets/celestialdrake.webp');
   });
 });

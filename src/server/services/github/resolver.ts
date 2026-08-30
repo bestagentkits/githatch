@@ -218,6 +218,26 @@ async function getGuardianFromDb(githubUserId: number, env: Env): Promise<Guardi
 
     if (!row) return null;
 
+    let heroUrl = row.hero_image_url;
+    if (heroUrl && heroUrl.includes('/assets/sample-pets/')) {
+      const speciesMap: Record<string, string> = {
+        'Ignis Emberfox': 'emberfox',
+        'Aether Neon Byte': 'neonbyte',
+        'Nox Abyssal Pearl': 'abyssal',
+        'Sylvan Verdant Golem': 'verdant',
+        'Helios Solar Griffin': 'solargriffin',
+        'Astral Void Stalker': 'voidstalker',
+        'Ferrum Rust Golem': 'rustgolem',
+        'Zenith Celestial Drake': 'celestialdrake'
+      };
+      const slug = speciesMap[row.species] || speciesMap[row.name];
+      if (slug) {
+        heroUrl = `/assets/sample-pets/${slug}.webp`;
+      } else {
+        heroUrl = heroUrl.replace(/\.jpg$/, '.webp');
+      }
+    }
+
     return {
       id: row.id,
       name: row.name,
@@ -227,7 +247,7 @@ async function getGuardianFromDb(githubUserId: number, env: Env): Promise<Guardi
       level: row.level,
       experience: row.experience,
       energy_state: row.energy_state,
-      hero_image_url: row.hero_image_url,
+      hero_image_url: heroUrl,
       spritesheet_url: row.spritesheet_url
     };
   } catch {
