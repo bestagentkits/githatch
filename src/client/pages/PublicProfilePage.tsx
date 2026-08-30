@@ -64,7 +64,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
 
   // Track egg_viewed ONLY when real profile egg card becomes >=50% visible (Contract §7)
   useEffect(() => {
-    if (!profile || loading || eggTrackedRef.current) return;
+    if (!profile || loading || profile.claimed || eggTrackedRef.current) return;
     const node = eggCardRef.current || (document.querySelector('.githoot-card') as HTMLElement | null);
     if (!node) return;
 
