@@ -5,7 +5,19 @@
 import React, { useEffect, useState, useRef } from 'react';
 import type { ResolvedProfile } from '../../server/types';
 import { EggSpritesheetPlayer } from '../components/EggSpritesheetPlayer';
+import { SocialSharePanel } from '../components/SocialSharePanel';
 import { track } from '../lib/analytics';
+
+function getRarityGlowColor(tier?: string): string {
+  switch (tier) {
+    case 'Rare': return '#3b82f6';
+    case 'Epic': return '#ff2a85';
+    case 'Legendary': return '#ffa800';
+    case 'Mythic': return '#a855f7';
+    case 'Common':
+    default: return '#00f0ff';
+  }
+}
 
 export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) => {
   const [profile, setProfile] = useState<ResolvedProfile | null>(null);
@@ -123,15 +135,120 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
       <main className="githoot-container" style={{ margin: 'clamp(24px, 5vw, 48px) auto' }}>
         <div className="githoot-main-grid">
           
-          {/* Left Column: Interactive Egg Canvas with 50% visibility tracking */}
+          {/* Left Column: Interactive Egg or Hatched Living Guardian */}
           <div
             ref={eggCardRef}
             className="githoot-card"
-            style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '320px' }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              minHeight: '340px',
+              border: profile.claimed && profile.guardian ? `2px solid ${getRarityGlowColor(profile.guardian.rarity_tier)}` : '1px solid rgba(0, 240, 255, 0.2)',
+              boxShadow: profile.claimed && profile.guardian ? `0 0 40px ${getRarityGlowColor(profile.guardian.rarity_tier)}33` : '0 8px 32px rgba(0, 0, 0, 0.4)'
+            }}
           >
-            <EggSpritesheetPlayer archetypeId={profile.egg_archetype_id} />
-          </div>
+            {profile.claimed && profile.guardian ? (
+              <div className="guardian-stage" style={{ width: '100%' }}>
+                {/* Rarity & Genesis Badge */}
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'rgba(0, 240, 255, 0.08)',
+                  border: `1px solid ${getRarityGlowColor(profile.guardian.rarity_tier)}`,
+                  color: getRarityGlowColor(profile.guardian.rarity_tier),
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  padding: '4px 14px',
+                  borderRadius: '9999px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  marginBottom: '12px'
+                }}>
+                  ✦ {profile.guardian.rarity_tier} GUARDIAN ✦
+                </div>
 
+                {/* Floating Pedestal & Hero Sprite */}
+                <div
+                  className="guardian-pedestal"
+                  style={{ '--pedestal-glow': getRarityGlowColor(profile.guardian.rarity_tier) } as React.CSSProperties}
+                >
+                  <img
+                    src={profile.guardian.hero_image_url}
+                    alt={profile.guardian.name}
+                    className="guardian-hero-sprite"
+                  />
+                </div>
+
+                {/* Guardian Title */}
+                <h2 style={{
+                  fontFamily: "'Archivo', sans-serif",
+                  fontSize: 'clamp(20px, 3vw, 24px)',
+                  fontWeight: 900,
+                  color: '#ffffff',
+                  margin: '0 0 6px 0',
+                  textAlign: 'center'
+                }}>
+                  {profile.guardian.name}
+                </h2>
+
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '12px',
+                  color: '#8b9bb4',
+                  textAlign: 'center',
+                  marginBottom: '14px'
+                }}>
+                  Species: <span style={{ color: '#00f0ff', fontWeight: 700 }}>{profile.guardian.species}</span>
+                </div>
+
+                {/* Status Badges Row */}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    padding: '3px 10px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 42, 133, 0.12)',
+                    border: '1px solid rgba(255, 42, 133, 0.35)',
+                    color: '#ff2a85'
+                  }}>
+                    🔥 {profile.guardian.element}
+                  </span>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    padding: '3px 10px',
+                    borderRadius: '6px',
+                    background: 'rgba(0, 240, 255, 0.12)',
+                    border: '1px solid rgba(0, 240, 255, 0.35)',
+                    color: '#00f0ff'
+                  }}>
+                    LVL {profile.guardian.level}
+                  </span>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    padding: '3px 10px',
+                    borderRadius: '6px',
+                    background: 'rgba(0, 255, 136, 0.12)',
+                    border: '1px solid rgba(0, 255, 136, 0.35)',
+                    color: '#00ff88'
+                  }}>
+                    ⚡ {profile.guardian.energy_state}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <EggSpritesheetPlayer archetypeId={profile.egg_archetype_id} />
+            )}
+          </div>
           {/* Right Column: Developer Snapshot & Claim Action */}
           <div className="githoot-card">
             
@@ -183,36 +300,45 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
               </div>
             </div>
 
-            {/* Claim CTA Button (Touch Standard >= 48px) */}
-            <div>
-              <a
-                href={`/auth/github?claim_username=${encodeURIComponent(profile.login)}`}
-                className="btn-touch"
-                onClick={() => {
-                  track('claim_started', { archetype_id: profile.egg_archetype_id });
-                }}
-                style={{
-                  width: '100%',
-                  background: '#00f0ff',
-                  color: '#000',
-                  padding: '14px 20px',
-                  borderRadius: '8px',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 'clamp(13px, 2.5vw, 15px)',
-                  fontWeight: 800,
-                  textDecoration: 'none',
-                  boxShadow: '0 0 24px rgba(0,240,255,0.35)',
-                  transition: 'transform 0.15s, box-shadow 0.15s',
-                  textAlign: 'center'
-                }}
-              >
-                🚀 Claim & Hatch My Guardian Free
-              </a>
-              <div style={{ textAlign: 'center', fontSize: '11px', color: '#53627a', marginTop: '10px' }}>
-                ✓ Only the owner of @{profile.login} can claim this companion.
+            {/* Claim CTA or Owner Bound Banner & Share Panel */}
+            {profile.claimed && profile.guardian ? (
+              <div>
+                <div className="claimed-owner-badge">
+                  <span>🛡️</span>
+                  <span>Guardian Claimed · Bound to GitHub #{profile.github_user_id}</span>
+                </div>
+                <SocialSharePanel username={profile.login} guardian={profile.guardian} />
               </div>
-            </div>
-
+            ) : (
+              <div>
+                <a
+                  href={`/auth/github?claim_username=${encodeURIComponent(profile.login)}`}
+                  className="btn-touch"
+                  onClick={() => {
+                    track('claim_started', { archetype_id: profile.egg_archetype_id });
+                  }}
+                  style={{
+                    width: '100%',
+                    background: '#00f0ff',
+                    color: '#000',
+                    padding: '14px 20px',
+                    borderRadius: '8px',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 'clamp(13px, 2.5vw, 15px)',
+                    fontWeight: 800,
+                    textDecoration: 'none',
+                    boxShadow: '0 0 24px rgba(0,240,255,0.35)',
+                    transition: 'transform 0.15s, box-shadow 0.15s',
+                    textAlign: 'center'
+                  }}
+                >
+                  🚀 Claim & Hatch My Guardian Free
+                </a>
+                <div style={{ textAlign: 'center', fontSize: '11px', color: '#53627a', marginTop: '10px' }}>
+                  ✓ Only the owner of @{profile.login} can claim this companion.
+                </div>
+              </div>
+            )}
           </div>
 
         </div>
