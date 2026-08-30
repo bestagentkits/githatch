@@ -58,8 +58,19 @@ export async function executeClaimTransaction(
   // 4. Derive Deterministic DNA
   const dna = await deriveGuardianDNA(authUser.id, authUser.login, []);
 
-  // 5. Default initial hero URL
-  let heroUrl = `/assets/sample-pets/${dna.egg_archetype_id === 'ember-core' ? 'emberfox' : dna.egg_archetype_id === 'neon-byte' ? 'neonbyte' : dna.egg_archetype_id === 'abyssal-pearl' ? 'abyssal' : 'verdant'}.jpg`;
+  // 5. Default initial hero URL (transparent de-spilled WebP assets)
+  const archetypeMap: Record<string, string> = {
+    'ember-core': 'emberfox',
+    'neon-byte': 'neonbyte',
+    'abyssal-pearl': 'abyssal',
+    'solar-flare': 'solargriffin',
+    'celestial-ray': 'celestialdrake',
+    'void-rift': 'voidstalker',
+    'rust-gear': 'rustgolem',
+    'verdant-sprout': 'verdant'
+  };
+  const petSlug = archetypeMap[dna.egg_archetype_id] || 'neonbyte';
+  let heroUrl = `/assets/sample-pets/${petSlug}.webp`;
   let spritesheetUrl: string | null = null;
 
   // 6. Execute Direct AI Generation if API key is present

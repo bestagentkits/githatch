@@ -59,65 +59,118 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
         className="githoot-modal-card"
         style={{
           border: `2px solid ${getRarityColor(guardian.rarity_tier)}`,
-          boxShadow: `0 0 50px ${getRarityGlow(guardian.rarity_tier)}`
+          boxShadow: `0 0 60px ${getRarityGlow(guardian.rarity_tier)}, 0 20px 60px rgba(0,0,0,0.85)`
         }}
       >
-        {/* Hologram Rarity Header */}
+        {/* Hologram Rarity Header Pill */}
         <div style={{
-          display: 'inline-block',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
           background: getRarityGradient(guardian.rarity_tier),
           color: '#000',
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: '11px',
           fontWeight: 900,
-          padding: '6px 18px',
+          padding: '6px 20px',
           borderRadius: '9999px',
           textTransform: 'uppercase',
-          letterSpacing: '0.1em',
-          marginBottom: '16px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.5)'
+          letterSpacing: '0.12em',
+          marginBottom: '14px',
+          boxShadow: `0 0 20px ${getRarityGlow(guardian.rarity_tier)}`
         }}>
-          ★ ★ ★ {guardian.rarity_tier} HATCH ★ ★ ★
+          <span>✦ ✦ ✦</span>
+          <span>{guardian.rarity_tier} HATCH</span>
+          <span>✦ ✦ ✦</span>
+        </div>
+
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: '12px',
+          fontWeight: 700,
+          color: '#00f0ff',
+          letterSpacing: '0.15em',
+          textTransform: 'uppercase',
+          marginBottom: '4px'
+        }}>
+          Ritual Complete · Genesis Awakening
         </div>
 
         <h2 style={{
           fontFamily: "'Archivo', sans-serif",
-          fontSize: 'clamp(22px, 5vw, 32px)',
+          fontSize: 'clamp(24px, 5vw, 36px)',
           fontWeight: 900,
           color: '#ffffff',
-          marginBottom: '8px'
+          margin: '0 0 8px 0',
+          textShadow: '0 0 24px rgba(255,255,255,0.3)'
         }}>
-          {guardian.name} Đã Thức Tỉnh!
+          {guardian.name}
         </h2>
 
-        <p style={{ fontSize: '13px', color: '#8b9bb4', marginBottom: '20px' }}>
-          Linh thú hộ mệnh hệ <strong>{guardian.element}</strong> bảo vệ các dự án mã nguồn mở của <strong>@{username}</strong>.
+        <p style={{ fontSize: '13px', color: '#8b9bb4', margin: '0 auto 20px auto', maxWidth: '460px', lineHeight: 1.5 }}>
+          Living Guardian bound to protect <strong style={{ color: '#00f0ff' }}>@{username}</strong>'s open-source realm.
         </p>
 
-        {/* Character Portrait (Responsive max 220px) */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          marginBottom: '24px'
-        }}>
-          <img
-            src={guardian.hero_image_url}
-            alt={guardian.name}
-            style={{
-              width: 'clamp(160px, 40vw, 220px)',
-              height: 'clamp(160px, 40vw, 220px)',
-              objectFit: 'cover',
-              borderRadius: '16px',
-              border: `2px solid ${getRarityColor(guardian.rarity_tier)}`,
-              boxShadow: `0 0 30px ${getRarityGlow(guardian.rarity_tier)}`
-            }}
-          />
+        {/* Grand Floating Pedestal Stage */}
+        <div className="guardian-stage">
+          <div
+            className="guardian-pedestal"
+            style={{ '--pedestal-glow': getRarityGlow(guardian.rarity_tier) } as React.CSSProperties}
+          >
+            <img
+              src={guardian.hero_image_url}
+              alt={guardian.name}
+              className="guardian-hero-sprite"
+            />
+          </div>
+
+          {/* Elemental & Progression Badges */}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '20px' }}>
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '11px',
+              fontWeight: 800,
+              padding: '4px 12px',
+              borderRadius: '6px',
+              background: 'rgba(255, 42, 133, 0.12)',
+              border: '1px solid rgba(255, 42, 133, 0.35)',
+              color: '#ff2a85'
+            }}>
+              🔥 {guardian.element}
+            </span>
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '11px',
+              fontWeight: 800,
+              padding: '4px 12px',
+              borderRadius: '6px',
+              background: 'rgba(0, 240, 255, 0.12)',
+              border: '1px solid rgba(0, 240, 255, 0.35)',
+              color: '#00f0ff'
+            }}>
+              LVL {guardian.level}
+            </span>
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '11px',
+              fontWeight: 800,
+              padding: '4px 12px',
+              borderRadius: '6px',
+              background: 'rgba(0, 255, 136, 0.12)',
+              border: '1px solid rgba(0, 255, 136, 0.35)',
+              color: '#00ff88'
+            }}>
+              ⚡ {guardian.energy_state}
+            </span>
+          </div>
         </div>
 
         {/* Social Share Embedded Section */}
-        <SocialSharePanel username={username} guardian={guardian} />
+        <div style={{ marginBottom: '24px' }}>
+          <SocialSharePanel username={username} guardian={guardian} />
+        </div>
 
-        <div style={{ marginTop: '20px' }}>
+        <div>
           <button
             onClick={onClose}
             className="btn-touch"
@@ -125,18 +178,19 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
               background: '#00f0ff',
               color: '#000',
               border: 'none',
-              padding: '12px 28px',
-              borderRadius: '8px',
+              padding: '14px 32px',
+              borderRadius: '10px',
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: '14px',
               fontWeight: 800,
               cursor: 'pointer',
-              boxShadow: '0 0 20px rgba(0,240,255,0.35)',
+              boxShadow: '0 0 30px rgba(0,240,255,0.4)',
               width: '100%',
-              maxWidth: '320px'
+              maxWidth: '360px',
+              transition: 'transform 0.15s, box-shadow 0.15s'
             }}
           >
-            Vào Trang Profile Chính Thức →
+            View Official Profile →
           </button>
         </div>
       </div>
