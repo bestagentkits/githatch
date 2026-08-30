@@ -12,7 +12,8 @@ export const authRouter = new Hono<{ Bindings: Env }>();
 // 1. Initiate GitHub OAuth
 authRouter.get('/github', async (c) => {
   const claimUsername = c.req.query('claim_username') || '';
-  const clientId = c.env.GITHUB_CLIENT_ID;
+  const rawClientId = c.env.GITHUB_CLIENT_ID || '';
+  const clientId = rawClientId.replace(/^["']|["']$/g, '').trim();
 
   if (!clientId) {
     return c.text('GITHUB_CLIENT_ID not configured.', 500);

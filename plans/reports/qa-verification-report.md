@@ -1,6 +1,6 @@
 # GitHoot Autonomous QA & Verification Report
 
-- **Date:** 2026-08-29T19:05:08.245Z
+- **Date:** 2026-08-30T03:54:05.141Z
 - **Target Domain:** `https://githoot.com`
 - **Supervisor:** Subagent Kongming (Zero Assumptions Policy)
 - **Total Tests Executed:** 10
@@ -12,10 +12,10 @@
 |---|---|---|---|---|
 | **API** | Healthcheck Endpoint GET /health | ✅ PASS | 12ms | Status: ok, Domain: githoot.com |
 | **API** | Early Access Status GET /api/early-access/status | ✅ PASS | 0ms | Total Slots: 100, Free Available: true |
-| **API** | Dynamic SVG README Badge GET /badge/octocat.svg | ✅ PASS | 863ms | SVG Length: 1010 bytes, Cache-Control: public, max-age=43200, s-maxage=43200 |
-| **API** | Dynamic OpenGraph Card GET /og/octocat | ✅ PASS | 134ms | OG Image Size: 1200x630, Bytes: 3339 |
+| **API** | Dynamic SVG README Badge GET /badge/octocat.svg | ✅ PASS | 837ms | SVG Length: 1010 bytes, Cache-Control: public, max-age=43200, s-maxage=43200 |
+| **API** | Dynamic OpenGraph Card GET /og/octocat | ✅ PASS | 133ms | OG Image Size: 1200x630, Bytes: 3339 |
 | **DNA** | Deterministic DNA Hash Consistency | ✅ PASS | 0ms | Species: Aether Neon Byte, Element: Cyber, Rarity: Common |
-| **Resolver** | Degraded Seed Mode on GitHub Throttling | ✅ PASS | 315ms | Source: degraded_seed, Egg Archetype: solar-flare |
+| **Resolver** | Degraded Seed Mode on GitHub Throttling | ✅ PASS | 308ms | Source: degraded_seed, Egg Archetype: solar-flare |
 | **Image** | Chroma Green Removal & Edge De-Spill | ✅ PASS | 0ms | Green background Alpha=0, Edge green de-spilled from 190 to 150 |
 | **Image** | Pure TS PNG Encode/Decode Roundtrip | ✅ PASS | 2ms | Encoded: 77 bytes -> Decoded: 2x1 RGBA |
 | **Image** | Smart Bounding Box Detection & Centering | ✅ PASS | 1ms | Original Bbox: [5,5..14,14] -> Centered at (128, 128) |

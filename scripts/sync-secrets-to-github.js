@@ -14,14 +14,18 @@ if (!fs.existsSync(envPath)) {
 }
 
 const lines = fs.readFileSync(envPath, 'utf-8').split('\n');
-const secretsToSync = [
-  'CLOUDFLARE_API_TOKEN',
-  'CLOUDFLARE_ACCOUNT_ID',
-  'R2_ACCESS_KEY_ID',
-  'R2_SECRET_ACCESS_KEY',
-  'GEMINI_API_KEY',
-  'R2_BUCKET_NAME'
-];
+const secretMapping = {
+  'CLOUDFLARE_API_TOKEN': 'CLOUDFLARE_API_TOKEN',
+  'CLOUDFLARE_ACCOUNT_ID': 'CLOUDFLARE_ACCOUNT_ID',
+  'R2_ACCESS_KEY_ID': 'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY': 'R2_SECRET_ACCESS_KEY',
+  'GEMINI_API_KEY': 'GEMINI_API_KEY',
+  'R2_BUCKET_NAME': 'R2_BUCKET_NAME',
+  'GITHUB_CLIENT_ID': 'GH_CLIENT_ID',
+  'GITHUB_CLIENT_SECRET': 'GH_CLIENT_SECRET',
+  'GITHUB_TOKENS': 'GH_TOKENS',
+  'AUTH_SECRET': 'AUTH_SECRET'
+};
 
 for (const line of lines) {
   const trimmed = line.trim();
@@ -30,16 +34,17 @@ for (const line of lines) {
     const cleanKey = key.trim();
     const cleanVal = rest.join('=').trim();
 
-    if (secretsToSync.includes(cleanKey) && cleanVal) {
-      console.log(`Setting GitHub Secret: ${cleanKey}...`);
+    const targetSecretName = secretMapping[cleanKey];
+    if (targetSecretName && cleanVal) {
+      console.log(`Setting GitHub Secret: ${targetSecretName}...`);
       try {
-        execSync(`gh secret set ${cleanKey} --body "${cleanVal}"`, { stdio: 'inherit' });
-        console.log(`✓ Secret ${cleanKey} set successfully.`);
+        execSync(`gh secret set ${targetSecretName} --body "${cleanVal}"`, { stdio: 'inherit' });
+        console.log(`✓ Secret ${targetSecretName} set successfully.`);
       } catch (err) {
-        console.warn(`⚠️ Failed to set ${cleanKey}:`, err.message);
+        console.warn(`⚠️ Failed to set ${targetSecretName}:`, err.message);
       }
     }
   }
 }
 
-console.log('✦ Finished syncing secrets to GitHub!');
+console.log('✦ Finished syncing all secrets to GitHub Actions!');
