@@ -132,7 +132,54 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
   return (
     <div style={{ minHeight: 'calc(100vh - 72px)', background: '#07090e', color: '#f0f6fc', fontFamily: "'Schibsted Grotesk', sans-serif" }}>
       {/* Main Responsive Container */}
-      <main className="githoot-container" style={{ margin: 'clamp(24px, 5vw, 48px) auto' }}>
+      <main className="githoot-container" style={{ margin: 'clamp(20px, 4vw, 40px) auto' }}>
+        
+        {/* Top Realm Status Bar */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          marginBottom: '20px',
+          padding: '12px 16px',
+          background: 'rgba(16, 22, 38, 0.6)',
+          border: '1px solid rgba(0, 240, 255, 0.15)',
+          borderRadius: '12px',
+          backdropFilter: 'blur(8px)'
+        }}>
+          <a
+            href="/"
+            style={{
+              color: '#00f0ff',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '12px',
+              fontWeight: 700,
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <span>←</span>
+            <span>Return to Realm Portal</span>
+          </a>
+
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '11px',
+            color: '#8b9bb4',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: profile.claimed ? '#00ff88' : '#ffa800', boxShadow: profile.claimed ? '0 0 8px #00ff88' : '0 0 8px #ffa800' }} />
+            <span>{profile.claimed ? 'GUARDIAN BOUND' : 'GENESIS EGG WAITING'}</span>
+            <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+            <span style={{ color: '#00f0ff' }}>SEED: 0x{profile.dna_seed.slice(0, 8)}</span>
+          </div>
+        </div>
+
         <div className="githoot-main-grid">
           
           {/* Left Column: Interactive Egg or Hatched Living Guardian */}
@@ -144,7 +191,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
               flexDirection: 'column',
               justifyContent: 'center',
               alignItems: 'center',
-              minHeight: '340px',
+              minHeight: '380px',
               border: profile.claimed && profile.guardian ? `2px solid ${getRarityGlowColor(profile.guardian.rarity_tier)}` : '1px solid rgba(0, 240, 255, 0.2)',
               boxShadow: profile.claimed && profile.guardian ? `0 0 40px ${getRarityGlowColor(profile.guardian.rarity_tier)}33` : '0 8px 32px rgba(0, 0, 0, 0.4)'
             }}
@@ -162,10 +209,10 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: '11px',
                   fontWeight: 800,
-                  padding: '4px 14px',
+                  padding: '4px 16px',
                   borderRadius: '9999px',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
+                  letterSpacing: '0.12em',
                   marginBottom: '12px'
                 }}>
                   ✦ {profile.guardian.rarity_tier} GUARDIAN ✦
@@ -186,7 +233,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                 {/* Guardian Title */}
                 <h2 style={{
                   fontFamily: "'Archivo', sans-serif",
-                  fontSize: 'clamp(20px, 3vw, 24px)',
+                  fontSize: 'clamp(22px, 3.5vw, 28px)',
                   fontWeight: 900,
                   color: '#ffffff',
                   margin: '0 0 6px 0',
@@ -206,12 +253,12 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                 </div>
 
                 {/* Status Badges Row */}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '16px' }}>
                   <span style={{
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: '11px',
                     fontWeight: 800,
-                    padding: '3px 10px',
+                    padding: '4px 12px',
                     borderRadius: '6px',
                     background: 'rgba(255, 42, 133, 0.12)',
                     border: '1px solid rgba(255, 42, 133, 0.35)',
@@ -223,7 +270,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: '11px',
                     fontWeight: 800,
-                    padding: '3px 10px',
+                    padding: '4px 12px',
                     borderRadius: '6px',
                     background: 'rgba(0, 240, 255, 0.12)',
                     border: '1px solid rgba(0, 240, 255, 0.35)',
@@ -235,7 +282,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: '11px',
                     fontWeight: 800,
-                    padding: '3px 10px',
+                    padding: '4px 12px',
                     borderRadius: '6px',
                     background: 'rgba(0, 255, 136, 0.12)',
                     border: '1px solid rgba(0, 255, 136, 0.35)',
@@ -244,59 +291,137 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                     ⚡ {profile.guardian.energy_state}
                   </span>
                 </div>
+
+                {/* XP Progression Bar */}
+                <div style={{
+                  width: '100%',
+                  maxWidth: '320px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '9999px',
+                  padding: '3px',
+                  boxSizing: 'border-box'
+                }}>
+                  <div style={{
+                    width: `${Math.max(5, Math.min(100, profile.guardian.experience))}%`,
+                    height: '6px',
+                    borderRadius: '9999px',
+                    background: 'linear-gradient(90deg, #00f0ff, #ff2a85)',
+                    boxShadow: '0 0 8px rgba(0, 240, 255, 0.5)'
+                  }} />
+                </div>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '10px',
+                  color: '#53627a',
+                  marginTop: '6px',
+                  textAlign: 'center'
+                }}>
+                  EXPERIENCE: {profile.guardian.experience} / 100 EXP · SHIELDING {profile.public_repos} REPOS
+                </div>
               </div>
             ) : (
-              <EggSpritesheetPlayer archetypeId={profile.egg_archetype_id} />
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <EggSpritesheetPlayer archetypeId={profile.egg_archetype_id} />
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '11px',
+                  color: '#8b9bb4',
+                  marginTop: '12px',
+                  textAlign: 'center'
+                }}>
+                  Genesis Drop Odds: <span style={{ color: '#00f0ff' }}>60% Common · 25% Rare · 10% Epic · 4% Legendary · 1% Mythic</span>
+                </div>
+              </div>
             )}
           </div>
+
           {/* Right Column: Developer Snapshot & Claim Action */}
-          <div className="githoot-card">
+          <div className="githoot-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             
-            {/* Dev Info */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-              <img src={profile.avatar_url} alt={profile.login} style={{ width: 'clamp(48px, 12vw, 64px)', height: 'clamp(48px, 12vw, 64px)', borderRadius: '50%', border: '2px solid #00f0ff', flexShrink: 0 }} />
-              <div style={{ overflow: 'hidden' }}>
-                <h1 style={{ fontFamily: "'Archivo', sans-serif", fontSize: 'clamp(20px, 4vw, 26px)', fontWeight: 900, margin: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                  {profile.name || profile.login}
-                </h1>
-                <div style={{ color: '#8b9bb4', fontSize: '13px' }}>@{profile.login}</div>
-              </div>
-            </div>
-
-            {profile.bio && (
-              <p style={{ fontSize: '13px', color: '#8b9bb4', marginBottom: '20px', lineHeight: 1.5 }}>
-                {profile.bio}
-              </p>
-            )}
-
-            {/* Dev Stats Grid */}
-            <div className="githoot-stats-grid" style={{ marginBottom: '24px' }}>
-              <div style={{ background: '#141b27', padding: '12px 14px', borderRadius: '8px' }}>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(18px, 3vw, 22px)', fontWeight: 800, color: '#00f0ff' }}>
-                  {profile.public_repos}
+            <div>
+              {/* Dev Info Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+                <img
+                  src={profile.avatar_url}
+                  alt={profile.login}
+                  style={{
+                    width: 'clamp(52px, 12vw, 68px)',
+                    height: 'clamp(52px, 12vw, 68px)',
+                    borderRadius: '50%',
+                    border: '2px solid #00f0ff',
+                    boxShadow: '0 0 16px rgba(0, 240, 255, 0.35)',
+                    flexShrink: 0
+                  }}
+                />
+                <div style={{ overflow: 'hidden' }}>
+                  <h1 style={{
+                    fontFamily: "'Archivo', sans-serif",
+                    fontSize: 'clamp(20px, 4vw, 26px)',
+                    fontWeight: 900,
+                    margin: 0,
+                    textOverflow: 'ellipsis',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {profile.name || profile.login}
+                  </h1>
+                  <a
+                    href={`https://github.com/${encodeURIComponent(profile.login)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: '#00f0ff',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: '13px',
+                      textDecoration: 'none',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      marginTop: '2px'
+                    }}
+                  >
+                    <span>@{profile.login}</span>
+                    <span style={{ fontSize: '10px' }}>↗</span>
+                  </a>
                 </div>
-                <div style={{ fontSize: '10px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Public Repos</div>
               </div>
 
-              <div style={{ background: '#141b27', padding: '12px 14px', borderRadius: '8px' }}>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(18px, 3vw, 22px)', fontWeight: 800, color: '#00f0ff' }}>
-                  {profile.followers}
-                </div>
-                <div style={{ fontSize: '10px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Followers</div>
-              </div>
+              {profile.bio && (
+                <p style={{ fontSize: '13px', color: '#c8d6e5', marginBottom: '20px', lineHeight: 1.6 }}>
+                  {profile.bio}
+                </p>
+              )}
 
-              <div style={{ background: '#141b27', padding: '12px 14px', borderRadius: '8px' }}>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(14px, 2.5vw, 16px)', fontWeight: 800, color: '#ffa800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {profile.top_languages[0] || 'Polyglot'}
+              {/* Dev Stats Grid */}
+              <div className="githoot-stats-grid" style={{ marginBottom: '24px' }}>
+                <div style={{ background: '#141b27', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 14px', borderRadius: '10px' }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(18px, 3vw, 22px)', fontWeight: 800, color: '#00f0ff' }}>
+                    {profile.public_repos}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Public Repos</div>
                 </div>
-                <div style={{ fontSize: '10px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Top Language</div>
-              </div>
 
-              <div style={{ background: '#141b27', padding: '12px 14px', borderRadius: '8px' }}>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(14px, 2.5vw, 16px)', fontWeight: 800, color: '#ff2a85' }}>
-                  {profile.estimated_rarity}
+                <div style={{ background: '#141b27', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 14px', borderRadius: '10px' }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(18px, 3vw, 22px)', fontWeight: 800, color: '#00f0ff' }}>
+                    {profile.followers}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Followers</div>
                 </div>
-                <div style={{ fontSize: '10px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Estimated Rarity</div>
+
+                <div style={{ background: '#141b27', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 14px', borderRadius: '10px' }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(14px, 2.5vw, 16px)', fontWeight: 800, color: '#ffa800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {profile.top_languages[0] || 'Polyglot'}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Primary Stack</div>
+                </div>
+
+                <div style={{ background: '#141b27', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 14px', borderRadius: '10px' }}>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(14px, 2.5vw, 16px)', fontWeight: 800, color: '#ff2a85' }}>
+                    {profile.estimated_rarity}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Genesis Rarity</div>
+                </div>
               </div>
             </div>
 
@@ -304,8 +429,8 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
             {profile.claimed && profile.guardian ? (
               <div>
                 <div className="claimed-owner-badge">
-                  <span>🛡️</span>
-                  <span>Guardian Claimed · Bound to GitHub #{profile.github_user_id}</span>
+                  <span style={{ fontSize: '14px' }}>🛡️</span>
+                  <span>Verified Owner · Bound to GitHub #{profile.github_user_id}</span>
                 </div>
                 <SocialSharePanel username={profile.login} guardian={profile.guardian} />
               </div>
@@ -322,20 +447,22 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                     background: '#00f0ff',
                     color: '#000',
                     padding: '14px 20px',
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 'clamp(13px, 2.5vw, 15px)',
                     fontWeight: 800,
                     textDecoration: 'none',
-                    boxShadow: '0 0 24px rgba(0,240,255,0.35)',
+                    boxShadow: '0 0 28px rgba(0,240,255,0.4)',
                     transition: 'transform 0.15s, box-shadow 0.15s',
-                    textAlign: 'center'
+                    textAlign: 'center',
+                    display: 'block',
+                    boxSizing: 'border-box'
                   }}
                 >
-                  🚀 Claim & Hatch My Guardian Free
+                  🚀 Claim & Awaken Guardian Free
                 </a>
-                <div style={{ textAlign: 'center', fontSize: '11px', color: '#53627a', marginTop: '10px' }}>
-                  ✓ Only the owner of @{profile.login} can claim this companion.
+                <div style={{ textAlign: 'center', fontSize: '11px', color: '#8b9bb4', marginTop: '10px' }}>
+                  ✓ Free forever · Only the owner of @{profile.login} can claim this companion.
                 </div>
               </div>
             )}
