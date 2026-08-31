@@ -151,7 +151,10 @@ export async function executeClaimTransaction(
 
   // 8. Invalidate KV Cache so profile instantly reflects claimed status
   try {
-    await env.CACHE_KV.delete(`gh:profile:${authUser.login.toLowerCase()}`);
+    await Promise.all([
+      env.CACHE_KV.delete(`gh:profile:v2:${authUser.login.toLowerCase()}`),
+      env.CACHE_KV.delete(`gh:profile:${authUser.login.toLowerCase()}`)
+    ]);
   } catch {
     // Non-blocking
   }
