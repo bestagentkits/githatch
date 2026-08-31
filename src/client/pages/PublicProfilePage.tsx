@@ -63,8 +63,22 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [repoTab, setRepoTab] = useState<'highlighted' | 'active'>('highlighted');
+  const [sessionLogin, setSessionLogin] = useState<string | null>(null);
   const eggCardRef = useRef<HTMLDivElement | null>(null);
   const eggTrackedRef = useRef(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMounted && data?.authenticated && data.user) {
+          setSessionLogin(String(data.user.login).toLowerCase());
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -510,6 +524,29 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   <div style={{ fontSize: '10px', color: '#53627a', fontFamily: "'JetBrains Mono', monospace", marginTop: '10px' }}>
                     Owner-authorized · Synced {formatRelativeTime(profile.aggregate_stats.refreshed_at)}
                   </div>
+                  {sessionLogin && profile && sessionLogin === profile.login.toLowerCase() && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                      <a
+                        href="/auth/github?consent=1"
+                        style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#00f0ff', textDecoration: 'none', border: '1px solid rgba(0,240,255,0.3)', borderRadius: '6px', padding: '5px 10px' }}
+                      >
+                        🔄 Refresh
+                      </a>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!confirm('Remove your published private-inclusive stats from GitHoot? This deletes the stored counts. You can re-add them by signing in again.')) return;
+                          try {
+                            const res = await fetch('/api/auth/aggregate-stats/delete', { method: 'DELETE', credentials: 'same-origin' });
+                            if (res.ok) window.location.reload();
+                          } catch {}
+                        }}
+                        style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#ff2a85', background: 'transparent', border: '1px solid rgba(255,42,133,0.35)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                      >
+                        🗑 Remove my stats
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
