@@ -20,8 +20,10 @@ authRouter.get('/github', async (c) => {
   if (!clientId) {
     return c.text('GITHUB_CLIENT_ID not configured.', 500);
   }
-
-  const secret = c.env.AUTH_SECRET || 'default-secret-change-in-prod';
+  const secret = c.env.AUTH_SECRET;
+  if (!secret) {
+    return c.text('AUTH_SECRET not configured on server.', 500);
+  }
   const state = await generateSignedState(claimUsername, secret, intent);
 
   const redirectUri = `${c.req.url.split('/auth')[0]}/auth/callback`;
@@ -38,8 +40,10 @@ authRouter.get('/callback', async (c) => {
   if (!code || !state) {
     return c.text('Invalid OAuth callback: missing code or state.', 400);
   }
-
-  const secret = c.env.AUTH_SECRET || 'default-secret-change-in-prod';
+  const secret = c.env.AUTH_SECRET;
+  if (!secret) {
+    return c.text('AUTH_SECRET not configured on server.', 500);
+  }
   const statePayload = await verifySignedState(state, secret);
 
   if (!statePayload) {
@@ -60,7 +64,9 @@ authRouter.get('/callback', async (c) => {
       avatar_url: authUser.avatar_url
     };
     const sessionToken = await createSessionToken(userSession, secret);
-    c.header('Set-Cookie', `githoot_session=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
+    const isSecure = c.env.ENVIRONMENT === 'production' || c.req.url.startsWith('https://');
+    const secureAttr = isSecure ? '; Secure' : '';
+    c.header('Set-Cookie', `githoot_session=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly${secureAttr}; SameSite=Lax; Max-Age=2592000`);
 
     // 4. Handle pure login intent (0 AI cost, no premature claim)
     if (statePayload.intent === 'login') {
@@ -102,8 +108,12 @@ authRouter.get('/me', async (c) => {
     return c.json({ authenticated: false, user: null });
   }
 
+  const secret = c.env.AUTH_SECRET;
+  if (!secret) {
+    return c.json({ authenticated: false, user: null });
+  }
+
   const sessionToken = decodeURIComponent(match[1]);
-  const secret = c.env.AUTH_SECRET || 'default-secret-change-in-prod';
   const user = await verifySessionToken(sessionToken, secret);
 
   if (!user) {
@@ -118,7 +128,9 @@ authRouter.get('/me', async (c) => {
 
 // 4. Logout Session
 authRouter.all('/logout', async (c) => {
-  c.header('Set-Cookie', 'githoot_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+  const isSecure = c.env.ENVIRONMENT === 'production' || c.req.url.startsWith('https://');
+  const secureAttr = isSecure ? '; Secure' : '';
+  c.header('Set-Cookie', `githoot_session=; Path=/; HttpOnly${secureAttr}; SameSite=Lax; Max-Age=0`);
   if (c.req.method === 'GET') {
     return c.redirect('/');
   }

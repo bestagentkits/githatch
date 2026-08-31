@@ -408,3 +408,140 @@ describe('Guardian Progression Integrity', () => {
     }
   });
 });
+
+describe('Zero-Activity Claimed Guardian & Active Repos Contracts', () => {
+  it('does not synthesize mood for a claimed guardian when coding activity is absent', async () => {
+    const mockDb = {
+      prepare: () => ({
+        bind: () => ({
+          first: async () => ({
+            id: 'g-zero',
+            name: 'Zenith Celestial Drake',
+            species: 'Zenith Celestial Drake',
+            element: 'Mythic',
+            rarity_tier: 'Common',
+            level: 1,
+            experience: 0,
+            energy_state: 'Active',
+            hero_image_url: '/assets/sample-pets/celestialdrake.webp',
+            spritesheet_url: null
+          })
+        })
+      })
+    };
+
+    const mockEnvZeroAct = {
+      DB: mockDb,
+      CACHE_KV: { get: async () => null, put: async () => null },
+      ENVIRONMENT: 'test',
+      DOMAIN: 'githoot.com',
+      CDN_DOMAIN: 'cdn.githoot.com',
+      EARLY_ACCESS_TOTAL_SLOTS: '100',
+      AI_MODEL_TIER: 'nano-banana'
+    } as unknown as Env;
+
+    // Mock global fetch to simulate GitHub responses with 0 events and 0 pushed repos
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/users/zero_dev/repos')) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('/users/zero_dev/events')) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('/users/zero_dev')) {
+        return new Response(JSON.stringify({
+          id: 55555,
+          login: 'zero_dev',
+          name: 'Zero Dev',
+          avatar_url: 'https://avatars.githubusercontent.com/u/55555',
+          public_repos: 0,
+          followers: 0,
+          created_at: '2026-08-30T00:00:00Z'
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return originalFetch(input);
+    };
+
+    try {
+      const profile = await resolveGitHubProfile('zero_dev', mockEnvZeroAct);
+      expect(profile.claimed).toBe(true);
+      expect(profile.mood).toBeUndefined();
+      expect(profile.guardian?.mood_title).toBeUndefined();
+      expect(profile.guardian?.mood_description).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('correctly includes active-but-not-highlighted repositories in active_repos', async () => {
+    const reposFixture = [
+      { name: 'star4', full_name: 'dev/star4', stargazers_count: 100, forks_count: 5, language: 'TypeScript', updated_at: '2025-01-01T00:00:00Z' },
+      { name: 'star3', full_name: 'dev/star3', stargazers_count: 80, forks_count: 2, language: 'Rust', updated_at: '2025-02-01T00:00:00Z' },
+      { name: 'star2', full_name: 'dev/star2', stargazers_count: 60, forks_count: 1, language: 'Go', updated_at: '2025-03-01T00:00:00Z' },
+      { name: 'star1', full_name: 'dev/star1', stargazers_count: 40, forks_count: 0, language: 'Python', updated_at: '2025-04-01T00:00:00Z' },
+      { name: 'recent-zero-star', full_name: 'dev/recent-zero-star', stargazers_count: 0, forks_count: 0, language: 'C++', pushed_at: '2026-08-31T09:00:00Z', updated_at: '2026-08-31T09:00:00Z' }
+    ];
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/users/multi_repo_dev/repos')) {
+        return new Response(JSON.stringify(reposFixture), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('/users/multi_repo_dev/events')) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('/users/multi_repo_dev')) {
+        return new Response(JSON.stringify({
+          id: 66666,
+          login: 'multi_repo_dev',
+          name: 'Multi Repo Dev',
+          avatar_url: 'https://avatars.githubusercontent.com/u/66666',
+          public_repos: 5,
+          followers: 10,
+          created_at: '2024-01-01T00:00:00Z'
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return originalFetch(input);
+    };
+
+    const mockEnv = {
+      DB: { prepare: () => ({ bind: () => ({ first: async () => null }) }) },
+      CACHE_KV: { get: async () => null, put: async () => null },
+      ENVIRONMENT: 'test',
+      DOMAIN: 'githoot.com',
+      CDN_DOMAIN: 'cdn.githoot.com',
+      EARLY_ACCESS_TOTAL_SLOTS: '100',
+      AI_MODEL_TIER: 'nano-banana'
+    } as unknown as Env;
+
+    try {
+      const profile = await resolveGitHubProfile('multi_repo_dev', mockEnv);
+      // Highlighted repos should only contain the 4 top-starred repos
+      expect(profile.highlighted_repos?.map(r => r.name)).toEqual(['star4', 'star3', 'star2', 'star1']);
+      expect(profile.highlighted_repos?.some(r => r.name === 'recent-zero-star')).toBe(false);
+
+      // Active repos should contain the recent-zero-star repo
+      expect(profile.active_repos?.some(r => r.name === 'recent-zero-star')).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('Fail-Closed Authentication Configuration Security', () => {
+  it('fails closed with HTTP 500 when AUTH_SECRET is not configured on server', async () => {
+    const mockEnvNoSecret = {
+      ENVIRONMENT: 'production',
+      DOMAIN: 'githoot.com',
+      GITHUB_CLIENT_ID: 'mock-client-id'
+    } as unknown as Env;
+
+    const res = await app.fetch(new Request('http://localhost/auth/github'), mockEnvNoSecret);
+    expect(res.status).toBe(500);
+    const text = await res.text();
+    expect(text).toContain('AUTH_SECRET');
+  });
+});
