@@ -1501,7 +1501,8 @@ section {
   animation: float-sleepy 5s ease-in-out infinite alternate, pulse-sleepy 3s ease-in-out infinite alternate;
 }
 
-.guardian-pet-anim-hungry {
+.guardian-pet-anim-hungry,
+.guardian-pet-anim-hungry-for-code {
   animation: float-hungry 2.5s ease-in-out infinite alternate;
 }
 

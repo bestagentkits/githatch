@@ -54,8 +54,8 @@ export function normalizeGuardianSummary(guardian: GuardianSummary | null): Guar
   return {
     ...guardian,
     hero_image_url: heroUrl,
-    mood_title: guardian.mood_title || moodInfo?.title || '✦ Active & Ready',
-    mood_description: guardian.mood_description || moodInfo?.desc || 'Đang khỏe mạnh và chăm chỉ bảo vệ các repositories của bạn.'
+    mood_title: guardian.mood_title || moodInfo?.title || '✦ Activity Syncing',
+    mood_description: guardian.mood_description || moodInfo?.desc || 'Chưa có hoạt động GitHub gần đây. Hãy push một commit để cập nhật tâm trạng bé nhé!'
   };
 }
 export async function resolveGitHubProfile(username: string, env: Env): Promise<ResolvedProfile> {
@@ -298,7 +298,7 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     }
 
     // Calculate Guardian Mood based on real coding activity timestamps (no synthetic timestamps)
-    const lastActiveTimestamp = latestEventTime || latestRepoPushTime || 0;
+    const lastActiveTimestamp = Math.max(latestEventTime, latestRepoPushTime);
     const mood = lastActiveTimestamp > 0 ? calculateGuardianMood(lastActiveTimestamp) : undefined;
 
     // Derive deterministic DNA
