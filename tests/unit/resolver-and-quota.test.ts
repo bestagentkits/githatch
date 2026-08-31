@@ -4,10 +4,10 @@
 // ============================================================================
 
 import { describe, it, expect } from 'vitest';
-import { generateDegradedProfile, normalizeGuardianSummary, resolveGitHubProfile } from '../../src/server/services/github/resolver';
+import { generateDegradedProfile, normalizeGuardianSummary, resolveGitHubProfile, getAggregateStatsFromDb } from '../../src/server/services/github/resolver';
 import { parseTokenPool, recordTokenResponse } from '../../src/server/services/github/token-pool';
 import { calculateGuardianMood } from '../../src/server/services/progression/mood-engine';
-import { createSessionToken, verifySessionToken, generateSignedState, verifySignedState } from '../../src/server/services/auth/oauth';
+import { createSessionToken, verifySessionToken, generateSignedState, verifySignedState, fetchAggregateStats, revokeAccessToken } from '../../src/server/services/auth/oauth';
 import { renderSvgToPng } from '../../src/server/services/image/resvg-renderer';
 import type { Env, PublicConfig, EarlyAccessStatus, ResolvedProfile, GuardianSummary, UserSession } from '../../src/server/types';
 import app from '../../src/server/index';
@@ -727,5 +727,105 @@ describe('Fail-Closed Authentication Configuration Security', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe('Private-Inclusive Aggregate Stats (owner-consented, sanitized counts only)', () => {
+  it('fetchAggregateStats returns sanitized scalar totals bound to the authenticated viewer', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      data: {
+        viewer: {
+          databaseId: 424242,
+          contributionsCollection: { contributionCalendar: { totalContributions: 1875 } },
+          repositories: { totalCount: 63 }
+        }
+      }
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+    try {
+      const stats = await fetchAggregateStats('gho_token', 424242);
+      expect(stats).not.toBeNull();
+      expect(stats?.contributions_last_year).toBe(1875);
+      expect(stats?.owned_repositories_total).toBe(63);
+      expect(typeof stats?.period_started_at).toBe('string');
+      expect(typeof stats?.period_ended_at).toBe('string');
+      // Never leaks names/urls: the DTO has exactly 5 sanitized keys.
+      expect(Object.keys(stats || {}).sort()).toEqual(['contributions_last_year', 'owned_repositories_total', 'period_ended_at', 'period_started_at', 'refreshed_at']);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('fetchAggregateStats returns null on viewer identity mismatch (anti-spoof)', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      data: { viewer: { databaseId: 999, contributionsCollection: { contributionCalendar: { totalContributions: 10 } }, repositories: { totalCount: 2 } } }
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    try {
+      const stats = await fetchAggregateStats('gho_token', 424242);
+      expect(stats).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('fetchAggregateStats returns null on GraphQL errors or partial data (never fabricates zeros)', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ errors: [{ message: 'rate limited' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    try {
+      const stats = await fetchAggregateStats('gho_token', 424242);
+      expect(stats).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('revokeAccessToken returns true only on GitHub 204, false on non-transient 404', async () => {
+    const env = { GITHUB_CLIENT_ID: 'cid', GITHUB_CLIENT_SECRET: 'sec' } as unknown as Env;
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = async () => new Response(null, { status: 204 });
+    try {
+      expect(await revokeAccessToken('gho_token', env)).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    globalThis.fetch = async () => new Response('not found', { status: 404 });
+    try {
+      expect(await revokeAccessToken('gho_token', env)).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('getAggregateStatsFromDb maps a D1 row to a sanitized ISO DTO and null when absent', async () => {
+    const nowMs = Date.now();
+    const envWithRow = {
+      DB: {
+        prepare: () => ({
+          bind: () => ({
+            first: async () => ({
+              contributions_last_year: 500,
+              owned_repositories_total: 40,
+              period_started_at: nowMs - 365 * 24 * 3600 * 1000,
+              period_ended_at: nowMs,
+              refreshed_at: nowMs
+            })
+          })
+        })
+      }
+    } as unknown as Env;
+
+    const stats = await getAggregateStatsFromDb(424242, envWithRow);
+    expect(stats?.contributions_last_year).toBe(500);
+    expect(stats?.owned_repositories_total).toBe(40);
+    expect(stats?.refreshed_at).toBe(new Date(nowMs).toISOString());
+
+    const envNoRow = { DB: { prepare: () => ({ bind: () => ({ first: async () => null }) }) } } as unknown as Env;
+    expect(await getAggregateStatsFromDb(424242, envNoRow)).toBeNull();
+    // Zero github_user_id short-circuits to null (never queries).
+    expect(await getAggregateStatsFromDb(0, envNoRow)).toBeNull();
   });
 });

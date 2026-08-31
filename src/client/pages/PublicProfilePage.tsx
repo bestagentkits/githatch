@@ -479,6 +479,39 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   <div style={{ fontSize: '10px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Genesis Rarity</div>
                 </div>
               </div>
+
+              {/* Private-inclusive aggregate counts (owner-consented, numbers only, never names) */}
+              {profile.aggregate_stats && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(0,240,255,0.08), rgba(255,42,133,0.06))',
+                  border: '1px solid rgba(0, 240, 255, 0.25)',
+                  borderRadius: '12px',
+                  padding: '14px 16px',
+                  marginBottom: '24px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <span>🔒</span>
+                    <span style={{ fontFamily: "'Archivo', sans-serif", fontSize: '13px', fontWeight: 800, color: '#ffffff' }}>Full Activity (incl. private)</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(18px, 3vw, 22px)', fontWeight: 800, color: '#00ff88' }}>
+                        {profile.aggregate_stats.contributions_last_year.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Contributions · Last Year</div>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(18px, 3vw, 22px)', fontWeight: 800, color: '#a855f7' }}>
+                        {profile.aggregate_stats.owned_repositories_total.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Owned Repos · incl. Private</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#53627a', fontFamily: "'JetBrains Mono', monospace", marginTop: '10px' }}>
+                    Owner-authorized · Synced {formatRelativeTime(profile.aggregate_stats.refreshed_at)}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Claim CTA or Owner Bound Banner & Share Panel */}
@@ -519,6 +552,9 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                 </a>
                 <div style={{ textAlign: 'center', fontSize: '11px', color: '#8b9bb4', marginTop: '10px' }}>
                   ✓ Free forever · Only the owner of @{profile.login} can claim this companion.
+                </div>
+                <div style={{ textAlign: 'left', fontSize: '10px', color: '#53627a', marginTop: '10px', lineHeight: 1.5, background: 'rgba(255,168,0,0.06)', border: '1px solid rgba(255,168,0,0.2)', borderRadius: '8px', padding: '10px 12px' }}>
+                  ⚠️ Sign-in requests GitHub's classic <strong style={{ color: '#ffa800' }}>repo</strong> permission — full read/write access to your public &amp; private repositories. GitHoot uses the token once to compute two public counts (contributions last year + owned repo total incl. private), stores <strong>no token and no private repo names/details</strong>, then immediately revokes it. Exact totals can reveal the volume of your private work.
                 </div>
               </div>
             )}

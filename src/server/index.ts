@@ -115,7 +115,7 @@ app.all('*', async (c) => {
 
       const title = `@${cleanUser} · GitHoot Realm Guardian`;
       const desc = `View @${cleanUser}'s developer identity, coding stats, and living hatched companion on GitHoot.`;
-      const ogImage = `${url.origin}/og/${encodeURIComponent(cleanUser)}.png?v=2`;
+      const ogImage = `${url.origin}/og/${encodeURIComponent(cleanUser)}.png?v=3`;
       const ogUrl = `${url.origin}/${encodeURIComponent(cleanUser)}`;
 
       const ogMeta = `

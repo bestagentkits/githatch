@@ -85,6 +85,57 @@ function getSpeciesVectorArt(species?: string, rarityColor = '#00f0ff'): string 
   `;
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+const MAX_HERO_BYTES = 3 * 1024 * 1024;
+
+async function getGuardianImageDataUri(heroUrl: string | undefined, env: Env, reqUrl: string): Promise<string | null> {
+  if (!heroUrl) return null;
+  try {
+    // 1. Local deterministic sample-pet asset served by the Pages ASSETS binding.
+    if (heroUrl.includes('/assets/sample-pets/')) {
+      if (!env.ASSETS) return null;
+      const pngPath = heroUrl.replace(/\.(webp|jpg|jpeg)$/i, '.png');
+      const res = await env.ASSETS.fetch(new Request(new URL(pngPath, reqUrl).toString()));
+      if (!res.ok) return null;
+      const ct = res.headers.get('content-type') || '';
+      if (ct && !ct.includes('image/png')) return null;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (bytes.length === 0 || bytes.length > MAX_HERO_BYTES) return null;
+      return `data:image/png;base64,${bytesToBase64(bytes)}`;
+    }
+
+    // 2. AI-generated guardian hero stored in R2, addressed via the trusted CDN host only.
+    const cdnHost = env.CDN_DOMAIN || 'cdn.githoot.com';
+    let parsed: URL;
+    try {
+      parsed = new URL(heroUrl);
+    } catch {
+      return null;
+    }
+    const key = parsed.pathname.replace(/^\//, '');
+    if (parsed.hostname === cdnHost && key.startsWith('guardians/') && key.endsWith('.png')) {
+      if (!env.ASSETS_BUCKET) return null;
+      const obj = await env.ASSETS_BUCKET.get(key);
+      if (!obj) return null;
+      const bytes = new Uint8Array(await (obj as unknown as { arrayBuffer(): Promise<ArrayBuffer> }).arrayBuffer());
+      if (bytes.length === 0 || bytes.length > MAX_HERO_BYTES) return null;
+      return `data:image/png;base64,${bytesToBase64(bytes)}`;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 ogRouter.get('/:username', async (c) => {
   const rawParam = c.req.param('username');
   const username = rawParam.replace(/\.(png|gif|webp|svg)$/, '');
@@ -100,6 +151,10 @@ ogRouter.get('/:username', async (c) => {
     const element = guardian?.element || 'Aether';
     const energyState = guardian?.energy_state || profile.mood?.state || 'Active';
     const vectorArt = getSpeciesVectorArt(species, rarityColor);
+    const heroDataUri = profile.claimed ? await getGuardianImageDataUri(guardian?.hero_image_url, c.env, c.req.url) : null;
+    const shrineArt = heroDataUri
+      ? `<image x="160" y="165" width="220" height="220" href="${heroDataUri}" clip-path="url(#shrineClip)" preserveAspectRatio="xMidYMid meet"/>`
+      : vectorArt;
 
     const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
@@ -124,6 +179,9 @@ ogRouter.get('/:username', async (c) => {
       <feGaussianBlur stdDeviation="8" result="blur" />
       <feComposite in="SourceGraphic" in2="blur" operator="over"/>
     </filter>
+    <clipPath id="shrineClip">
+      <circle cx="270" cy="275" r="88"/>
+    </clipPath>
   </defs>
 
   <!-- Background Layer -->
@@ -160,10 +218,10 @@ ogRouter.get('/:username', async (c) => {
   <!-- Left Side: Guardian Shrine Stage -->
   <rect x="60" y="125" width="420" height="445" rx="16" fill="#0c111c" stroke="${rarityColor}" stroke-width="1.5" stroke-opacity="0.6"/>
   
-  <!-- Aura Circle & Vector Character Art -->
+  <!-- Aura Circle & Guardian Character (real hatched pet image when claimed) -->
   <circle cx="270" cy="275" r="120" fill="${rarityColor}" fill-opacity="0.1" filter="url(#glow)"/>
   <circle cx="270" cy="275" r="90" fill="#141c2c" stroke="${rarityColor}" stroke-width="1.5" stroke-dasharray="4,4"/>
-  ${vectorArt}
+  ${shrineArt}
 
   <!-- Guardian Name & Species -->
   <text x="270" y="445" font-family="Archivo" font-size="22" font-weight="900" fill="#ffffff" text-anchor="middle">${escapeXml(guardianName)}</text>

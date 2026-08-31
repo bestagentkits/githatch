@@ -3,7 +3,7 @@
 // (src/server/services/github/resolver.ts)
 // ============================================================================
 
-import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary, GitHubRepo, UserActivity } from '../../types';
+import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary, GitHubRepo, UserActivity, AggregateStats } from '../../types';
 import { getHealthyGitHubToken, recordTokenResponse } from './token-pool';
 import { deriveGuardianDNA } from '../dna/seed';
 import { calculateGuardianMood } from '../progression/mood-engine';
@@ -50,7 +50,7 @@ export function normalizeGuardianSummary(guardian: GuardianSummary | null): Guar
 }
 export async function resolveGitHubProfile(username: string, env: Env): Promise<ResolvedProfile> {
   const cleanUsername = username.trim().toLowerCase();
-  const cacheKey = `gh:profile:v2:${cleanUsername}`;
+  const cacheKey = `gh:profile:v3:${cleanUsername}`;
 
   // 1. Check Cloudflare KV Cache
   let cached: CachedEntry | null = null;
@@ -122,6 +122,7 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
       if (scraped && scraped.userId > 0) {
         const dna = await deriveGuardianDNA(scraped.userId, cleanUsername, scraped.topLanguages);
         const guardianRecord = await getGuardianFromDb(scraped.userId, env);
+        const aggregateStats = await getAggregateStatsFromDb(scraped.userId, env);
         const profile: ResolvedProfile = {
           github_user_id: scraped.userId,
           login: cleanUsername,
@@ -141,7 +142,8 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
           last_synced_at: now,
           activities: [],
           highlighted_repos: [],
-          active_repos: []
+          active_repos: [],
+          aggregate_stats: aggregateStats
         };
         try {
           await env.CACHE_KV.put(cacheKey, JSON.stringify({ timestamp: now, data: profile }), {
@@ -303,8 +305,9 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     // Derive deterministic DNA
     const dna = await deriveGuardianDNA(rawUser.id, rawUser.login, topLanguages);
 
-    // Check D1 database for existing Guardian
+    // Check D1 database for existing Guardian and owner-consented aggregate stats
     let guardianRecord = await getGuardianFromDb(rawUser.id, env);
+    const aggregateStats = await getAggregateStatsFromDb(rawUser.id, env);
     if (guardianRecord) {
       guardianRecord = {
         ...guardianRecord,
@@ -340,7 +343,8 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
         description: mood.description,
         badgeColor: mood.badgeColor,
         recommendedPose: mood.recommendedPose
-      } : undefined
+      } : undefined,
+      aggregate_stats: aggregateStats
     };
     // Save to KV Cache (3 days max)
     try {
@@ -363,6 +367,7 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     if (scraped && scraped.userId > 0) {
       const dna = await deriveGuardianDNA(scraped.userId, cleanUsername, scraped.topLanguages);
       const guardianRecord = await getGuardianFromDb(scraped.userId, env);
+      const aggregateStats = await getAggregateStatsFromDb(scraped.userId, env);
       return {
         github_user_id: scraped.userId,
         login: cleanUsername,
@@ -382,7 +387,8 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
         last_synced_at: now,
         activities: [],
         highlighted_repos: [],
-        active_repos: []
+        active_repos: [],
+        aggregate_stats: aggregateStats
       };
     }
     return generateDegradedProfile(cleanUsername);
@@ -409,6 +415,33 @@ async function getGuardianFromDb(githubUserId: number, env: Env): Promise<Guardi
       hero_image_url: row.hero_image_url,
       spritesheet_url: row.spritesheet_url
     });
+  } catch {
+    return null;
+  }
+}
+
+export async function getAggregateStatsFromDb(githubUserId: number, env: Env): Promise<AggregateStats | null> {
+  if (!githubUserId || !env.DB) return null;
+  try {
+    const row = await env.DB.prepare(
+      'SELECT contributions_last_year, owned_repositories_total, period_started_at, period_ended_at, refreshed_at FROM github_aggregate_stats WHERE github_user_id = ?'
+    ).bind(githubUserId).first<{
+      contributions_last_year: number;
+      owned_repositories_total: number;
+      period_started_at: number;
+      period_ended_at: number;
+      refreshed_at: number;
+    }>();
+
+    if (!row) return null;
+
+    return {
+      contributions_last_year: row.contributions_last_year,
+      owned_repositories_total: row.owned_repositories_total,
+      period_started_at: new Date(row.period_started_at).toISOString(),
+      period_ended_at: new Date(row.period_ended_at).toISOString(),
+      refreshed_at: new Date(row.refreshed_at).toISOString()
+    };
   } catch {
     return null;
   }

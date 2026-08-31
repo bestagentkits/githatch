@@ -82,3 +82,14 @@ CREATE TABLE IF NOT EXISTS activity_ledger (
 );
 
 CREATE INDEX IF NOT EXISTS idx_activity_ledger_gh_id ON activity_ledger(github_user_id);
+
+-- 7. GitHub Aggregate Stats Table (Owner-consented public aggregate COUNTS only; never names/URLs/tokens)
+CREATE TABLE IF NOT EXISTS github_aggregate_stats (
+    github_user_id           INTEGER PRIMARY KEY,
+    contributions_last_year  INTEGER NOT NULL CHECK (contributions_last_year >= 0),
+    owned_repositories_total INTEGER NOT NULL CHECK (owned_repositories_total >= 0),
+    period_started_at        INTEGER NOT NULL,
+    period_ended_at          INTEGER NOT NULL,
+    refreshed_at             INTEGER NOT NULL,
+    consent_version          INTEGER NOT NULL DEFAULT 1
+);
