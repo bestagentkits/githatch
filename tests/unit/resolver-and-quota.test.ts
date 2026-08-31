@@ -559,6 +559,20 @@ describe('Fail-Closed Authentication Configuration Security', () => {
     expect(text).toContain('AUTH_SECRET');
   });
 
+  it('returns HTTP 400 on invalid claim_username format instead of silently falling back to login', async () => {
+    const mockEnv = {
+      AUTH_SECRET: 'test-secret-32-chars-long-key-1!',
+      GITHUB_CLIENT_ID: 'client123',
+      ENVIRONMENT: 'production',
+      DOMAIN: 'githoot.com'
+    } as unknown as Env;
+
+    const res = await app.fetch(new Request('http://localhost/auth/github?claim_username=invalid__username!!'), mockEnv);
+    expect(res.status).toBe(400);
+    const text = await res.text();
+    expect(text).toContain('Invalid claim username');
+  });
+
   it('executes /auth/callback with intent: login, setting session cookie with zero claim transaction', async () => {
     const secret = 'test-secret-32-chars-long-key-1!';
     const loginState = await generateSignedState('', secret, 'login');
@@ -665,6 +679,51 @@ describe('Fail-Closed Authentication Configuration Security', () => {
       // Second request: MUST hit cache_fresh because v2 activities schema check passes
       const profile2 = await resolveGitHubProfile('rate_limited_dev', mockEnv);
       expect(profile2.source).toBe('cache_fresh');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('escapes user input on identity mismatch page to prevent XSS', async () => {
+    const secret = 'test-secret-32-chars-long-key-1!';
+    const xssState = await generateSignedState('<script>alert(1)</script>', secret, 'claim');
+
+    const mockEnv = {
+      AUTH_SECRET: secret,
+      GITHUB_CLIENT_ID: 'client123',
+      GITHUB_CLIENT_SECRET: 'secret123',
+      ENVIRONMENT: 'production',
+      DOMAIN: 'githoot.com',
+      DB: { prepare: () => ({ bind: () => ({ first: async () => null }) }) },
+      CACHE_KV: { get: async () => null, put: async () => null, delete: async () => null }
+    } as unknown as Env;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('github.com/login/oauth/access_token')) {
+        return new Response(JSON.stringify({ access_token: 'gho_mock_token_123' }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (url.includes('api.github.com/user')) {
+        return new Response(JSON.stringify({
+          id: 99999,
+          login: 'victim_user',
+          name: 'Victim User',
+          avatar_url: 'https://avatars.githubusercontent.com/u/99999'
+        }), { headers: { 'Content-Type': 'application/json' } });
+      }
+      return originalFetch(input);
+    };
+
+    try {
+      const res = await app.fetch(new Request(`http://localhost/auth/callback?code=mock_code&state=${encodeURIComponent(xssState)}`), mockEnv);
+      expect(res.status).toBe(403);
+      const html = await res.text();
+      expect(html).toContain('Identity Mismatch');
+      expect(html).not.toContain('<script>alert(1)</script>');
+      expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     } finally {
       globalThis.fetch = originalFetch;
     }
