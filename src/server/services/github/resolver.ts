@@ -43,19 +43,9 @@ export function normalizeGuardianSummary(guardian: GuardianSummary | null): Guar
       heroUrl = heroUrl.replace(/\.jpg$/, '.webp');
     }
   }
-
-  const moodInfo = guardian.energy_state ? {
-    Energetic: { title: '⚡ Energetic & Sparking', desc: 'Vừa lập trình sôi nổi trong 24h qua! Linh thú đang hào hứng cùng bạn.' },
-    Active: { title: '✦ Active & Ready', desc: 'Đang khỏe mạnh và chăm chỉ bảo vệ các repositories của bạn.' },
-    Resting: { title: '😴 Resting & Cozy', desc: 'Đang ngủ đông êm đềm bên cạnh các dòng code.' },
-    Hungry_for_code: { title: '🍖 Hungry for Commits', desc: 'Đã hơn 30 ngày chưa có commit mới. Hãy push 1 commit để đánh thức bé nhé!' }
-  }[guardian.energy_state] : null;
-
   return {
     ...guardian,
-    hero_image_url: heroUrl,
-    mood_title: guardian.mood_title || moodInfo?.title || '✦ Activity Syncing',
-    mood_description: guardian.mood_description || moodInfo?.desc || 'Chưa có hoạt động GitHub gần đây. Hãy push một commit để cập nhật tâm trạng bé nhé!'
+    hero_image_url: heroUrl
   };
 }
 export async function resolveGitHubProfile(username: string, env: Env): Promise<ResolvedProfile> {
@@ -227,8 +217,14 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
           })
           .slice(0, 4);
 
-        // Active: most recently pushed
-        activeRepos = [...mappedRepos].slice(0, 4);
+        // Active: most recently pushed / updated
+        activeRepos = [...mappedRepos]
+          .sort((a, b) => {
+            const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+            const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+            return timeB - timeA;
+          })
+          .slice(0, 4);
       }
     } catch {
       // Non-blocking
@@ -310,8 +306,8 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
       guardianRecord = {
         ...guardianRecord,
         energy_state: mood ? mood.state : guardianRecord.energy_state,
-        mood_title: mood ? mood.title : (guardianRecord.mood_title || '✦ Activity Syncing'),
-        mood_description: mood ? mood.description : (guardianRecord.mood_description || 'Chưa có hoạt động GitHub gần đây. Hãy push một commit để cập nhật tâm trạng bé nhé!')
+        mood_title: mood ? mood.title : undefined,
+        mood_description: mood ? mood.description : undefined
       };
     }
 

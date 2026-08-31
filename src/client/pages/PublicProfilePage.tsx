@@ -62,6 +62,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
   const [profile, setProfile] = useState<ResolvedProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [repoTab, setRepoTab] = useState<'highlighted' | 'active'>('highlighted');
   const eggCardRef = useRef<HTMLDivElement | null>(null);
   const eggTrackedRef = useRef(false);
 
@@ -317,7 +318,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                     LVL {profile.guardian.level}
                   </span>
                   <span
-                    title={profile.guardian.mood_description || profile.mood?.description || 'Guarding repositories'}
+                    title={profile.mood?.description || 'Hoạt động GitHub'}
                     style={{
                       fontFamily: "'JetBrains Mono', monospace",
                       fontSize: '11px',
@@ -325,12 +326,12 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                       padding: '4px 12px',
                       borderRadius: '6px',
                       background: 'rgba(0, 255, 136, 0.12)',
-                      border: `1px solid ${profile.mood?.badgeColor || '#00ff88'}`,
-                      color: profile.mood?.badgeColor || '#00ff88',
+                      border: `1px solid ${profile.mood?.badgeColor || '#00f0ff'}`,
+                      color: profile.mood?.badgeColor || '#00f0ff',
                       cursor: 'help'
                     }}
                   >
-                    {profile.guardian.mood_title || profile.mood?.title || `⚡ ${profile.guardian.energy_state}`}
+                    {profile.mood?.title || '✦ Activity Syncing'}
                   </span>
                 </div>
 
@@ -341,11 +342,11 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   color: '#8b9bb4',
                   fontStyle: 'italic',
                   textAlign: 'center',
-                  margin: '0 auto 14px auto',
+                  margin: '0 auto 12px auto',
                   maxWidth: '320px',
                   lineHeight: 1.4
                 }}>
-                  "{profile.guardian.mood_description || profile.mood?.description || 'Đang khỏe mạnh và chăm chỉ bảo vệ các repositories của bạn.'}"
+                  "{profile.mood?.description || 'Chưa có hoạt động GitHub gần đây. Hãy push một commit để cập nhật tâm trạng bé nhé!'}"
                 </p>
 
                 {/* Honest Raw Experience & Progression Stats */}
@@ -536,14 +537,54 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   <span>Highlighted & Active Repositories</span>
                 </h3>
                 <p style={{ fontSize: '12px', color: '#8b9bb4', margin: '4px 0 0 0' }}>
-                  Top starred & actively maintained codebases by @{profile.login}
+                  Codebases and open-source projects maintained by @{profile.login}
                 </p>
+              </div>
+
+              {/* Sub-Tabs: Highlighted vs Active */}
+              <div style={{ display: 'inline-flex', background: 'rgba(255, 255, 255, 0.05)', padding: '3px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)', gap: '4px' }}>
+                <button
+                  type="button"
+                  onClick={() => setRepoTab('highlighted')}
+                  style={{
+                    background: repoTab === 'highlighted' ? '#00f0ff' : 'transparent',
+                    color: repoTab === 'highlighted' ? '#000' : '#8b9bb4',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '4px 10px',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  🌟 Top Starred ({profile.highlighted_repos?.length || 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRepoTab('active')}
+                  style={{
+                    background: repoTab === 'active' ? '#00f0ff' : 'transparent',
+                    color: repoTab === 'active' ? '#000' : '#8b9bb4',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '4px 10px',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  ⚡ Recently Active ({profile.active_repos?.length || 0})
+                </button>
               </div>
             </div>
 
-            {profile.highlighted_repos && profile.highlighted_repos.length > 0 ? (
+            {((repoTab === 'highlighted' ? profile.highlighted_repos : profile.active_repos) || profile.highlighted_repos || []).length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
-                {profile.highlighted_repos.map((repo) => (
+                {((repoTab === 'highlighted' ? profile.highlighted_repos : profile.active_repos) || []).map((repo) => (
                   <a
                     key={repo.full_name}
                     href={repo.html_url}
