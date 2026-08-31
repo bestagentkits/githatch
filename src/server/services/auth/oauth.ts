@@ -2,7 +2,7 @@
 // GitHoot GitHub OAuth & HMAC Security Service (src/server/services/auth/oauth.ts)
 // ============================================================================
 
-import type { Env, GitHubUserRaw, UserSession } from '../../types';
+import type { Env, GitHubUserRaw, UserSession, AggregateStats } from '../../types';
 export interface OAuthStatePayload {
   claim_username?: string;
   intent: 'login' | 'claim';
@@ -203,4 +203,128 @@ export async function fetchAuthenticatedUser(accessToken: string): Promise<GitHu
   }
 
   return (await res.json()) as GitHubUserRaw;
+}
+
+/**
+ * Fetches PRIVATE-INCLUSIVE aggregate COUNTS only via a single GitHub GraphQL query
+ * bound to `viewer`. Returns sanitized scalar totals — never repo names, URLs, or
+ * per-event detail. Returns null on any error, partial response, identity mismatch,
+ * or negative value so callers preserve the previous good snapshot (never write zeros).
+ */
+export async function fetchAggregateStats(accessToken: string, expectedUserId: number): Promise<AggregateStats | null> {
+  const to = new Date();
+  const from = new Date(to.getTime() - 365 * 24 * 3600 * 1000);
+  const query = `query($from: DateTime!, $to: DateTime!) {
+    viewer {
+      databaseId
+      contributionsCollection(from: $from, to: $to) {
+        contributionCalendar { totalContributions }
+      }
+      repositories(first: 1, ownerAffiliations: [OWNER]) { totalCount }
+    }
+  }`;
+
+  try {
+    const res = await fetch('https://api.github.com/graphql', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'User-Agent': 'GitHoot-Auth/1.0',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query, variables: { from: from.toISOString(), to: to.toISOString() } })
+    });
+
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      data?: {
+        viewer?: {
+          databaseId?: number;
+          contributionsCollection?: { contributionCalendar?: { totalContributions?: number } };
+          repositories?: { totalCount?: number };
+        };
+      };
+      errors?: unknown;
+    };
+
+    if (json.errors || !json.data?.viewer) return null;
+    const viewer = json.data.viewer;
+
+    // Bind strictly to the authenticated identity; never trust browser-supplied usernames.
+    if (viewer.databaseId !== expectedUserId) return null;
+
+    const contributions = viewer.contributionsCollection?.contributionCalendar?.totalContributions;
+    const ownedRepos = viewer.repositories?.totalCount;
+
+    if (typeof contributions !== 'number' || typeof ownedRepos !== 'number') return null;
+    if (!Number.isInteger(contributions) || !Number.isInteger(ownedRepos)) return null;
+    if (contributions < 0 || ownedRepos < 0) return null;
+
+    return {
+      contributions_last_year: contributions,
+      owned_repositories_total: ownedRepos,
+      period_started_at: from.toISOString(),
+      period_ended_at: to.toISOString(),
+      refreshed_at: to.toISOString()
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Revokes a SINGLE OAuth access token via GitHub's `DELETE /applications/{client_id}/token`
+ * (never deletes the whole app grant). GitHub returns 204 on success. Transient failures
+ * (network, 429, 5xx) are retried with bounded backoff. On final failure a token-free,
+ * actionable warning is logged; the caller still discards the local token regardless.
+ * Returns true only when GitHub confirmed revocation with 204.
+ */
+export async function revokeAccessToken(accessToken: string, env: Env): Promise<boolean> {
+  const clientId = (env.GITHUB_CLIENT_ID || '').replace(/^["']|["']$/g, '').trim();
+  const clientSecret = (env.GITHUB_CLIENT_SECRET || '').replace(/^["']|["']$/g, '').trim();
+  if (!clientId || !clientSecret) {
+    console.warn('[OAuth] Token revocation skipped: client credentials missing.');
+    return false;
+  }
+
+  const basic = btoa(`${clientId}:${clientSecret}`);
+  const url = `https://api.github.com/applications/${encodeURIComponent(clientId)}/token`;
+  const maxAttempts = 3;
+  let lastStatus = 0;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Basic ${basic}`,
+          'User-Agent': 'GitHoot-Auth/1.0',
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ access_token: accessToken })
+      });
+      lastStatus = res.status;
+
+      // GitHub documents 204 No Content on successful revocation.
+      if (res.status === 204) return true;
+
+      // Non-transient failures (401/404/422) will not succeed on retry.
+      if (res.status !== 429 && res.status < 500) {
+        console.warn(`[OAuth] Token revocation failed with non-transient HTTP ${res.status}; discarding token locally.`);
+        return false;
+      }
+    } catch {
+      lastStatus = 0; // network error → transient
+    }
+
+    if (attempt < maxAttempts) {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 200 * attempt);
+      await promise;
+    }
+  }
+
+  console.warn(`[OAuth] Token revocation failed after ${maxAttempts} attempts (last status ${lastStatus}); token discarded locally but may remain valid at GitHub until expiry.`);
+  return false;
 }

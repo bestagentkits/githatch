@@ -4,7 +4,7 @@
 
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { generateSignedState, verifySignedState, exchangeCodeForAccessToken, fetchAuthenticatedUser, createSessionToken, verifySessionToken } from '../services/auth/oauth';
+import { generateSignedState, verifySignedState, exchangeCodeForAccessToken, fetchAuthenticatedUser, createSessionToken, verifySessionToken, fetchAggregateStats, revokeAccessToken } from '../services/auth/oauth';
 import type { UserSession } from '../types';
 import { executeClaimTransaction } from '../services/claim/transaction';
 
@@ -52,7 +52,7 @@ authRouter.get('/github', async (c) => {
   const state = await generateSignedState(claimUsername, secret, intent);
 
   const redirectUri = `${c.req.url.split('/auth')[0]}/auth/callback`;
-  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user&state=${encodeURIComponent(state)}`;
+  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent('repo read:user')}&state=${encodeURIComponent(state)}`;
 
   return c.redirect(githubAuthUrl);
 });
@@ -75,13 +75,48 @@ authRouter.get('/callback', async (c) => {
     return c.text('Invalid or expired OAuth state token (CSRF check failed).', 403);
   }
 
+  let accessToken: string | null = null;
   try {
-    // 1. Exchange code for access token
-    const accessToken = await exchangeCodeForAccessToken(code, c.env);
+    // 1. Exchange code for access token (held only in callback-local memory)
+    accessToken = await exchangeCodeForAccessToken(code, c.env);
 
     // 2. Fetch authenticated user data from GitHub
     const authUser = await fetchAuthenticatedUser(accessToken);
-    // 3. Set persistent secure HttpOnly session cookie first
+
+    // 3. Derive + persist owner-consented private-INCLUSIVE aggregate COUNTS only
+    //    (contributions last year + owned repos incl. private). Sanitized numbers,
+    //    never names/URLs/token. Non-blocking; preserve prior snapshot on failure.
+    try {
+      const stats = await fetchAggregateStats(accessToken, authUser.id);
+      if (stats) {
+        await c.env.DB.prepare(
+          `INSERT INTO github_aggregate_stats
+            (github_user_id, contributions_last_year, owned_repositories_total, period_started_at, period_ended_at, refreshed_at, consent_version)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1)
+           ON CONFLICT(github_user_id) DO UPDATE SET
+            contributions_last_year = ?2,
+            owned_repositories_total = ?3,
+            period_started_at = ?4,
+            period_ended_at = ?5,
+            refreshed_at = ?6,
+            consent_version = 1`
+        ).bind(
+          authUser.id,
+          stats.contributions_last_year,
+          stats.owned_repositories_total,
+          Date.parse(stats.period_started_at),
+          Date.parse(stats.period_ended_at),
+          Date.parse(stats.refreshed_at)
+        ).run();
+        try {
+          await c.env.CACHE_KV.delete(`gh:profile:v3:${authUser.login.toLowerCase()}`);
+        } catch {}
+      }
+    } catch {
+      // Non-blocking: never overwrite a good snapshot with zeros; login proceeds.
+    }
+
+    // 4. Set persistent secure HttpOnly session cookie (token-free)
     const userSession: UserSession = {
       id: authUser.id,
       login: authUser.login,
@@ -93,12 +128,12 @@ authRouter.get('/callback', async (c) => {
     const secureAttr = isSecure ? '; Secure' : '';
     c.header('Set-Cookie', `githoot_session=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly${secureAttr}; SameSite=Lax; Max-Age=2592000`);
 
-    // 4. Handle pure login intent (0 AI cost, no premature claim)
+    // 5. Handle pure login intent (0 AI cost, no premature claim)
     if (statePayload.intent === 'login') {
       return c.redirect(`/${encodeURIComponent(authUser.login)}`);
     }
 
-    // 5. Handle explicit claim intent
+    // 6. Handle explicit claim intent
     // Security check: User must match the claim target if target was specified
     if (statePayload.claim_username && statePayload.claim_username !== authUser.login.toLowerCase()) {
       const safeAuthLogin = escapeHtml(authUser.login);
@@ -123,6 +158,11 @@ authRouter.get('/callback', async (c) => {
       return c.redirect(`/${encodeURIComponent(statePayload.claim_username || 'user')}?checkout=true`);
     }
     return c.text(`Authentication error: ${msg}`, 500);
+  } finally {
+    // Always revoke the single OAuth token at GitHub, then discard locally.
+    if (accessToken) {
+      await revokeAccessToken(accessToken, c.env);
+    }
   }
 });
 

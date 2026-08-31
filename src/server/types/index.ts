@@ -81,6 +81,14 @@ export interface UserSession {
   avatar_url: string;
 }
 
+export interface AggregateStats {
+  contributions_last_year: number;
+  owned_repositories_total: number;
+  period_started_at: string;
+  period_ended_at: string;
+  refreshed_at: string;
+}
+
 export interface ResolvedProfile {
   github_user_id: number;
   login: string;
@@ -108,6 +116,7 @@ export interface ResolvedProfile {
     badgeColor: string;
     recommendedPose: string;
   };
+  aggregate_stats?: AggregateStats | null;
 }
 
 export type RarityTier = 'Common' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
