@@ -44,10 +44,11 @@ export async function generateSignedState(claimUsername: string, secret: string,
   };
   const payloadStr = JSON.stringify(payload);
   const payloadBytes = new TextEncoder().encode(payloadStr);
+  if (!secret) throw new Error('secret is required for state generation');
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(secret || 'default-dev-secret-32-chars-long!'),
+    encoder.encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
@@ -66,10 +67,11 @@ export async function verifySignedState(stateStr: string, secret: string): Promi
     if (!b64Payload || !sigHex) return null;
     const payloadBytes = base64urlToBytes(b64Payload);
     const payloadStr = new TextDecoder().decode(payloadBytes);
+    if (!secret) return null;
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',
-      encoder.encode(secret || 'default-dev-secret-32-chars-long!'),
+      encoder.encode(secret),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['verify']
@@ -105,10 +107,11 @@ export async function createSessionToken(user: UserSession, secret: string): Pro
   };
   const payloadStr = JSON.stringify(payload);
   const payloadBytes = new TextEncoder().encode(payloadStr);
+  if (!secret) throw new Error('secret is required for session token creation');
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(secret || 'default-dev-secret-32-chars-long!'),
+    encoder.encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
@@ -128,10 +131,11 @@ export async function verifySessionToken(tokenStr: string, secret: string): Prom
 
     const payloadBytes = base64urlToBytes(b64Payload);
     const payloadStr = new TextDecoder().decode(payloadBytes);
+    if (!secret) return null;
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',
-      encoder.encode(secret || 'default-dev-secret-32-chars-long!'),
+      encoder.encode(secret),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['verify']
