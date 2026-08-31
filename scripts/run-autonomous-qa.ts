@@ -141,9 +141,9 @@ async function runAutonomousQa() {
     const res = await app.fetch(new Request('http://localhost/octocat'), mockEnvWithAssets);
     if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
     const html = await res.text();
-    if (!html.includes('/og/octocat.png')) throw new Error('Missing dynamic /og/octocat.png in og:image tag');
+    if (!html.includes('/og/octocat.png?v=2')) throw new Error('Missing dynamic /og/octocat.png?v=2 in og:image tag');
     if (!html.includes('@octocat · GitHoot Realm Guardian')) throw new Error('Missing dynamic title in HTML');
-    return 'Injected: og:image=/og/octocat.png, og:title=@octocat · GitHoot Realm Guardian';
+    return 'Injected: og:image=/og/octocat.png?v=2, og:title=@octocat · GitHoot Realm Guardian';
   });
   // --- Tier 2: DNA & Anti-Throttling Resolver ---
   console.log('\n► Tier 2: Deterministic DNA & SWR Fallback Engine');
