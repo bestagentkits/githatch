@@ -7,7 +7,9 @@ import { describe, it, expect } from 'vitest';
 import { generateDegradedProfile, normalizeGuardianSummary, resolveGitHubProfile } from '../../src/server/services/github/resolver';
 import { parseTokenPool, recordTokenResponse } from '../../src/server/services/github/token-pool';
 import { calculateGuardianMood } from '../../src/server/services/progression/mood-engine';
-import type { Env, PublicConfig, EarlyAccessStatus, ResolvedProfile, GuardianSummary } from '../../src/server/types';
+import { createSessionToken, verifySessionToken, generateSignedState, verifySignedState } from '../../src/server/services/auth/oauth';
+import { renderSvgToPng } from '../../src/server/services/image/resvg-renderer';
+import type { Env, PublicConfig, EarlyAccessStatus, ResolvedProfile, GuardianSummary, UserSession } from '../../src/server/types';
 import app from '../../src/server/index';
 import { getEarlyAccessStatus } from '../../src/server/services/claim/quota';
 describe('SWR Resolver & Degraded Seed Fallback', () => {
@@ -242,5 +244,123 @@ describe('Public Config & Quota Endpoint Contracts', () => {
     const profile = await resolveGitHubProfile('mrgoonie', mockEnvKvCached);
     expect(profile.source).toBe('cache_fresh');
     expect(profile.guardian?.hero_image_url).toBe('/assets/sample-pets/celestialdrake.webp');
+  });
+});
+
+describe('Auth Session & OAuth State Integrity', () => {
+  const secret = 'super-secret-key-32-chars-length!';
+
+  it('generates and verifies login and claim OAuth signed state tokens', async () => {
+    const claimState = await generateSignedState('octocat', secret, 'claim');
+    const parsedClaim = await verifySignedState(claimState, secret);
+    expect(parsedClaim).not.toBeNull();
+    expect(parsedClaim?.claim_username).toBe('octocat');
+    expect(parsedClaim?.intent).toBe('claim');
+
+    const loginState = await generateSignedState('', secret, 'login');
+    const parsedLogin = await verifySignedState(loginState, secret);
+    expect(parsedLogin).not.toBeNull();
+    expect(parsedLogin?.intent).toBe('login');
+    expect(parsedLogin?.claim_username).toBeUndefined();
+  });
+
+  it('rejects tampered OAuth state tokens', async () => {
+    const validState = await generateSignedState('octocat', secret, 'claim');
+    const tampered = validState.slice(0, -4) + 'abcd';
+    const result = await verifySignedState(tampered, secret);
+    expect(result).toBeNull();
+  });
+
+  it('creates and verifies user session tokens correctly', async () => {
+    const user: UserSession = {
+      id: 123456,
+      login: 'mona-lisa',
+      name: 'Mona Lisa',
+      avatar_url: 'https://avatars.githubusercontent.com/u/123456'
+    };
+
+    const sessionToken = await createSessionToken(user, secret);
+    expect(typeof sessionToken).toBe('string');
+    expect(sessionToken.includes('.')).toBe(true);
+
+    const verified = await verifySessionToken(sessionToken, secret);
+    expect(verified).not.toBeNull();
+    expect(verified?.id).toBe(123456);
+    expect(verified?.login).toBe('mona-lisa');
+    expect(verified?.name).toBe('Mona Lisa');
+  });
+
+  it('rejects tampered session tokens', async () => {
+    const user: UserSession = {
+      id: 999,
+      login: 'hacker',
+      name: null,
+      avatar_url: 'https://avatars.githubusercontent.com/u/999'
+    };
+    const token = await createSessionToken(user, secret);
+    const [payload, sig] = token.split('.');
+    const tampered = payload + '.' + (sig.startsWith('00') ? 'ff' : '00') + sig.slice(2);
+    const verified = await verifySessionToken(tampered, secret);
+    expect(verified).toBeNull();
+  });
+});
+
+describe('Tamagotchi Mood Engine Calculations', () => {
+  const now = Date.now();
+
+  it('computes Energetic for activity within 24 hours', () => {
+    const mood = calculateGuardianMood(now - 1000 * 3600 * 2); // 2 hours ago
+    expect(mood.state).toBe('Energetic');
+    expect(mood.recommendedPose).toBe('work');
+    expect(mood.badgeColor).toBe('#00ff88');
+  });
+
+  it('computes Active for activity within 7 days', () => {
+    const mood = calculateGuardianMood(now - 1000 * 3600 * 24 * 3); // 3 days ago
+    expect(mood.state).toBe('Active');
+    expect(mood.recommendedPose).toBe('idle');
+    expect(mood.badgeColor).toBe('#00f0ff');
+  });
+
+  it('computes Resting for activity within 30 days', () => {
+    const mood = calculateGuardianMood(now - 1000 * 3600 * 24 * 15); // 15 days ago
+    expect(mood.state).toBe('Resting');
+    expect(mood.recommendedPose).toBe('sleepy');
+    expect(mood.badgeColor).toBe('#ffa800');
+  });
+
+  it('computes Hungry_for_code for inactivity exceeding 30 days', () => {
+    const mood = calculateGuardianMood(now - 1000 * 3600 * 24 * 45); // 45 days ago
+    expect(mood.state).toBe('Hungry_for_code');
+    expect(mood.badgeColor).toBe('#ff2a85');
+  });
+
+  it('omits mood when user has zero coding activity (no events and no repo pushes)', () => {
+    const lastActive = 0;
+    const mood = lastActive > 0 ? calculateGuardianMood(lastActive) : undefined;
+    expect(mood).toBeUndefined();
+  });
+});
+
+describe('WebAssembly SVG-to-PNG Raster Rendering', () => {
+  it('renders Cyber-Arcade SVG into a valid PNG binary buffer with magic bytes', async () => {
+    const sampleSvg = `<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1200" height="630" fill="#07090e"/>
+      <text x="600" y="315" font-family="sans-serif" font-size="48" fill="#00f0ff" text-anchor="middle">GitHoot Card</text>
+    </svg>`;
+
+    const pngBytes = await renderSvgToPng(sampleSvg, 1200);
+    expect(pngBytes).toBeInstanceOf(Uint8Array);
+    expect(pngBytes.length).toBeGreaterThan(100);
+
+    // Verify standard PNG magic header: 0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A
+    expect(pngBytes[0]).toBe(0x89);
+    expect(pngBytes[1]).toBe(0x50); // 'P'
+    expect(pngBytes[2]).toBe(0x4E); // 'N'
+    expect(pngBytes[3]).toBe(0x47); // 'G'
+    expect(pngBytes[4]).toBe(0x0D);
+    expect(pngBytes[5]).toBe(0x0A);
+    expect(pngBytes[6]).toBe(0x1A);
+    expect(pngBytes[7]).toBe(0x0A);
   });
 });

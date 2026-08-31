@@ -1,9 +1,22 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'vite-wasm-loader',
+      enforce: 'pre',
+      load(id) {
+        if (id.endsWith('.wasm')) {
+          const buf = fs.readFileSync(id);
+          return `export default new Uint8Array([${Array.from(buf).join(',')}]);`;
+        }
+      }
+    }
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src')

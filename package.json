@@ -8,7 +8,7 @@
     "dev": "wrangler pages dev dist --d1=githoot_db --kv=GITHOOT_CACHE --r2=githoot --port=8788",
     "build": "node scripts/build.js",
     "typecheck": "tsc --noEmit",
-    "test": "npx tsx scripts/run-autonomous-qa.ts",
+    "test": "vite-node scripts/run-autonomous-qa.ts",
     "landing:gen": "node scripts/gen-landing16.mjs neonbyte",
     "landing:build": "node scripts/build-hatch-mockup-html.js",
     "landing:verify": "node scripts/verify-landing16.mjs",
@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.4.3",
+    "@resvg/resvg-wasm": "^2.6.2",
     "hono": "^4.7.2",
     "zod": "^3.24.2"
   },

@@ -19,6 +19,45 @@ function getRarityGlowColor(tier?: string): string {
   }
 }
 
+function formatRelativeTime(dateStr: string): string {
+  try {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 3600));
+    if (diffHours < 1) {
+      const diffMins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+      return `${diffMins}m ago`;
+    }
+    if (diffHours < 24) {
+      return `${diffHours}h ago`;
+    }
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 30) return `${diffDays}d ago`;
+    const diffMonths = Math.floor(diffDays / 30);
+    return `${diffMonths}mo ago`;
+  } catch {
+    return 'recently';
+  }
+}
+
+function getLangColor(lang: string | null): string {
+  switch (lang) {
+    case 'TypeScript': return '#3178c6';
+    case 'JavaScript': return '#f7df1e';
+    case 'Python': return '#3776ab';
+    case 'Rust': return '#dea584';
+    case 'Go': return '#00add8';
+    case 'HTML': return '#e34f26';
+    case 'CSS': return '#563d7c';
+    case 'C++': return '#f34b7d';
+    case 'C': return '#555555';
+    case 'PHP': return '#4f5d95';
+    case 'Java': return '#b07219';
+    case 'Swift': return '#f05138';
+    default: return '#00f0ff';
+  }
+}
+
 export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) => {
   const [profile, setProfile] = useState<ResolvedProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -226,10 +265,9 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   <img
                     src={profile.guardian.hero_image_url}
                     alt={profile.guardian.name}
-                    className="guardian-hero-sprite"
+                    className={`guardian-hero-sprite guardian-pet-anim-${(profile.guardian.energy_state || 'active').toLowerCase().replace(/_/g, '-')}`}
                   />
                 </div>
-
                 {/* Guardian Title */}
                 <h2 style={{
                   fontFamily: "'Archivo', sans-serif",
@@ -278,21 +316,39 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   }}>
                     LVL {profile.guardian.level}
                   </span>
-                  <span style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    padding: '4px 12px',
-                    borderRadius: '6px',
-                    background: 'rgba(0, 255, 136, 0.12)',
-                    border: '1px solid rgba(0, 255, 136, 0.35)',
-                    color: '#00ff88'
-                  }}>
-                    ⚡ {profile.guardian.energy_state}
+                  <span
+                    title={profile.guardian.mood_description || profile.mood?.description || 'Guarding repositories'}
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      padding: '4px 12px',
+                      borderRadius: '6px',
+                      background: 'rgba(0, 255, 136, 0.12)',
+                      border: `1px solid ${profile.mood?.badgeColor || '#00ff88'}`,
+                      color: profile.mood?.badgeColor || '#00ff88',
+                      cursor: 'help'
+                    }}
+                  >
+                    {profile.guardian.mood_title || profile.mood?.title || `⚡ ${profile.guardian.energy_state}`}
                   </span>
                 </div>
 
-                {/* XP Progression Bar */}
+                {/* Mood Description Note */}
+                <p style={{
+                  fontFamily: "'Schibsted Grotesk', sans-serif",
+                  fontSize: '11px',
+                  color: '#8b9bb4',
+                  fontStyle: 'italic',
+                  textAlign: 'center',
+                  margin: '0 auto 14px auto',
+                  maxWidth: '320px',
+                  lineHeight: 1.4
+                }}>
+                  "{profile.guardian.mood_description || profile.mood?.description || 'Đang khỏe mạnh và chăm chỉ bảo vệ các repositories của bạn.'}"
+                </p>
+
+                {/* Honest XP Progression Bar */}
                 <div style={{
                   width: '100%',
                   maxWidth: '320px',
@@ -303,21 +359,22 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   boxSizing: 'border-box'
                 }}>
                   <div style={{
-                    width: `${Math.max(5, Math.min(100, profile.guardian.experience))}%`,
+                    width: `${Math.min(100, Math.max(0, (profile.guardian.experience || 0) % 100))}%`,
                     height: '6px',
                     borderRadius: '9999px',
                     background: 'linear-gradient(90deg, #00f0ff, #ff2a85)',
-                    boxShadow: '0 0 8px rgba(0, 240, 255, 0.5)'
+                    boxShadow: (profile.guardian.experience || 0) > 0 ? '0 0 8px rgba(0, 240, 255, 0.5)' : 'none',
+                    transition: 'width 0.3s ease'
                   }} />
                 </div>
                 <div style={{
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: '10px',
-                  color: '#53627a',
+                  color: '#8b9bb4',
                   marginTop: '6px',
                   textAlign: 'center'
                 }}>
-                  EXPERIENCE: {profile.guardian.experience} / 100 EXP · SHIELDING {profile.public_repos} REPOS
+                  EXPERIENCE: {profile.guardian.experience || 0} EXP · LEVEL {profile.guardian.level || 1} · SHIELDING {profile.public_repos} REPOSITORIES
                 </div>
               </div>
             ) : (
@@ -464,6 +521,162 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                 <div style={{ textAlign: 'center', fontSize: '11px', color: '#8b9bb4', marginTop: '10px' }}>
                   ✓ Free forever · Only the owner of @{profile.login} can claim this companion.
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Dossier Bottom Row: Highlighted Repositories & Live Realm Activities */}
+        <div className="dossier-full-grid">
+          
+          {/* Highlighted & Active Repositories Card */}
+          <div className="githoot-card" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <h3 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '18px', fontWeight: 800, margin: 0, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>📁</span>
+                  <span>Highlighted & Active Repositories</span>
+                </h3>
+                <p style={{ fontSize: '12px', color: '#8b9bb4', margin: '4px 0 0 0' }}>
+                  Top starred & actively maintained codebases by @{profile.login}
+                </p>
+              </div>
+            </div>
+
+            {profile.highlighted_repos && profile.highlighted_repos.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
+                {profile.highlighted_repos.map((repo) => (
+                  <a
+                    key={repo.full_name}
+                    href={repo.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="repo-item-card"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', gap: '8px' }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '13px', fontWeight: 800, color: '#00f0ff', wordBreak: 'break-all' }}>
+                          {repo.is_private ? '🔒 ' : ''}{repo.name}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                          {repo.stargazers_count > 0 && (
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#ff2a85', fontWeight: 700 }}>
+                              ★ {repo.stargazers_count}
+                            </span>
+                          )}
+                          {repo.forks_count > 0 && (
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#8b9bb4' }}>
+                              ⑂ {repo.forks_count}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#c8d6e5', margin: '0 0 10px 0', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {repo.description || 'Open-source repository guarded on GitHoot.'}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: '#53627a', fontFamily: "'JetBrains Mono', monospace" }}>
+                      {repo.language ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#8b9bb4' }}>
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: getLangColor(repo.language) }} />
+                          <span>{repo.language}</span>
+                        </span>
+                      ) : <span />}
+                      {repo.updated_at && (
+                        <span>{formatRelativeTime(repo.updated_at)}</span>
+                      )}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: '24px', textAlign: 'center', color: '#8b9bb4', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}>
+                ✦ Repositories protected under the Guardian shield ✦
+              </div>
+            )}
+          </div>
+
+          {/* Live Realm Activities Feed Card */}
+          <div className="githoot-card" style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <h3 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '18px', fontWeight: 800, margin: 0, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>⚡</span>
+                  <span>Recent Realm Activities</span>
+                </h3>
+                <p style={{ fontSize: '12px', color: '#8b9bb4', margin: '4px 0 0 0' }}>
+                  Live GitHub activity stream fueling companion mood & growth
+                </p>
+              </div>
+            </div>
+
+            {profile.activities && profile.activities.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {profile.activities.map((act) => {
+                  const getActIcon = (type: string) => {
+                    switch (type) {
+                      case 'PushEvent': return '🚀';
+                      case 'PullRequestEvent': return '🔀';
+                      case 'IssuesEvent': return '⚠️';
+                      case 'CreateEvent': return '🌿';
+                      case 'ReleaseEvent': return '📦';
+                      case 'WatchEvent': return '⭐';
+                      case 'ForkEvent': return '🍴';
+                      default: return '✦';
+                    }
+                  };
+
+                  return (
+                    <div key={act.id} className="activity-timeline-entry">
+                      <div style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
+                        background: 'rgba(0, 240, 255, 0.1)',
+                        border: '1px solid rgba(0, 240, 255, 0.25)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '14px',
+                        flexShrink: 0
+                      }}>
+                        {getActIcon(act.type)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                          <a
+                            href={act.repo_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              color: '#00f0ff',
+                              textDecoration: 'none',
+                              textOverflow: 'ellipsis',
+                              overflow: 'hidden',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {act.repo}
+                          </a>
+                          <span style={{ fontSize: '11px', color: '#53627a', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                            {formatRelativeTime(act.created_at)}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#c8d6e5', marginTop: '2px', lineHeight: 1.4 }}>
+                          {act.summary}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ padding: '32px', textAlign: 'center', color: '#8b9bb4', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px' }}>
+                😴 No public events in the last 90 days. Push a commit to wake the guardian!
               </div>
             )}
           </div>

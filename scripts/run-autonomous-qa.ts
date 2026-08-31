@@ -105,14 +105,29 @@ async function runAutonomousQa() {
     return `SVG Length: ${svgText.length} bytes, Cache-Control: ${res.headers.get('Cache-Control')}`;
   });
 
-  await runTest('API', 'Dynamic OpenGraph Card GET /og/octocat', async () => {
-    const res = await app.fetch(new Request('http://localhost/og/octocat'), mockEnv);
+  await runTest('API', 'Dynamic OpenGraph PNG Card GET /og/octocat.png (with mixed Accept header)', async () => {
+    const res = await app.fetch(new Request('http://localhost/og/octocat.png', {
+      headers: { 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/svg+xml,image/*,*/*;q=0.8' }
+    }), mockEnv);
     if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-    const svgText = await res.text();
-    if (!svgText.includes('GitHoot.com') || !svgText.includes('1200')) throw new Error('Invalid OG card');
-    return `OG Image Size: 1200x630, Bytes: ${svgText.length}`;
+    const contentType = res.headers.get('Content-Type') || '';
+    if (!contentType.includes('image/png')) throw new Error(`Expected image/png, got ${contentType}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4E || bytes[3] !== 0x47) {
+      throw new Error('Invalid PNG binary header');
+    }
+    return `Format: PNG, Bytes: ${bytes.length}, Content-Type: ${contentType}`;
   });
 
+  await runTest('API', 'Dynamic OpenGraph SVG Card GET /og/octocat.svg', async () => {
+    const res = await app.fetch(new Request('http://localhost/og/octocat.svg'), mockEnv);
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+    const contentType = res.headers.get('Content-Type') || '';
+    if (!contentType.includes('image/svg+xml')) throw new Error(`Expected image/svg+xml, got ${contentType}`);
+    const svgText = await res.text();
+    if (!svgText.includes('GitHoot') || !svgText.includes('<svg')) throw new Error('Invalid SVG content');
+    return `Format: SVG, Bytes: ${svgText.length}, Content-Type: ${contentType}`;
+  });
   // --- Tier 2: DNA & Anti-Throttling Resolver ---
   console.log('\n► Tier 2: Deterministic DNA & SWR Fallback Engine');
   await runTest('DNA', 'Deterministic DNA Hash Consistency', async () => {

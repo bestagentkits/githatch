@@ -3,9 +3,10 @@
 // (src/server/services/github/resolver.ts)
 // ============================================================================
 
-import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary } from '../../types';
+import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary, GitHubRepo, UserActivity } from '../../types';
 import { getHealthyGitHubToken, recordTokenResponse } from './token-pool';
 import { deriveGuardianDNA } from '../dna/seed';
+import { calculateGuardianMood } from '../progression/mood-engine';
 
 export class UserNotFoundError extends Error {
   constructor(username: string) {
@@ -43,12 +44,20 @@ export function normalizeGuardianSummary(guardian: GuardianSummary | null): Guar
     }
   }
 
+  const moodInfo = guardian.energy_state ? {
+    Energetic: { title: '⚡ Energetic & Sparking', desc: 'Vừa lập trình sôi nổi trong 24h qua! Linh thú đang hào hứng cùng bạn.' },
+    Active: { title: '✦ Active & Ready', desc: 'Đang khỏe mạnh và chăm chỉ bảo vệ các repositories của bạn.' },
+    Resting: { title: '😴 Resting & Cozy', desc: 'Đang ngủ đông êm đềm bên cạnh các dòng code.' },
+    Hungry_for_code: { title: '🍖 Hungry for Commits', desc: 'Đã hơn 30 ngày chưa có commit mới. Hãy push 1 commit để đánh thức bé nhé!' }
+  }[guardian.energy_state] : null;
+
   return {
     ...guardian,
-    hero_image_url: heroUrl
+    hero_image_url: heroUrl,
+    mood_title: guardian.mood_title || moodInfo?.title || '✦ Active & Ready',
+    mood_description: guardian.mood_description || moodInfo?.desc || 'Đang khỏe mạnh và chăm chỉ bảo vệ các repositories của bạn.'
   };
 }
-
 export async function resolveGitHubProfile(username: string, env: Env): Promise<ResolvedProfile> {
   const cleanUsername = username.trim().toLowerCase();
   const cacheKey = `gh:profile:${cleanUsername}`;
@@ -156,33 +165,154 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
 
     const rawUser = (await res.json()) as GitHubUserRaw;
 
-    // Fetch top languages and stars from user repos
+    // Fetch top languages, stars, highlighted repos & active repos from user repos
     let topLanguages: string[] = [];
     let totalStars = 0;
+    let highlightedRepos: GitHubRepo[] = [];
+    let activeRepos: GitHubRepo[] = [];
+    let latestRepoPushTime = 0;
+
     try {
       const reposRes = await fetch(`https://api.github.com/users/${encodeURIComponent(cleanUsername)}/repos?per_page=30&sort=updated`, { headers });
       if (reposRes.ok) {
-        const repos = (await reposRes.json()) as Array<{ language: string | null; stargazers_count?: number }>;
+        const repos = (await reposRes.json()) as Array<{
+          name: string;
+          full_name: string;
+          description: string | null;
+          html_url: string;
+          language: string | null;
+          stargazers_count?: number;
+          forks_count?: number;
+          fork?: boolean;
+          private?: boolean;
+          pushed_at?: string;
+          updated_at?: string;
+        }>;
         const langCounts: Record<string, number> = {};
+        const mappedRepos: GitHubRepo[] = [];
+
         for (const r of repos) {
           if (r.language) {
             langCounts[r.language] = (langCounts[r.language] || 0) + 1;
           }
-          if (typeof r.stargazers_count === 'number') {
-            totalStars += r.stargazers_count;
+          const stars = typeof r.stargazers_count === 'number' ? r.stargazers_count : 0;
+          totalStars += stars;
+
+          const pushTime = r.pushed_at ? new Date(r.pushed_at).getTime() : (r.updated_at ? new Date(r.updated_at).getTime() : 0);
+          if (pushTime > latestRepoPushTime) {
+            latestRepoPushTime = pushTime;
           }
+
+          mappedRepos.push({
+            name: r.name,
+            full_name: r.full_name || `${cleanUsername}/${r.name}`,
+            description: r.description || null,
+            html_url: r.html_url || `https://github.com/${cleanUsername}/${r.name}`,
+            stargazers_count: stars,
+            forks_count: typeof r.forks_count === 'number' ? r.forks_count : 0,
+            language: r.language || null,
+            is_private: Boolean(r.private),
+            is_fork: Boolean(r.fork),
+            updated_at: r.pushed_at || r.updated_at
+          });
         }
         topLanguages = Object.keys(langCounts).sort((a, b) => (langCounts[b] ?? 0) - (langCounts[a] ?? 0)).slice(0, 3);
+        
+        // Highlighted: top starred repos (non-fork preferred)
+        highlightedRepos = [...mappedRepos]
+          .sort((a, b) => {
+            if (a.is_fork !== b.is_fork) return a.is_fork ? 1 : -1;
+            return b.stargazers_count - a.stargazers_count;
+          })
+          .slice(0, 4);
+
+        // Active: most recently pushed
+        activeRepos = [...mappedRepos].slice(0, 4);
       }
     } catch {
       // Non-blocking
     }
 
+    // Fetch recent public activities
+    let activities: UserActivity[] = [];
+    let latestEventTime = 0;
+    try {
+      const eventsRes = await fetch(`https://api.github.com/users/${encodeURIComponent(cleanUsername)}/events/public?per_page=10`, { headers });
+      if (eventsRes.ok) {
+        const rawEvents = (await eventsRes.json()) as Array<{
+          id: string;
+          type: string;
+          repo?: { name: string; url: string };
+          created_at: string;
+          payload?: {
+            commits?: Array<{ message: string }>;
+            action?: string;
+            ref_type?: string;
+            ref?: string;
+            pull_request?: { number?: number; title?: string };
+            issue?: { number?: number; title?: string };
+          };
+        }>;
+
+        for (const ev of rawEvents) {
+          const evTime = new Date(ev.created_at).getTime();
+          if (evTime > latestEventTime) {
+            latestEventTime = evTime;
+          }
+          const repoName = ev.repo?.name || `${cleanUsername}/repo`;
+          let summary = 'Activity in repository';
+          
+          if (ev.type === 'PushEvent') {
+            const count = ev.payload?.commits?.length || 1;
+            const msg = ev.payload?.commits?.[0]?.message?.split('\n')[0] || '';
+            summary = msg ? `Pushed ${count} commit${count > 1 ? 's' : ''}: "${msg.slice(0, 50)}${msg.length > 50 ? '...' : ''}"` : `Pushed ${count} commit${count > 1 ? 's' : ''}`;
+          } else if (ev.type === 'PullRequestEvent') {
+            const action = ev.payload?.action || 'updated';
+            summary = `${action.charAt(0).toUpperCase() + action.slice(1)} Pull Request #${ev.payload?.pull_request?.number || ''}`;
+          } else if (ev.type === 'IssuesEvent') {
+            const action = ev.payload?.action || 'updated';
+            summary = `${action.charAt(0).toUpperCase() + action.slice(1)} Issue #${ev.payload?.issue?.number || ''}`;
+          } else if (ev.type === 'CreateEvent') {
+            summary = `Created ${ev.payload?.ref_type || 'branch'} ${ev.payload?.ref || ''}`.trim();
+          } else if (ev.type === 'WatchEvent') {
+            summary = 'Starred repository';
+          } else if (ev.type === 'ForkEvent') {
+            summary = 'Forked repository';
+          } else if (ev.type === 'ReleaseEvent') {
+            summary = 'Published a release';
+          }
+
+          activities.push({
+            id: ev.id,
+            type: ev.type,
+            repo: repoName,
+            repo_url: `https://github.com/${repoName}`,
+            summary,
+            created_at: ev.created_at
+          });
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
+
+    // Calculate Guardian Mood based on real coding activity timestamps (no synthetic timestamps)
+    const lastActiveTimestamp = latestEventTime || latestRepoPushTime || 0;
+    const mood = lastActiveTimestamp > 0 ? calculateGuardianMood(lastActiveTimestamp) : undefined;
+
     // Derive deterministic DNA
     const dna = await deriveGuardianDNA(rawUser.id, rawUser.login, topLanguages);
 
     // Check D1 database for existing Guardian
-    const guardianRecord = await getGuardianFromDb(rawUser.id, env);
+    let guardianRecord = await getGuardianFromDb(rawUser.id, env);
+    if (guardianRecord) {
+      guardianRecord = {
+        ...guardianRecord,
+        energy_state: mood ? mood.state : guardianRecord.energy_state,
+        mood_title: mood ? mood.title : (guardianRecord.mood_title || '✦ Activity Syncing'),
+        mood_description: mood ? mood.description : (guardianRecord.mood_description || 'Chưa có hoạt động GitHub gần đây. Hãy push một commit để cập nhật tâm trạng bé nhé!')
+      };
+    }
 
     const profile: ResolvedProfile = {
       github_user_id: rawUser.id,
@@ -200,9 +330,18 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
       claimed: guardianRecord !== null,
       guardian: guardianRecord,
       source: 'github_live',
-      last_synced_at: now
+      last_synced_at: now,
+      activities,
+      highlighted_repos: highlightedRepos,
+      active_repos: activeRepos,
+      mood: mood ? {
+        state: mood.state,
+        title: mood.title,
+        description: mood.description,
+        badgeColor: mood.badgeColor,
+        recommendedPose: mood.recommendedPose
+      } : undefined
     };
-
     // Save to KV Cache (3 days max)
     try {
       await env.CACHE_KV.put(cacheKey, JSON.stringify({ timestamp: now, data: profile }), {

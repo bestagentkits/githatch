@@ -21,6 +21,7 @@ app.use('*', cors({
 
 // Mount Sub-Routers
 app.route('/auth', authRouter);
+app.route('/api/auth', authRouter);
 app.route('/badge', badgeRouter);
 app.route('/og', ogRouter);
 
@@ -100,7 +101,7 @@ app.get('/api/early-access/status', async (c) => {
   }
 });
 
-// Static Asset & SPA Fallback for Cloudflare Pages
+// Static Asset & SPA Fallback with Dynamic OpenGraph Meta Tags for Cloudflare Pages
 app.all('*', async (c) => {
   if (c.env.ASSETS) {
     const res = await c.env.ASSETS.fetch(c.req.raw);
@@ -108,7 +109,46 @@ app.all('*', async (c) => {
     const url = new URL(c.req.url);
     if (!url.pathname.includes('.')) {
       const indexReq = new Request(new URL('/', c.req.url).toString(), c.req.raw);
-      return c.env.ASSETS.fetch(indexReq);
+      const indexRes = await c.env.ASSETS.fetch(indexReq);
+      
+      const cleanUser = url.pathname.replace(/^\//, '').split('/')[0];
+      const isProfile = cleanUser && cleanUser !== 'explore' && cleanUser !== 'design' && cleanUser !== 'docs';
+      
+      if (isProfile) {
+        const html = await indexRes.text();
+        const title = `@${cleanUser} · GitHoot Realm Guardian`;
+        const desc = `View @${cleanUser}'s developer identity, coding stats, and living hatched companion on GitHoot.`;
+        const ogImage = `${url.origin}/og/${encodeURIComponent(cleanUser)}.png`;
+        const ogUrl = `${url.origin}/${encodeURIComponent(cleanUser)}`;
+
+        const ogMeta = `
+    <title>${title}</title>
+    <meta name="description" content="${desc}">
+    <meta property="og:type" content="profile">
+    <meta property="og:title" content="${title}">
+    <meta property="og:description" content="${desc}">
+    <meta property="og:image" content="${ogImage}">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:url" content="${ogUrl}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${title}">
+    <meta name="twitter:description" content="${desc}">
+    <meta name="twitter:image" content="${ogImage}">
+        `.trim();
+        const modifiedHtml = html.replace('<title>GitHoot - Gamified Developer Identity &amp; Gacha Hatch</title>', ogMeta)
+          .replace('<title>GitHoot - Gamified Developer Identity & Gacha Hatch</title>', ogMeta);
+
+        return new Response(modifiedHtml, {
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'public, max-age=0, must-revalidate'
+          }
+        });
+      }
+
+      return indexRes;
     }
     return res;
   }

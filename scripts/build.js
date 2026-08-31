@@ -47,10 +47,18 @@ if (fs.existsSync(srcAssets)) {
   console.log('✓ Copied filtered production assets to dist/assets');
 }
 
-// 4. Bundle Cloudflare Pages Edge Worker
+// 4. Copy WebAssembly module for Cloudflare Pages static linking
+const srcWasm = path.join(process.cwd(), 'src', 'server', 'services', 'image', 'index_bg.wasm');
+const destWasm = path.join(distDir, 'index_bg.wasm');
+if (fs.existsSync(srcWasm)) {
+  fs.copyFileSync(srcWasm, destWasm);
+  console.log('✓ Copied index_bg.wasm to dist/index_bg.wasm for Cloudflare WASM module binding');
+}
+
+// 5. Bundle Cloudflare Pages Edge Worker
 console.log('► 2. Bundling Edge Worker with esbuild...');
 try {
-  execSync('npx esbuild src/server/index.ts --bundle --format=esm --platform=neutral --outfile=dist/_worker.js --external:cloudflare:*', {
+  execSync('npx esbuild src/server/index.ts --bundle --format=esm --platform=neutral --outfile=dist/_worker.js --external:cloudflare:* --external:./index_bg.wasm --external:*.wasm', {
     stdio: 'inherit'
   });
   console.log('✓ Edge Worker compiled to dist/_worker.js');

@@ -7,7 +7,7 @@
 export type ViewportBucket = 'mobile' | 'tablet' | 'desktop';
 export type CtaSource = 'hero' | 'navbar' | 'footer' | 'early_access' | 'example_link';
 export type DemoControl = 'play' | 'slowmo' | 'scrub' | 'replay';
-export type ShareNetwork = 'x' | 'linkedin' | 'badge' | 'copy_link';
+export type ShareNetwork = 'x' | 'linkedin' | 'facebook' | 'badge' | 'copy_link';
 export type CreatorDestination = 'agentkit' | 'nextlevelbuilder' | 'goclaw' | 'ui_ux_pro_max' | 'github_source';
 
 export interface EventMap {
