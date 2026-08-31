@@ -9,11 +9,36 @@ import type { UserSession } from '../types';
 import { executeClaimTransaction } from '../services/claim/transaction';
 
 export const authRouter = new Hono<{ Bindings: Env }>();
+function escapeHtml(unsafe: string): string {
+  return unsafe.replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&#39;';
+      case '"': return '&quot;';
+      default: return c;
+    }
+  });
+}
+
 
 // 1. Initiate GitHub OAuth
 authRouter.get('/github', async (c) => {
-  const claimUsername = c.req.query('claim_username') || '';
-  const intent: 'login' | 'claim' = claimUsername ? 'claim' : 'login';
+  const rawClaimUser = c.req.query('claim_username');
+  let claimUsername = '';
+  let intent: 'login' | 'claim' = 'login';
+
+  if (typeof rawClaimUser === 'string' && rawClaimUser.trim().length > 0) {
+    const clean = rawClaimUser.trim().replace(/^@/, '');
+    const isValid = /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/.test(clean);
+    if (!isValid) {
+      return c.text('Invalid claim username format. Must be a valid GitHub username.', 400);
+    }
+    claimUsername = clean.toLowerCase();
+    intent = 'claim';
+  }
+
   const rawClientId = c.env.GITHUB_CLIENT_ID || '';
   const clientId = rawClientId.replace(/^["']|["']$/g, '').trim();
 
@@ -76,11 +101,13 @@ authRouter.get('/callback', async (c) => {
     // 5. Handle explicit claim intent
     // Security check: User must match the claim target if target was specified
     if (statePayload.claim_username && statePayload.claim_username !== authUser.login.toLowerCase()) {
+      const safeAuthLogin = escapeHtml(authUser.login);
+      const safeClaimTarget = escapeHtml(statePayload.claim_username || '');
       return c.html(`
         <div style="background:#07090e; color:#ff2a85; font-family:sans-serif; padding:48px; text-align:center;">
           <h2>⚠️ Identity Mismatch</h2>
-          <p>You authenticated as <strong>@${authUser.login}</strong>, but attempted to claim <strong>@${statePayload.claim_username}</strong>.</p>
-          <a href="/${encodeURIComponent(authUser.login)}" style="color:#00f0ff; margin-top:16px; display:inline-block;">Go to your own egg: githoot.com/${authUser.login} →</a>
+          <p>You authenticated as <strong>@${safeAuthLogin}</strong>, but attempted to claim <strong>@${safeClaimTarget}</strong>.</p>
+          <a href="/${encodeURIComponent(authUser.login)}" style="color:#00f0ff; margin-top:16px; display:inline-block;">Go to your own egg: githoot.com/${encodeURIComponent(authUser.login)} →</a>
         </div>
       `, 403);
     }
