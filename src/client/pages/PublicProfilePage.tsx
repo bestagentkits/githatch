@@ -64,6 +64,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
   const [error, setError] = useState<string | null>(null);
   const [repoTab, setRepoTab] = useState<'highlighted' | 'active'>('highlighted');
   const [sessionLogin, setSessionLogin] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
   const eggCardRef = useRef<HTMLDivElement | null>(null);
   const eggTrackedRef = useRef(false);
 
@@ -527,23 +528,29 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   {sessionLogin && profile && sessionLogin === profile.login.toLowerCase() && (
                     <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
                       <a
-                        href="/auth/github?consent=1"
+                        href="/auth/github"
                         style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#00f0ff', textDecoration: 'none', border: '1px solid rgba(0,240,255,0.3)', borderRadius: '6px', padding: '5px 10px' }}
                       >
                         🔄 Refresh
                       </a>
                       <button
                         type="button"
+                        disabled={removing}
                         onClick={async () => {
                           if (!confirm('Remove your published private-inclusive stats from GitHoot? This deletes the stored counts. You can re-add them by signing in again.')) return;
+                          setRemoving(true);
                           try {
                             const res = await fetch('/api/auth/aggregate-stats/delete', { method: 'DELETE', credentials: 'same-origin' });
-                            if (res.ok) window.location.reload();
-                          } catch {}
+                            if (res.ok) { window.location.reload(); return; }
+                            alert('Could not remove your stats right now. Please try again.');
+                          } catch {
+                            alert('Could not remove your stats right now. Please try again.');
+                          }
+                          setRemoving(false);
                         }}
-                        style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#ff2a85', background: 'transparent', border: '1px solid rgba(255,42,133,0.35)', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}
+                        style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#ff2a85', background: 'transparent', border: '1px solid rgba(255,42,133,0.35)', borderRadius: '6px', padding: '5px 10px', cursor: removing ? 'wait' : 'pointer', opacity: removing ? 0.5 : 1 }}
                       >
-                        🗑 Remove my stats
+                        {removing ? '… Removing' : '🗑 Remove my stats'}
                       </button>
                     </div>
                   )}
