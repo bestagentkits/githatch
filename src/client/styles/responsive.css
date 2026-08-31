@@ -1170,6 +1170,12 @@ section {
     padding-top: 12px;
   }
 }
+@media (max-width: 1120px) {
+  .nav-right .quota-pill {
+    display: none;
+  }
+}
+
 
 @media (max-width: 640px) {
   .desktop-nav, .nav-search {
@@ -1466,16 +1472,114 @@ section {
 
 .githoot-share-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
 
-@media (max-width: 540px) {
+@media (max-width: 768px) {
+  .githoot-share-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
   .githoot-share-grid {
     grid-template-columns: 1fr;
   }
 }
 
+/* Guardian Pet Dynamic Mood Animations */
+.guardian-pet-anim-energetic {
+  animation: float-energetic 2s ease-in-out infinite alternate, pulse-energetic 1.5s ease-in-out infinite alternate;
+}
+
+.guardian-pet-anim-active {
+  animation: float-idle 3.5s ease-in-out infinite alternate;
+}
+
+.guardian-pet-anim-resting {
+  animation: float-sleepy 5s ease-in-out infinite alternate, pulse-sleepy 3s ease-in-out infinite alternate;
+}
+
+.guardian-pet-anim-hungry {
+  animation: float-hungry 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes float-energetic {
+  0% { transform: translateY(0px) scale(1) rotate(0deg); }
+  50% { transform: translateY(-10px) scale(1.03) rotate(1deg); }
+  100% { transform: translateY(-18px) scale(1.05) rotate(-1deg); }
+}
+
+@keyframes pulse-energetic {
+  0% { filter: drop-shadow(0 0 10px rgba(0, 255, 136, 0.4)); }
+  100% { filter: drop-shadow(0 0 25px rgba(0, 240, 255, 0.8)); }
+}
+
+@keyframes float-idle {
+  0% { transform: translateY(0px); }
+  100% { transform: translateY(-12px); }
+}
+
+@keyframes float-sleepy {
+  0% { transform: translateY(0px) rotate(-1deg); }
+  100% { transform: translateY(-6px) rotate(1deg); }
+}
+
+@keyframes pulse-sleepy {
+  0% { filter: drop-shadow(0 0 8px rgba(255, 168, 0, 0.3)); }
+  100% { filter: drop-shadow(0 0 18px rgba(255, 168, 0, 0.6)); }
+}
+
+@keyframes float-hungry {
+  0% { transform: translateY(0px) scale(0.98); }
+  50% { transform: translateY(-4px) scale(1); }
+  100% { transform: translateY(-8px) scale(0.97); }
+}
+
+/* Profile Sub-Grids & Dossier Cards */
+.dossier-full-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 24px;
+  width: 100%;
+}
+
+@media (max-width: 880px) {
+  .dossier-full-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.repo-item-card {
+  background: #0d121d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.repo-item-card:hover {
+  border-color: rgba(0, 240, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.15);
+}
+
+.activity-timeline-entry {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.activity-timeline-entry:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

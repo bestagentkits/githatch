@@ -23,7 +23,7 @@ export const SocialSharePanel: React.FC<SocialSharePanelProps> = ({
   const twitterText = `I just unlocked ${guardian.species} [${guardian.rarity_tier}] (${guardian.element}) on @GitHoot! 🔥 Protecting my open-source repos. Preview yours:`;
   const twitterIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(twitterText)}&url=${encodeURIComponent(profileUrl)}`;
   const linkedInIntentUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(profileUrl)}`;
-
+  const facebookIntentUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(profileUrl)}`;
   const handleCopyBadge = async () => {
     track('share_clicked', { network: 'badge' });
     try {
@@ -63,6 +63,7 @@ export const SocialSharePanel: React.FC<SocialSharePanelProps> = ({
       </h3>
 
       {/* Share Buttons Row */}
+      {/* Share Buttons Row (3-button Cyber-Arcade layout) */}
       <div className="githoot-share-grid" style={{ marginBottom: '16px' }}>
         <a
           href={twitterIntentUrl}
@@ -74,21 +75,21 @@ export const SocialSharePanel: React.FC<SocialSharePanelProps> = ({
             background: '#000000',
             border: '1px solid rgba(255, 255, 255, 0.25)',
             color: '#ffffff',
-            padding: '12px 18px',
+            padding: '12px 14px',
             borderRadius: '10px',
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '13px',
+            fontSize: '12px',
             fontWeight: 700,
             textDecoration: 'none',
             transition: 'all 0.15s ease',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '10px',
+            gap: '8px',
             boxShadow: '0 4px 14px rgba(0,0,0,0.5)'
           }}
         >
-          <span style={{ fontSize: '15px', fontWeight: 900 }}>𝕏</span>
+          <span style={{ fontSize: '14px', fontWeight: 900 }}>𝕏</span>
           <span>Share to X</span>
         </a>
 
@@ -102,24 +103,53 @@ export const SocialSharePanel: React.FC<SocialSharePanelProps> = ({
             background: '#0a66c2',
             border: '1px solid rgba(255, 255, 255, 0.2)',
             color: '#ffffff',
-            padding: '12px 18px',
+            padding: '12px 14px',
             borderRadius: '10px',
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '13px',
+            fontSize: '12px',
             fontWeight: 700,
             textDecoration: 'none',
             transition: 'all 0.15s ease',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '10px',
+            gap: '8px',
             boxShadow: '0 4px 14px rgba(10,102,194,0.35)'
           }}
         >
-          <span style={{ fontSize: '14px', fontWeight: 900, background: '#fff', color: '#0a66c2', padding: '1px 4px', borderRadius: '3px' }}>in</span>
-          <span>Share LinkedIn</span>
+          <span style={{ fontSize: '12px', fontWeight: 900, background: '#fff', color: '#0a66c2', padding: '1px 4px', borderRadius: '3px' }}>in</span>
+          <span>LinkedIn</span>
+        </a>
+
+        <a
+          href={facebookIntentUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-touch"
+          onClick={() => track('share_clicked', { network: 'facebook' })}
+          style={{
+            background: '#1877f2',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: '#ffffff',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '12px',
+            fontWeight: 700,
+            textDecoration: 'none',
+            transition: 'all 0.15s ease',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            boxShadow: '0 4px 14px rgba(24,119,242,0.35)'
+          }}
+        >
+          <span style={{ fontSize: '13px', fontWeight: 900, background: '#fff', color: '#1877f2', width: '16px', height: '16px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>f</span>
+          <span>Facebook</span>
         </a>
       </div>
+
 
       {/* README Badge Box */}
       <div style={{
