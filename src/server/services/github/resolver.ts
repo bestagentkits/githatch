@@ -60,7 +60,7 @@ export function normalizeGuardianSummary(guardian: GuardianSummary | null): Guar
 }
 export async function resolveGitHubProfile(username: string, env: Env): Promise<ResolvedProfile> {
   const cleanUsername = username.trim().toLowerCase();
-  const cacheKey = `gh:profile:${cleanUsername}`;
+  const cacheKey = `gh:profile:v2:${cleanUsername}`;
 
   // 1. Check Cloudflare KV Cache
   let cached: CachedEntry | null = null;
@@ -78,7 +78,8 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
   }
 
   // Fresh cache hit (< 1 hour)
-  if (cached?.data && now - cached.timestamp < 3600 * 1000) {
+  // Fresh cache hit (< 1 hour) with schema v2 validation
+  if (cached?.data && Array.isArray(cached.data.activities) && now - cached.timestamp < 3600 * 1000) {
     const data = cached.data;
     return {
       ...data,
@@ -88,7 +89,7 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
   }
 
   // Stale cache hit (1 hour to 24 hours): Return stale immediately, enqueue revalidation
-  if (cached?.data && now - cached.timestamp < 86400 * 1000) {
+  if (cached?.data && Array.isArray(cached.data.activities) && now - cached.timestamp < 86400 * 1000) {
     if (env.AI_QUEUE) {
       env.AI_QUEUE.send({ type: 'REVALIDATE_PROFILE', username: cleanUsername }).catch(() => {});
     }

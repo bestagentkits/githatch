@@ -227,6 +227,9 @@ describe('Public Config & Quota Endpoint Contracts', () => {
         hero_image_url: '/assets/sample-pets/verdant.jpg',
         spritesheet_url: null
       },
+      activities: [],
+      highlighted_repos: [],
+      active_repos: [],
       source: 'github_live',
       last_synced_at: Date.now()
     };
