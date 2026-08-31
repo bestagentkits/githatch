@@ -11,13 +11,15 @@ import { ExplorePage } from './pages/ExplorePage';
 import { DesignSystemPage } from './pages/DesignSystemPage';
 import { DocsPage } from './pages/DocsPage';
 import { PublicProfilePage } from './pages/PublicProfilePage';
+import { HatchWaitPage } from './pages/HatchWaitPage';
 import { GachaRevealModal } from './components/GachaRevealModal';
 import { CheckoutModal } from './components/CheckoutModal';
-import type { GuardianSummary, EarlyAccessStatus } from '../server/types';
+import type { GuardianSummary, EarlyAccessStatus, ResolvedProfile } from '../server/types';
 
 function App() {
   const [currentRoute, setCurrentRoute] = useState<string>('/');
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
+  const [hatchGuardianId, setHatchGuardianId] = useState<string | null>(null);
   const [quota, setQuota] = useState<EarlyAccessStatus | null>(null);
   const [hatchOpen, setHatchOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -42,6 +44,16 @@ function App() {
       setCurrentRoute('/design');
     } else if (path === '/docs') {
       setCurrentRoute('/docs');
+    } else if (path.startsWith('/hatch/wait/')) {
+      const user = path.replace('/hatch/wait/', '');
+      setCurrentRoute('/hatch/wait');
+      setProfileUsername(user);
+      setHatchGuardianId(params.get('guardian_id') || '');
+    } else if (path.startsWith('/hatch/reveal/')) {
+      const user = path.replace('/hatch/reveal/', '');
+      setCurrentRoute('/hatch/reveal');
+      setProfileUsername(user);
+      setHatchGuardianId(params.get('guardian_id') || '');
     } else {
       // User Profile Route: /:username
       const rawUser = path.replace(/^\//, '');
@@ -49,24 +61,6 @@ function App() {
         setCurrentRoute('/profile');
         setProfileUsername(rawUser);
       }
-    }
-
-    // Check modal triggers
-    if (params.get('hatch') === 'true') {
-      const gId = params.get('guardian_id') || 'demo';
-      setGuardian({
-        id: gId,
-        name: 'Ignis Emberfox',
-        species: 'Ignis Emberfox',
-        element: 'Fire',
-        rarity_tier: 'Legendary',
-        level: 1,
-        experience: 420,
-        energy_state: 'Active',
-        hero_image_url: '/assets/sample-pets/emberfox.jpg',
-        spritesheet_url: '/assets/sample-pets/emberfox.jpg'
-      });
-      setHatchOpen(true);
     }
 
     if (params.get('checkout') === 'true') {
@@ -79,6 +73,23 @@ function App() {
     window.history.pushState({}, '', route);
   };
 
+  const handleHatchReady = async () => {
+    if (!profileUsername) return;
+    try {
+      const res = await fetch(`/api/profile/${encodeURIComponent(profileUsername)}`);
+      if (res.ok) {
+        const data = (await res.json()) as ResolvedProfile;
+        if (data.guardian) {
+          setGuardian(data.guardian);
+          setHatchOpen(true);
+        }
+      }
+    } catch {
+      // Fallback open
+      setHatchOpen(true);
+    }
+  };
+
   const renderActivePage = () => {
     switch (currentRoute) {
       case '/':
@@ -89,6 +100,17 @@ function App() {
         return <DesignSystemPage />;
       case '/docs':
         return <DocsPage />;
+      case '/hatch/wait':
+      case '/hatch/reveal':
+        return profileUsername ? (
+          <HatchWaitPage
+            username={profileUsername}
+            guardianId={hatchGuardianId || ''}
+            onReady={handleHatchReady}
+          />
+        ) : (
+          <HomePage onRouteChange={handleRouteChange} />
+        );
       case '/profile':
         return profileUsername ? <PublicProfilePage username={profileUsername} /> : <HomePage onRouteChange={handleRouteChange} />;
       default:
@@ -106,7 +128,12 @@ function App() {
           username={profileUsername}
           guardian={guardian}
           isOpen={hatchOpen}
-          onClose={() => setHatchOpen(false)}
+          onClose={() => {
+            setHatchOpen(false);
+            if (profileUsername) {
+              handleRouteChange(`/${encodeURIComponent(profileUsername)}`);
+            }
+          }}
         />
       )}
 

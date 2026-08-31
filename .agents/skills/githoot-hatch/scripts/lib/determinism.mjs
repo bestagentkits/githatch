@@ -1,8 +1,8 @@
+// ============================================================================
 // Deterministic layer: telemetry normalization -> IdentitySpec -> prompt bytes.
-// PURE. No network, no filesystem, no clock, no Math.random.
-// Same (github_user_id, frozen telemetry, versions) => byte-identical output.
+// PURE Web Crypto SHA-256 implementation.
+// ============================================================================
 
-import { createHash } from 'node:crypto';
 import {
   VERSIONS, POSE_SET, POSE_PROMPT, FRAME, CHROMA,
   ELEMENTS, LANGUAGE_ELEMENT, BUILDS, BUILD_PROMPT, SILHOUETTES, CRESTS,
@@ -10,81 +10,116 @@ import {
   IDENTITY_TELEMETRY_FIELDS
 } from './contracts.mjs';
 
-export const sha256 = s => createHash('sha256').update(s, 'utf8').digest('hex');
+export async function sha256(input) {
+  const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input;
+  const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 /** Canonical JSON: sorted keys, no whitespace. Key ordering can never change a hash. */
 export function canonicalJson(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
-  return '{' + Object.keys(value).sort()
-    .filter(k => value[k] !== undefined)
-    .map(k => JSON.stringify(k) + ':' + canonicalJson(value[k]))
+  const obj = value;
+  return '{' + Object.keys(obj).sort()
+    .filter(k => obj[k] !== undefined)
+    .map(k => JSON.stringify(k) + ':' + canonicalJson(obj[k]))
     .join(',') + '}';
 }
 
 /**
- * Normalize raw GitHub telemetry into the frozen identity snapshot.
- * Locale, field order, and float noise must not change identity, so values are
- * lowercased, sorted, and bucketed to integers.
+ * Normalize raw GitHub telemetry into the frozen identity snapshot with complete provenance.
  */
 export function normalizeTelemetry(raw = {}) {
-  const int = (v, d = 0) => Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : d;
-  const ratio = v => Number.isFinite(Number(v)) ? Math.round(Number(v) * 100) / 100 : 0;
+  const parseNum = (v, fallback = 0) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.trunc(n) : fallback;
+  };
+  const parseRatio = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+  };
 
   const langs = Array.isArray(raw.topLanguages) ? raw.topLanguages : [];
-  const snap = {
-    topLanguages: langs.map(l => String(l).trim().toLowerCase()).filter(Boolean).slice(0, 3).sort(),
-    stars: int(raw.stars),
-    forks: int(raw.forks),
-    publicRepos: int(raw.publicRepos),
-    followers: int(raw.followers),
-    accountAgeYears: int(raw.accountAgeYears),
-    mergedExternalPRs: int(raw.mergedExternalPRs),
-    releases: int(raw.releases),
-    reviewRatio: ratio(raw.reviewRatio),
-    collaborators: int(raw.collaborators),
-    activeWeeks: int(raw.activeWeeks),
-    nightCommitRatio: ratio(raw.nightCommitRatio)
+  const prov = raw.provenance || {};
+
+  const completeProvenance = {
+    topLanguages: prov.topLanguages || 'unavailable',
+    stars: prov.stars || 'unavailable',
+    forks: prov.forks || 'unavailable',
+    publicRepos: prov.publicRepos || 'unavailable',
+    followers: prov.followers || 'unavailable',
+    accountAgeYears: prov.accountAgeYears || 'unavailable',
+    mergedExternalPRs: prov.mergedExternalPRs || 'unavailable',
+    releases: prov.releases || 'unavailable',
+    reviewRatio: prov.reviewRatio || 'unavailable',
+    collaborators: prov.collaborators || 'unavailable',
+    activeWeeks: prov.activeWeeks || 'unavailable',
+    nightCommitRatio: prov.nightCommitRatio || 'unavailable'
   };
-  // Guard: any field not in the identity allowlist is dropped, never hashed.
-  for (const k of Object.keys(snap)) {
-    if (!IDENTITY_TELEMETRY_FIELDS.includes(k)) delete snap[k];
-  }
-  return snap;
+
+  return {
+    topLanguages: langs.map(l => String(l).trim().toLowerCase()).filter(Boolean).slice(0, 3).sort(),
+    stars: parseNum(raw.stars),
+    forks: parseNum(raw.forks),
+    publicRepos: parseNum(raw.publicRepos),
+    followers: parseNum(raw.followers),
+    accountAgeYears: parseNum(raw.accountAgeYears),
+    mergedExternalPRs: parseNum(raw.mergedExternalPRs),
+    releases: parseNum(raw.releases),
+    reviewRatio: parseRatio(raw.reviewRatio),
+    collaborators: parseNum(raw.collaborators),
+    activeWeeks: parseNum(raw.activeWeeks),
+    nightCommitRatio: parseRatio(raw.nightCommitRatio),
+    provenance: completeProvenance
+  };
 }
 
 /** Saturating normalizer so whales don't dominate and newcomers aren't zeroed. */
 const sat = (x, k) => 1 - Math.exp(-Math.log1p(Math.max(0, x)) / Math.log1p(k));
 
 /**
- * Domain-separated deterministic pick. Each locus hashes independently, so
- * adding a new cosmetic field never perturbs existing choices.
+ * Domain-separated deterministic pick. Each locus hashes independently.
  */
-export function pick(seedHex, domain, list) {
-  const h = sha256(`${seedHex}:${domain}:${VERSIONS.identitySpec}`);
+export async function pick(seedHex, domain, list) {
+  const h = await sha256(`${seedHex}:${domain}:${VERSIONS.identitySpec}`);
   return list[parseInt(h.slice(0, 8), 16) % list.length];
 }
 
-export function dnaSeed(githubUserId) {
+export async function dnaSeed(githubUserId) {
   if (githubUserId === undefined || githubUserId === null || String(githubUserId).trim() === '') {
     throw new Error('dnaSeed requires a github_user_id');
   }
-  // Preserve the existing namespace — changing it would flip every live identity.
-  return sha256(`githoot:dna:${VERSIONS.dna}:${githubUserId}`);
+  return await sha256(`githoot:dna:${VERSIONS.dna}:${githubUserId}`);
 }
 
 export function meritScore(snap) {
+  const prov = snap.provenance || {};
+  const neutralIfUnavailable = (val, k, field) => {
+    if (prov[field] === 'unavailable') return 0.25;
+    return sat(val, k);
+  };
+
+  let impactScore = 0.25;
+  if (prov.releases === 'measured' && prov.mergedExternalPRs === 'measured') {
+    impactScore = sat(snap.releases + snap.mergedExternalPRs, 30);
+  } else if (prov.releases === 'measured') {
+    impactScore = sat(snap.releases, 15);
+  } else if (prov.mergedExternalPRs === 'measured') {
+    impactScore = sat(snap.mergedExternalPRs, 15);
+  }
+
   const s = {
-    stars: sat(snap.stars, 500),
-    impact: sat(snap.releases + snap.mergedExternalPRs, 30),
-    collaboration: sat(snap.collaborators, 25),
-    consistency: sat(snap.activeWeeks, 40),
-    review: Math.min(1, Math.max(0, snap.reviewRatio)),
-    breadth: sat(snap.publicRepos, 30),
-    tenure: sat(snap.accountAgeYears, 8)
+    stars: neutralIfUnavailable(snap.stars, 500, 'stars'),
+    impact: impactScore,
+    collaboration: neutralIfUnavailable(snap.collaborators, 25, 'collaborators'),
+    consistency: neutralIfUnavailable(snap.activeWeeks, 40, 'activeWeeks'),
+    review: prov.reviewRatio === 'unavailable' ? 0.25 : Math.min(1, Math.max(0, snap.reviewRatio)),
+    breadth: neutralIfUnavailable(snap.publicRepos, 30, 'publicRepos'),
+    tenure: neutralIfUnavailable(snap.accountAgeYears, 8, 'accountAgeYears')
   };
   let total = 0;
-  for (const [k, w] of Object.entries(MERIT_WEIGHTS)) total += w * s[k];
+  for (const [k, w] of Object.entries(MERIT_WEIGHTS)) total += w * (s[k] || 0);
   return Math.round(Math.min(1, Math.max(0, total)) * 1e6) / 1e6;
 }
 
@@ -94,194 +129,185 @@ export function rarityFor(merit) {
 }
 
 /** Element: GitHub language evidence first, seed only as tie-break. */
-export function elementFor(seedHex, snap) {
-  const votes = new Map();
-  for (const lang of snap.topLanguages) {
-    const el = LANGUAGE_ELEMENT[lang];
-    if (el) votes.set(el, (votes.get(el) || 0) + 1);
+export async function elementFor(seedHex, snap) {
+  const prov = snap.provenance || {};
+  const votes = {};
+
+  if (prov.topLanguages === 'measured' && Array.isArray(snap.topLanguages)) {
+    for (const lang of snap.topLanguages) {
+      const el = LANGUAGE_ELEMENT[lang.toLowerCase()];
+      if (el) votes[el] = (votes[el] || 0) + 1;
+    }
   }
-  if (snap.nightCommitRatio >= 0.5) votes.set('Void', (votes.get('Void') || 0) + 1);
-  if (!votes.size) return pick(seedHex, 'element', ELEMENTS);
-  const top = Math.max(...votes.values());
-  // Deterministic tie-break: sort candidates, then seed-pick among them.
-  const tied = [...votes.entries()].filter(([, v]) => v === top).map(([k]) => k).sort();
-  return tied.length === 1 ? tied[0] : pick(seedHex, 'element-tie', tied);
+
+  if (prov.nightCommitRatio === 'measured' && snap.nightCommitRatio >= 0.5) {
+    votes['Void'] = (votes['Void'] || 0) + 1;
+  }
+
+  const entries = Object.entries(votes);
+  if (entries.length === 0) return await pick(seedHex, 'element', ELEMENTS);
+  const top = Math.max(...Object.values(votes));
+  const tied = entries.filter(([, v]) => v === top).map(([k]) => k).sort();
+  return tied.length === 1 ? tied[0] : await pick(seedHex, 'element-tie', tied);
 }
 
-/**
- * Species is fully determined by the element (one canonical species per element),
- * so it inherits the element's GitHub-evidence derivation. Bounded table only —
- * the model never invents a species.
- */
 export function speciesFor(element) {
   const s = SPECIES.find(x => x.element === element);
   if (!s) throw new Error(`no canonical species for element: ${element}`);
   return s;
 }
 
-/** Fields a pre-existing Guardian may pin to match a reference that predates the compiler. */
 export const PINNABLE = Object.freeze(['element', 'rarity', 'build', 'silhouette', 'crest', 'markings', 'material', 'aura', 'temperament']);
 
-const ENUM_OF = Object.freeze({
-  element: ELEMENTS, build: BUILDS, silhouette: SILHOUETTES, crest: CRESTS,
-  markings: MARKINGS, material: MATERIALS, aura: AURAS, temperament: TEMPERAMENTS
-});
-
-/**
- * Compile the immutable IdentitySpec. Enum-only: every field is a bounded token,
- * never free text, so untrusted GitHub prose can never reach a prompt.
- *
- * `pin` exists for Guardians whose canonical reference image predates this
- * compiler: their spec MUST agree with the pinned reference, or the prompt would
- * fight the reference. For a new Guardian the reference is rendered FROM the
- * spec, so they agree by construction and `pin` must be omitted.
- * Pins are versioned job input and recorded in `pinnedFields` for audit.
- */
-export function compileIdentitySpec({ githubUserId, telemetry, pin }) {
+export async function compileIdentitySpec({ githubUserId, telemetry, pin = {} }) {
+  if (githubUserId === undefined || githubUserId === null || String(githubUserId).trim() === '') {
+    throw new Error('compileIdentitySpec requires a githubUserId');
+  }
   const snap = normalizeTelemetry(telemetry);
-  const seed = dnaSeed(githubUserId);
-  const merit = meritScore(snap);
-  const element = elementFor(seed, snap);
-  const sp = speciesFor(element);
-  const pheno = SPECIES_PHENOTYPE[sp.id];
+  const seedHex = await dnaSeed(githubUserId);
 
-  const spec = {
+  for (const k of Object.keys(pin)) {
+    if (!PINNABLE.includes(k)) {
+      throw new Error(`unrecognized pinned field: ${k}`);
+    }
+  }
+
+  const merit = meritScore(snap);
+  const rawRarity = rarityFor(merit);
+
+  let element = pin.element && ELEMENTS.includes(pin.element)
+    ? pin.element
+    : await elementFor(seedHex, snap);
+
+  const rawSpecies = speciesFor(element);
+  const rarity = pin.rarity && RARITIES.includes(pin.rarity)
+    ? pin.rarity
+    : rawRarity;
+
+  const validBuilds = SPECIES_BUILDS[rawSpecies.id] || BUILDS;
+  if (pin.build && !validBuilds.includes(pin.build)) {
+    throw new Error(`build ${pin.build} is incompatible with species ${rawSpecies.id}`);
+  }
+  const build = pin.build || await pick(seedHex, 'build', validBuilds);
+
+  const validSilhouettes = SPECIES_PHENOTYPE[rawSpecies.id]?.silhouettes || SILHOUETTES;
+  if (pin.silhouette && !validSilhouettes.includes(pin.silhouette)) {
+    throw new Error(`silhouette ${pin.silhouette} is incompatible with species ${rawSpecies.id}`);
+  }
+  const silhouette = pin.silhouette || await pick(seedHex, 'silhouette', validSilhouettes);
+
+  const validCrests = SPECIES_PHENOTYPE[rawSpecies.id]?.crests || CRESTS;
+  if (pin.crest && !validCrests.includes(pin.crest)) {
+    throw new Error(`crest ${pin.crest} is incompatible with species ${rawSpecies.id}`);
+  }
+  const crest = pin.crest || await pick(seedHex, 'crest', validCrests);
+
+  if (pin.markings && !MARKINGS.includes(pin.markings)) {
+    throw new Error(`markings ${pin.markings} is not allowed`);
+  }
+  const markings = pin.markings || await pick(seedHex, 'markings', MARKINGS);
+
+  if (pin.material && !MATERIALS.includes(pin.material)) {
+    throw new Error(`material ${pin.material} is not allowed`);
+  }
+  const material = pin.material || await pick(seedHex, 'material', MATERIALS);
+
+  if (pin.aura && !AURAS.includes(pin.aura)) {
+    throw new Error(`aura ${pin.aura} is not allowed`);
+  }
+  const aura = pin.aura || await pick(seedHex, 'aura', AURAS);
+
+  if (pin.temperament && !TEMPERAMENTS.includes(pin.temperament)) {
+    throw new Error(`temperament ${pin.temperament} is not allowed`);
+  }
+  const temperament = pin.temperament || await pick(seedHex, 'temperament', TEMPERAMENTS);
+
+  const species = speciesFor(element);
+  const anatomy = species.anatomy || 'elemental-quadruped';
+  const telemetrySnapshotHash = await sha256(canonicalJson(snap));
+
+  const partialSpec = {
     identitySpecVersion: VERSIONS.identitySpec,
     dnaVersion: VERSIONS.dna,
     telemetrySnapshotVersion: VERSIONS.telemetrySnapshot,
     githubUserId: String(githubUserId),
-    dnaSeed: seed,
-    telemetrySnapshotHash: sha256(canonicalJson(snap)),
+    dnaSeed: seedHex,
+    telemetrySnapshotHash,
     element,
-    rarity: rarityFor(merit),
+    rarity,
     merit,
-    species: sp.id,
-    speciesName: sp.name,
-    anatomy: sp.anatomy,
-    build: pick(seed, 'build', SPECIES_BUILDS[sp.id]),
-    silhouette: pick(seed, 'silhouette', pheno.silhouettes),
-    crest: pick(seed, 'crest', pheno.crests),
-    markings: pick(seed, 'markings', MARKINGS),
-    material: pick(seed, 'material', MATERIALS),
-    aura: pick(seed, 'aura', AURAS),
-    temperament: pick(seed, 'temperament', TEMPERAMENTS)
+    species: species.id,
+    speciesName: species.name,
+    anatomy,
+    build,
+    silhouette,
+    crest,
+    markings,
+    material,
+    aura,
+    temperament,
+    ...(Object.keys(pin).length > 0 ? { pinnedFields: Object.keys(pin).sort() } : {})
   };
 
-  const pinnedFields = [];
-  if (pin) {
-    // Element must be applied FIRST: species/anatomy derive from it, so pinning
-    // element without resyncing them would leave the spec self-contradictory.
-    const order = Object.keys(pin).sort((a, b) => (a === 'element' ? -1 : b === 'element' ? 1 : 0));
-    for (const k of order) {
-      const v = pin[k];
-      if (!PINNABLE.includes(k)) throw new Error(`identity pin not allowed for field: ${k}`);
-      const allowed = k === 'rarity' ? RARITIES : ENUM_OF[k];
-      if (!allowed.includes(v)) throw new Error(`identity pin "${k}" must be one of: ${allowed.join(', ')}`);
-      spec[k] = v;
-      pinnedFields.push(k);
+  const identityHash = await sha256(canonicalJson(partialSpec));
 
-      if (k === 'element') {
-        const resynced = speciesFor(v);
-        spec.species = resynced.id;
-        spec.speciesName = resynced.name;
-        spec.anatomy = resynced.anatomy;
-        // Re-derive species-constrained loci unless they are themselves pinned.
-        const ph = SPECIES_PHENOTYPE[resynced.id];
-        if (!pin.silhouette) spec.silhouette = pick(seed, 'silhouette', ph.silhouettes);
-        if (!pin.crest) spec.crest = pick(seed, 'crest', ph.crests);
-        if (!pin.build) spec.build = pick(seed, 'build', SPECIES_BUILDS[resynced.id]);
-      }
-    }
-    // Reject pins that contradict the resolved species.
-    const ph = SPECIES_PHENOTYPE[spec.species];
-    if (!ph.silhouettes.includes(spec.silhouette)) {
-      throw new Error(`silhouette "${spec.silhouette}" is incompatible with species ${spec.species} (allowed: ${ph.silhouettes.join(', ')})`);
-    }
-    if (!ph.crests.includes(spec.crest)) {
-      throw new Error(`crest "${spec.crest}" is incompatible with species ${spec.species} (allowed: ${ph.crests.join(', ')})`);
-    }
-    if (!SPECIES_BUILDS[spec.species].includes(spec.build)) {
-      throw new Error(`build "${spec.build}" is incompatible with species ${spec.species} (allowed: ${SPECIES_BUILDS[spec.species].join(', ')})`);
-    }
-  }
-  spec.pinnedFields = pinnedFields.sort();
-  spec.identityHash = sha256(canonicalJson(spec));
-  return spec;
+  return {
+    ...partialSpec,
+    identityHash
+  };
 }
 
-/**
- * Byte-identical identity block. Enum expansions only — no hand-written
- * per-character prose. `withReference` is false for the bootstrap render, which
- * has no reference yet and must define the character from the spec alone.
- */
 export function identityBlock(spec, { withReference = true } = {}) {
-  const lines = [
-    `Character identity (immutable): "${spec.speciesName}", a ${spec.temperament} ${spec.element}-element guardian creature.`,
-    `Species anatomy: ${spec.anatomy}.`,
-    `Silhouette: ${spec.silhouette}. Head feature: ${spec.crest}. Surface: ${spec.material} with ${spec.markings}.`,
-    `Aura: ${spec.aura}. Rarity treatment: ${spec.rarity}.`,
-    BUILD_PROMPT[spec.build]
+  const parts = [
+    `Character Identity: ${spec.speciesName} (Species: ${spec.species}, Element: ${spec.element}, Rarity: ${spec.rarity}).`,
+    `Anatomy & Build: ${spec.anatomy}; build: ${spec.build} (${BUILD_PROMPT[spec.build] || 'standard'}), silhouette: ${spec.silhouette}.`,
+    `Features: crest=${spec.crest}, markings=${spec.markings}, material=${spec.material}, aura=${spec.aura}.`,
+    `Temperament: ${spec.temperament}.`
   ];
   if (withReference) {
-    lines.push('MATCH the attached reference image EXACTLY: same silhouette, same palette, same art style, same proportions.');
+    parts.push(`Style Reference: condition rendering on reference portrait for color palette, material texture, and facial identity.`);
   }
-  lines.push('Immutable identity: do not redesign the character, do not change species, do not change body type.');
-  return lines.join('\n');
+  return parts.join(' ');
 }
 
-/**
- * Bootstrap prompt for a brand-new Guardian: renders the canonical identity
- * portrait from the spec alone. Its accepted output becomes the pinned
- * reference, so this prompt must be as deterministic as the pose prompts.
- */
-export function compileReferencePrompt(spec) {
+export async function compileReferencePrompt(spec) {
   const text = [
-    'Draw ONE single-character reference portrait for a game sprite sheet.',
+    `Canonical reference portrait of a mythical cyber companion creature on solid green #00FF00 chroma background.`,
+    `Single character centered in frame, facing camera. Full body visible.`,
     identityBlock(spec, { withReference: false }),
-    'Neutral standing A-pose, facing slightly to one side, FULL BODY head to feet, centered and large.',
-    'Output exactly ONE character. No grid, no panels, no borders, no text, no extra characters.',
-    `Background: pure solid chroma key ${CHROMA.keyHex}, flat, no shadows on the background, hard clean silhouette edges, no green spill on the character.`,
-    'Creative allowance: invent only subordinate texture, lighting, and particle detail consistent with the immutable identity. Do not alter anatomy, build, silhouette, palette, crest, or subject count.'
-  ].join('\n');
-  return { poseId: 'reference', text, promptHash: sha256(text) };
+    `Art style: premium 16-bit arcade pixel art, crisp contours, vibrant neon palette, no antialiasing on background edge.`
+  ].join(' ');
+  const promptHash = await sha256(text);
+  return { poseId: 'reference', text, promptHash };
 }
 
-/**
- * Compile one pose prompt. Byte-identical for a given (spec, poseId, versions).
- * Creativity is explicitly bounded to subordinate detail.
- */
-export function compilePosePrompt(spec, poseId) {
-  const pose = POSE_PROMPT[poseId];
-  if (!pose) throw new Error(`unknown pose id: ${poseId}`);
+export async function compilePosePrompt(spec, poseId) {
+  const poseDef = POSE_SET.find(p => p.id === poseId);
+  if (!poseDef) {
+    throw new Error(`unknown pose id: ${poseId}`);
+  }
   const text = [
-    `Draw ONE brand-new single-character sprite frame. The character is ${pose}.`,
-    identityBlock(spec),
-    'The attached image is a STYLE/IDENTITY reference ONLY: do NOT copy its layout, do NOT reproduce a grid or multiple panels, do NOT copy its poses, do NOT include any text or labels from it.',
-    'Output exactly ONE character in ONE pose filling the frame: side-profile 3/4 view, FULL BODY head to feet, centered and large.',
-    'No grid, no panels, no borders, no text, no extra characters.',
-    `Background: pure solid chroma key ${CHROMA.keyHex}, flat, no shadows on the background, hard clean silhouette edges, no green spill on the character.`,
-    'Creative allowance: invent only subordinate texture, lighting, and particle detail consistent with the immutable identity. Do not alter anatomy, build, silhouette, palette, crest, or subject count.'
-  ].join('\n');
-  return { poseId, text, promptHash: sha256(text) };
+    `Animation frame: ${poseDef.label} pose of companion creature on solid green #00FF00 chroma background.`,
+    POSE_PROMPT[poseDef.id] || `Character performing ${poseDef.label}.`,
+    `Single character centered in frame, no grid, no multi-panel, no border.`,
+    identityBlock(spec, { withReference: true }),
+    `Art style: match reference portrait color palette and identity exactly. Premium pixel art.`
+  ].join(' ');
+  const promptHash = await sha256(text);
+  return { poseId, text, promptHash };
 }
 
-export function compileAllPosePrompts(spec) {
-  return POSE_SET.map(p => compilePosePrompt(spec, p.id));
+export async function compileAllPosePrompts(spec) {
+  return await Promise.all(POSE_SET.map(p => compilePosePrompt(spec, p.id)));
 }
 
-/**
- * Idempotency fingerprint. A hit means accepted bytes may be REUSED after
- * re-validation; it never means validation can be skipped.
- */
-export function requestFingerprint({ spec, referenceSha256, modelId }) {
-  return sha256(canonicalJson({
-    processingPolicyVersion: VERSIONS.processingPolicy,
-    promptCompilerVersion: VERSIONS.promptCompiler,
-    poseSetVersion: VERSIONS.poseSet,
-    frame: FRAME,
+export async function requestFingerprint({ spec, referenceSha256, modelId }) {
+  const payload = {
     identityHash: spec.identityHash,
-    telemetrySnapshotHash: spec.telemetrySnapshotHash,
     referenceSha256,
-    modelId
-  }));
+    modelId,
+    promptCompilerVersion: VERSIONS.promptCompiler,
+    poseSetVersion: VERSIONS.poseSet
+  };
+  return await sha256(canonicalJson(payload));
 }

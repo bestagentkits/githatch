@@ -52,7 +52,7 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
         boxShadow: '0 0 24px rgba(0, 240, 255, 0.35)'
       }}>
         <img
-          src={guardian.hero_image_url}
+          src={guardian.hero_image_url || ''}
           alt={guardian.name}
           style={{
             width: '100%',

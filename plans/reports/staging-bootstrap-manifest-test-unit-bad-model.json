@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-08-31T09:54:36.705Z",
+  "runLabel": "test-unit-bad-model",
+  "environment": "staging",
+  "createdCount": 6,
+  "resources": {
+    "pages": {
+      "name": "githoot-staging",
+      "env_config": "wrangler.toml:[env.staging]",
+      "status": "verified"
+    },
+    "worker": {
+      "name": "githoot-generation-consumer-staging",
+      "env_config": "wrangler.worker.toml:[env.staging]",
+      "status": "verified"
+    }
+  },
+  "applied_migrations": [],
+  "credentials": {
+    "cloudflare_auth": "verified",
+    "GEMINI_API_KEY": "verified",
+    "AUTH_SECRET": "verified",
+    "ADMIN_REVIEW_SECRET": "verified",
+    "GITHUB_TOKENS": "verified"
+  },
+  "gemini_canary": {
+    "endpoint": "HTTP 200 OK",
+    "configured_model": "untrusted-custom-model",
+    "available_models_count": 1,
+    "canary_status": "verified",
+    "status": "verified"
+  },
+  "ready": false,
+  "failures": [
+    "D1 database githoot_db_staging was created but could not be re-verified.",
+    "Failed to parse migration query output from githoot_db_staging: verified",
+    "R2 bucket githoot-staging could not be verified after create.",
+    "KV namespace GITHOOT_CACHE_STAGING was created but could not be re-verified.",
+    "Queue githoot-ai-queue-staging could not be verified after create.",
+    "DLQ githoot-ai-dlq-staging could not be verified after create.",
+    "Configured model untrusted-custom-model is not in MODEL_ALLOWLIST."
+  ]
+}

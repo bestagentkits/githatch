@@ -2,6 +2,14 @@
 // EVERY threshold, version, enum, and allowlist lives here. Other modules and
 // docs reference these values; they are never re-declared elsewhere.
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const allowlistPath = path.resolve(__dirname, '../../../../../src/server/services/dna/model-allowlist.json');
+
 export const VERSIONS = Object.freeze({
   dna: 'v1',                  // seed namespace: githoot:dna:v1:<github_user_id>
   telemetrySnapshot: 'v1',
@@ -11,13 +19,8 @@ export const VERSIONS = Object.freeze({
   processingPolicy: 'v1'
 });
 
-// Nano Banana 2 / Pro only. Confirmed against live ListModels.
-// Nano Banana 1 (gemini-2.5-flash-image) is NOT allowed, not even as fallback.
-export const MODEL_ALLOWLIST = Object.freeze([
-  'nano-banana-pro-preview',
-  'gemini-3-pro-image',
-  'gemini-3-pro-image-preview'
-]);
+// Nano Banana 2 / Pro only. Single source loaded from src/server/services/dna/model-allowlist.json.
+export const MODEL_ALLOWLIST = Object.freeze(JSON.parse(fs.readFileSync(allowlistPath, 'utf8')));
 
 export const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -151,7 +154,7 @@ export const BUILD_PROMPT = Object.freeze({
   compact: 'Build: COMPACT and rounded, short sturdy limbs, oversized head, mascot-like. NOT tall, NOT lanky.'
 });
 
-export const SILHOUETTES = Object.freeze(['humanoid biped', 'winged biped', 'quadruped beast', 'serpentine', 'floating wisp']);
+export const SILHOUETTES = Object.freeze(['humanoid biped', 'winged biped', 'quadruped beast', 'serpentine', 'floating wisp', 'agile biped', 'towering hulk']);
 export const CRESTS = Object.freeze(['flame crest', 'horned crown', 'antenna fins', 'halo ring', 'antler branches', 'smooth carapace']);
 export const MARKINGS = Object.freeze(['circuit traces', 'runic glyphs', 'constellation freckles', 'tribal stripes', 'crystal scales', 'void fissures']);
 export const MATERIALS = Object.freeze(['plated armor', 'living crystal', 'woven energy', 'molten stone', 'polished chitin']);

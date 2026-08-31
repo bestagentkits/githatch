@@ -144,7 +144,7 @@ export const InteractiveCompanionShowcase: React.FC<InteractiveCompanionProps> =
           borderRadius: '9999px',
           textTransform: 'uppercase'
         }}>
-          {archetype.element.split('/')[0]}
+          {archetype.element?.split('/')?.[0] || archetype.element}
         </div>
       </div>
 

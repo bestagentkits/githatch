@@ -3,7 +3,8 @@
 // ============================================================================
 
 import type { GuardianDNA, RarityTier } from '../../types';
-
+import { compileIdentitySpec } from './compiler';
+import { sha256Hex } from '../crypto/web-crypto';
 export const EGG_ARCHETYPES = [
   { id: 'ember-core', name: 'Ember Core', element: 'Fire', species: 'Ignis Emberfox' },
   { id: 'neon-byte', name: 'Neon Byte', element: 'Cyber', species: 'Aether Neon Byte' },
@@ -23,29 +24,19 @@ const PALETTES_BY_ELEMENT: Record<string, { primary: string; secondary: string; 
   Light: { primary: '#F5A623', secondary: '#FFD700', accent: '#FFFFFF' },
   Void: { primary: '#7928CA', secondary: '#FF0080', accent: '#000000' },
   Mechanical: { primary: '#A0AEC0', secondary: '#4A5568', accent: '#E2E8F0' },
+  Metal: { primary: '#A0AEC0', secondary: '#4A5568', accent: '#E2E8F0' },
+  Cosmic: { primary: '#E2B340', secondary: '#E60067', accent: '#00E5FF' },
   Mythic: { primary: '#E2B340', secondary: '#E60067', accent: '#00E5FF' }
 };
 
-const MARKINGS = ['circuit glyphs', 'runic flames', 'constellation stars', 'tribal stripes', 'crystalline scales', 'void fissures'];
-const SILHOUETTES = ['compact quad', 'sleek avian', 'mystical serpentine', 'sturdy bipedal', 'floating wisp'];
-const TEMPERAMENTS = ['Ferocious Shipper', 'Curious Architect', 'Stoic Maintainer', 'Playful Innovator', 'Vigilant Guardian'];
-const ARCHETYPES = ['Code Weaver', 'Systems Sentinel', 'Frontend Artisan', 'Infrastructure Sage', 'Algorithmic Sorcerer'];
-
-export async function hashToSha256(input: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+export const hashToSha256 = sha256Hex;
 
 export function rollRarityTier(roll: number): RarityTier {
-  // roll is 0 to 999
-  if (roll >= 990) return 'Mythic';     // 1%
-  if (roll >= 950) return 'Legendary';  // 4%
-  if (roll >= 850) return 'Epic';       // 10%
-  if (roll >= 600) return 'Rare';       // 25%
-  return 'Common';                      // 60%
+  if (roll >= 990) return 'Mythic';
+  if (roll >= 950) return 'Legendary';
+  if (roll >= 850) return 'Epic';
+  if (roll >= 600) return 'Rare';
+  return 'Common';
 }
 
 export async function deriveGuardianDNA(
@@ -53,41 +44,31 @@ export async function deriveGuardianDNA(
   fallbackUsername?: string,
   topLanguages: string[] = []
 ): Promise<GuardianDNA> {
-  const seedString = `githoot:dna:v1:${githubUserId || fallbackUsername || 'anon'}`;
-  const sha256 = await hashToSha256(seedString);
-
-  // Extract numbers from hex hash
-  const archetypeSeed = parseInt(sha256.slice(0, 4), 16);
-  const raritySeed = parseInt(sha256.slice(4, 8), 16) % 1000;
-  const markingSeed = parseInt(sha256.slice(8, 12), 16);
-  const silhouetteSeed = parseInt(sha256.slice(12, 16), 16);
-  const temperamentSeed = parseInt(sha256.slice(16, 20), 16);
-  const archetypeIdxSeed = parseInt(sha256.slice(20, 24), 16);
-
-  // Map top languages to element if prominent, otherwise use archetypeSeed
-  let archetype = EGG_ARCHETYPES[archetypeSeed % EGG_ARCHETYPES.length];
-  if (topLanguages.length > 0) {
-    const lang = topLanguages[0].toLowerCase();
-    if (lang === 'rust' || lang === 'go' || lang === 'c++') archetype = EGG_ARCHETYPES[0]; // Fire
-    else if (lang === 'typescript' || lang === 'javascript') archetype = EGG_ARCHETYPES[1]; // Cyber
-    else if (lang === 'python' || lang === 'r' || lang === 'julia') archetype = EGG_ARCHETYPES[2]; // Water
-    else if (lang === 'html' || lang === 'css' || lang === 'vue' || lang === 'svelte') archetype = EGG_ARCHETYPES[4]; // Light
-  }
-
-  const rarity_tier = rollRarityTier(raritySeed);
-  const palette = PALETTES_BY_ELEMENT[archetype.element] || PALETTES_BY_ELEMENT.Cyber;
+  const spec = await compileIdentitySpec({
+    githubUserId: githubUserId || fallbackUsername || '0',
+    telemetry: {
+      topLanguages,
+      provenance: {
+        topLanguages: topLanguages.length > 0 ? 'measured' : 'unavailable'
+      }
+    }
+  });
+  const palette = PALETTES_BY_ELEMENT[spec.element] || PALETTES_BY_ELEMENT.Cyber;
 
   return {
     github_user_id: githubUserId,
-    dna_seed: sha256,
-    egg_archetype_id: archetype.id,
-    species: archetype.species,
-    element: archetype.element,
-    rarity_tier,
+    dna_seed: spec.dnaSeed,
+    egg_archetype_id: `${spec.species}-core`,
+    species: spec.species,
+    species_name: spec.speciesName,
+    anatomy: spec.anatomy,
+    element: spec.element,
+    rarity_tier: spec.rarity,
     palette,
-    markings: MARKINGS[markingSeed % MARKINGS.length],
-    silhouette: SILHOUETTES[silhouetteSeed % SILHOUETTES.length],
-    temperament: TEMPERAMENTS[temperamentSeed % TEMPERAMENTS.length],
-    archetype: ARCHETYPES[archetypeIdxSeed % ARCHETYPES.length]
+    markings: spec.markings,
+    silhouette: spec.silhouette,
+    temperament: spec.temperament,
+    archetype: spec.temperament,
+    identity_spec: spec
   };
 }

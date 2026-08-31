@@ -3,7 +3,7 @@
 // (src/server/services/github/resolver.ts)
 // ============================================================================
 
-import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary } from '../../types';
+import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary, TelemetrySnapshot, MetricProvenance } from '../../types';
 import { getHealthyGitHubToken, recordTokenResponse } from './token-pool';
 import { deriveGuardianDNA } from '../dna/seed';
 
@@ -210,27 +210,61 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
   }
 }
 
+interface GuardianJoinPublicationRow {
+  id: string;
+  name: string;
+  species: string;
+  species_name: string | null;
+  anatomy: string | null;
+  element: string;
+  rarity_tier: string;
+  projected_status: string | null;
+  level: number;
+  experience: number;
+  energy_state: string;
+  hero_image_url: string | null;
+  manifest_key: string | null;
+  spritesheet_key: string | null;
+  publication_state: string | null;
+  published_at: number | null;
+}
+
 async function getGuardianFromDb(githubUserId: number, env: Env): Promise<GuardianSummary | null> {
   try {
-    const row = await env.DB.prepare('SELECT id, name, species, element, rarity_tier, level, experience, energy_state, hero_image_url, spritesheet_url FROM guardians WHERE github_user_id = ?')
-      .bind(githubUserId)
-      .first<GuardianSummary>();
+    const row = await env.DB.prepare(`
+      SELECT 
+        g.id, g.name, g.species, g.species_name, g.anatomy, g.element, g.rarity_tier,
+        g.level, g.experience, g.energy_state, g.hero_image_url,
+        g.status as projected_status,
+        p.manifest_key, p.spritesheet_key, p.state as publication_state, p.published_at
+      FROM guardians g
+      LEFT JOIN guardian_publication p ON g.id = p.guardian_id AND p.state = 'ASSET_READY'
+      WHERE g.github_user_id = ?1;
+    `).bind(githubUserId).first<GuardianJoinPublicationRow>();
 
     if (!row) return null;
+
+    const cdnHost = env.CDN_DOMAIN || 'cdn.githoot.com';
+    const isPublished = row.publication_state === 'ASSET_READY' && Boolean(row.manifest_key);
 
     return {
       id: row.id,
       name: row.name,
       species: row.species,
-      element: row.element,
-      rarity_tier: row.rarity_tier,
+      species_name: row.species_name || row.name,
+      anatomy: row.anatomy || undefined,
+      element: row.element as any,
+      rarity_tier: row.rarity_tier as any,
+      status: (isPublished ? 'ASSET_READY' : (row.projected_status === 'ASSET_READY' ? 'VERIFYING' : (row.projected_status || 'PENDING'))) as GuardianSummary['status'],
       level: row.level,
       experience: row.experience,
-      energy_state: row.energy_state,
-      hero_image_url: row.hero_image_url,
-      spritesheet_url: row.spritesheet_url
+      energy_state: row.energy_state as any,
+      hero_image_url: isPublished ? (row.hero_image_url || `/assets/sample-pets/${row.species}.jpg`) : null,
+      spritesheet_url: isPublished && row.spritesheet_key ? `https://${cdnHost}/${row.spritesheet_key}` : null,
+      manifest_url: isPublished && row.manifest_key ? `https://${cdnHost}/${row.manifest_key}` : null
     };
-  } catch {
+  } catch (err) {
+    console.error('[Resolver] getGuardianFromDb query failed:', err);
     return null;
   }
 }
@@ -254,6 +288,287 @@ export async function generateDegradedProfile(username: string): Promise<Resolve
     guardian: null,
     source: 'degraded_seed',
     last_synced_at: Date.now()
+  };
+}
+
+function getISOWeekKey(dt: Date): string {
+  const d = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+export function createAllUnavailableSnapshot(rawUser: Partial<GitHubUserRaw> = {}): TelemetrySnapshot {
+  const now = Date.now();
+  const createdDate = new Date(rawUser.created_at || now);
+  const accountAgeYears = Math.max(0, Math.floor((now - createdDate.getTime()) / (365.25 * 86400000)));
+
+  return {
+    topLanguages: [],
+    stars: 0,
+    forks: 0,
+    publicRepos: rawUser.public_repos || 0,
+    followers: rawUser.followers || 0,
+    accountAgeYears,
+    mergedExternalPRs: 0,
+    releases: 0,
+    reviewRatio: 0,
+    collaborators: 0,
+    activeWeeks: 0,
+    nightCommitRatio: 0,
+    provenance: {
+      topLanguages: 'unavailable',
+      stars: 'unavailable',
+      forks: 'unavailable',
+      publicRepos: rawUser.public_repos !== undefined ? 'measured' : 'unavailable',
+      followers: rawUser.followers !== undefined ? 'measured' : 'unavailable',
+      accountAgeYears: rawUser.created_at ? 'measured' : 'unavailable',
+      mergedExternalPRs: 'unavailable',
+      releases: 'unavailable',
+      reviewRatio: 'unavailable',
+      collaborators: 'unavailable',
+      activeWeeks: 'unavailable',
+      nightCommitRatio: 'unavailable'
+    }
+  };
+}
+
+export async function fetchTelemetrySnapshot(
+  rawUser: GitHubUserRaw,
+  env: Env,
+  headers?: Record<string, string>
+): Promise<TelemetrySnapshot> {
+  const now = Date.now();
+  const createdDate = new Date(rawUser.created_at || now);
+  const accountAgeYears = Math.max(0, Math.floor((now - createdDate.getTime()) / (365.25 * 86400000)));
+
+  let topLanguages: string[] = [];
+  let stars = 0;
+  let forks = 0;
+  let reposMeasured = false;
+  let eventsMeasured = false;
+  let prsMeasured = false;
+  let reviewsMeasured = false;
+  let activeWeeks = 0;
+  let nightCommitRatio = 0;
+  let mergedExternalPRs = 0;
+  let reviewRatio = 0;
+
+  const reqHeaders: Record<string, string> = {
+    'User-Agent': 'GitHoot-Bot/1.0 (https://githoot.com)',
+    'Accept': 'application/vnd.github.v3+json',
+    ...(headers || {})
+  };
+
+  if (!reqHeaders.Authorization) {
+    const token = await getHealthyGitHubToken(env);
+    if (token) {
+      reqHeaders.Authorization = `Bearer ${token}`;
+    }
+  }
+
+  // 1. Measure Repos, Languages, Stars, Forks (with pagination for accounts > 100 repos)
+  try {
+    const totalExpectedRepos = typeof rawUser.public_repos === 'number' ? rawUser.public_repos : 0;
+    const maxPages = Math.min(10, Math.ceil(Math.max(1, totalExpectedRepos) / 100));
+    let allRepos: Array<{ language: string | null; stargazers_count?: number; forks_count?: number }> = [];
+    let paginationCompleted = true;
+
+    for (let page = 1; page <= maxPages; page++) {
+      const reposRes = await fetch(
+        `https://api.github.com/users/${encodeURIComponent(rawUser.login)}/repos?per_page=100&page=${page}&sort=updated`,
+        { headers: reqHeaders }
+      );
+      if (reposRes.status === 403 || reposRes.status === 429) {
+        paginationCompleted = false;
+        break;
+      }
+      if (!reposRes.ok) {
+        paginationCompleted = false;
+        break;
+      }
+      const pageRepos = (await reposRes.json()) as Array<{ language: string | null; stargazers_count?: number; forks_count?: number }>;
+      if (!Array.isArray(pageRepos)) {
+        paginationCompleted = false;
+        break;
+      }
+      allRepos = allRepos.concat(pageRepos);
+      if (pageRepos.length < 100) {
+        // Last page reached
+        break;
+      }
+    }
+
+    // Completeness invariant: if public_repos > 1000, we capped at 1000 repos, so completeness is NOT established
+    // Only mark measured if we retrieved ALL expected repos
+    const isComplete = paginationCompleted && (
+      totalExpectedRepos === 0 ||
+      allRepos.length === totalExpectedRepos ||
+      (allRepos.length < 100 && totalExpectedRepos <= allRepos.length)
+    ) && totalExpectedRepos <= 1000;
+
+    if (isComplete) {
+      const langCounts: Record<string, number> = {};
+      for (const r of allRepos) {
+        if (r.language) {
+          const l = r.language.toLowerCase();
+          langCounts[l] = (langCounts[l] || 0) + 1;
+        }
+        if (typeof r.stargazers_count === 'number') {
+          stars += r.stargazers_count;
+        }
+        if (typeof r.forks_count === 'number') {
+          forks += r.forks_count;
+        }
+      }
+      topLanguages = Object.keys(langCounts).sort((a, b) => (langCounts[b] ?? 0) - (langCounts[a] ?? 0)).slice(0, 3);
+      reposMeasured = true;
+    } else {
+      // Incomplete or truncated (>1000): fail closed to unavailable to avoid publishing partial numbers as measured
+      reposMeasured = false;
+    }
+  } catch (err) {
+    console.warn('[Resolver] Failed to fetch repos for telemetry:', err);
+    reposMeasured = false;
+  }
+
+  // 2. Measure Events for Active Weeks and Chronotype (Night Commit Ratio, paginating up to 300 events)
+  try {
+    let allEvents: Array<{ created_at: string; type: string }> = [];
+    let eventsComplete = true;
+
+    for (let page = 1; page <= 3; page++) {
+      const eventsRes = await fetch(
+        `https://api.github.com/users/${encodeURIComponent(rawUser.login)}/events/public?per_page=100&page=${page}`,
+        { headers: reqHeaders }
+      );
+      if (eventsRes.status === 403 || eventsRes.status === 429 || !eventsRes.ok) {
+        eventsComplete = false;
+        break;
+      }
+      const pageEvents = (await eventsRes.json()) as Array<{ created_at: string; type: string }>;
+      if (!Array.isArray(pageEvents)) {
+        eventsComplete = false;
+        break;
+      }
+      allEvents = allEvents.concat(pageEvents);
+      if (pageEvents.length < 100) {
+        // Terminal page reached: recent window is completely retrieved
+        break;
+      }
+      if (page === 3 && pageEvents.length === 100) {
+        // Truncated at 300 events without terminal page: completeness not established, fail closed to unavailable
+        eventsComplete = false;
+        break;
+      }
+    }
+
+    if (eventsComplete) {
+      const weeks = new Set<string>();
+      let nightCount = 0;
+      let pushCount = 0;
+      for (const ev of allEvents) {
+        if (ev.created_at) {
+          const dt = new Date(ev.created_at);
+          weeks.add(getISOWeekKey(dt));
+
+          if (ev.type === 'PushEvent') {
+            pushCount++;
+            const hour = dt.getUTCHours();
+            // Night commits: between 22:00 and 06:00 UTC
+            if (hour >= 22 || hour <= 6) {
+              nightCount++;
+            }
+          }
+        }
+      }
+      activeWeeks = weeks.size;
+      nightCommitRatio = pushCount > 0 ? Math.round((nightCount / pushCount) * 100) / 100 : 0;
+      eventsMeasured = true;
+    } else {
+      eventsMeasured = false;
+    }
+  } catch (err) {
+    console.warn('[Resolver] Failed to fetch public events for telemetry:', err);
+    eventsMeasured = false;
+  }
+
+  // 3. Measure Merged External PRs via Search API
+  try {
+    const prQuery = `author:${rawUser.login} type:pr is:merged -user:${rawUser.login}`;
+    const prRes = await fetch(`https://api.github.com/search/issues?q=${encodeURIComponent(prQuery)}`, { headers: reqHeaders });
+    if (prRes.ok) {
+      const prData = (await prRes.json()) as { total_count?: number };
+      if (typeof prData.total_count === 'number') {
+        mergedExternalPRs = prData.total_count;
+        prsMeasured = true;
+      }
+    }
+  } catch (err) {
+    console.warn('[Resolver] Failed to fetch merged PRs for telemetry:', err);
+  }
+
+  // 4. Measure Code Reviews via Search API
+  try {
+    const reviewQuery = `reviewed-by:${rawUser.login} type:pr`;
+    const reviewRes = await fetch(`https://api.github.com/search/issues?q=${encodeURIComponent(reviewQuery)}`, { headers: reqHeaders });
+    if (reviewRes.ok) {
+      const reviewData = (await reviewRes.json()) as { total_count?: number };
+      if (typeof reviewData.total_count === 'number') {
+        const totalReviews = reviewData.total_count;
+        reviewRatio = Math.min(1, Math.round((totalReviews / Math.max(1, rawUser.public_repos || 10)) * 100) / 100);
+        reviewsMeasured = true;
+      }
+    }
+  } catch (err) {
+    console.warn('[Resolver] Failed to fetch reviews for telemetry:', err);
+  }
+
+  const provenance: Record<
+    | 'topLanguages'
+    | 'stars'
+    | 'forks'
+    | 'publicRepos'
+    | 'followers'
+    | 'accountAgeYears'
+    | 'mergedExternalPRs'
+    | 'releases'
+    | 'reviewRatio'
+    | 'collaborators'
+    | 'activeWeeks'
+    | 'nightCommitRatio',
+    MetricProvenance
+  > = {
+    topLanguages: reposMeasured ? 'measured' : 'unavailable',
+    stars: reposMeasured ? 'measured' : 'unavailable',
+    forks: reposMeasured ? 'measured' : 'unavailable',
+    publicRepos: rawUser.public_repos !== undefined ? 'measured' : 'unavailable',
+    followers: rawUser.followers !== undefined ? 'measured' : 'unavailable',
+    accountAgeYears: rawUser.created_at ? 'measured' : 'unavailable',
+    mergedExternalPRs: prsMeasured ? 'measured' : 'unavailable',
+    releases: 'unavailable',
+    reviewRatio: reviewsMeasured ? 'measured' : 'unavailable',
+    collaborators: 'unavailable',
+    activeWeeks: eventsMeasured ? 'measured' : 'unavailable',
+    nightCommitRatio: eventsMeasured ? 'measured' : 'unavailable'
+  };
+
+  return {
+    topLanguages,
+    stars,
+    forks,
+    publicRepos: rawUser.public_repos || 0,
+    followers: rawUser.followers || 0,
+    accountAgeYears,
+    mergedExternalPRs,
+    releases: 0,
+    reviewRatio,
+    collaborators: 0,
+    activeWeeks,
+    nightCommitRatio,
+    provenance
   };
 }
 

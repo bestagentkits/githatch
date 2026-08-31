@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-08-31T09:09:26.518Z",
+  "environment": "staging",
+  "resources": {
+    "d1": {
+      "name": "githoot_db_staging",
+      "id": "d9ccb357-a59c-44e7-a50a-236e51991d65",
+      "status": "verified"
+    },
+    "r2": {
+      "name": "githoot-staging",
+      "status": "verified"
+    },
+    "kv": {
+      "name": "GITHOOT_CACHE_STAGING",
+      "id": "efa9aa71d9104284976966dcbdfb111b",
+      "status": "verified"
+    },
+    "queue": {
+      "name": "githoot-ai-queue-staging",
+      "status": "verified"
+    },
+    "dlq": {
+      "name": "githoot-ai-dlq-staging",
+      "status": "verified"
+    },
+    "worker": {
+      "name": "githoot-generation-consumer-staging",
+      "status": "ready_for_deploy"
+    },
+    "pages": {
+      "name": "githoot-staging",
+      "status": "ready_for_deploy"
+    }
+  },
+  "migrations": {
+    "d1_staging": "applied"
+  },
+  "credentials": {
+    "cloudflare_auth": "verified",
+    "GEMINI_API_KEY": "verified",
+    "AUTH_SECRET": "verified",
+    "ADMIN_REVIEW_SECRET": "verified",
+    "GITHUB_TOKENS": "verified",
+    "gemini_endpoint": "verified"
+  },
+  "ready": true
+}

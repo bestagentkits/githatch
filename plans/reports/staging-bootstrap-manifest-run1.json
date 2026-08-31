@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-08-31T15:28:22.156Z",
+  "runLabel": "run1",
+  "environment": "staging",
+  "verifier_digest": "cc64fb52ae4f41b0f208378d2e3fabaeaaa1568fd177b77de98aaa018c41fdbc",
+  "createdCount": 0,
+  "resources": {
+    "d1": {
+      "name": "githoot_db_staging",
+      "id": "d9ccb357-a59c-44e7-a50a-236e51991d65",
+      "status": "verified"
+    },
+    "r2": {
+      "name": "githoot-staging",
+      "status": "verified"
+    },
+    "kv": {
+      "name": "GITHOOT_CACHE_STAGING",
+      "id": "efa9aa71d9104284976966dcbdfb111b",
+      "status": "verified"
+    },
+    "queue": {
+      "name": "githoot-ai-queue-staging",
+      "id": "031ed29543b34d26a62664cea67c5c58",
+      "status": "verified"
+    },
+    "dlq": {
+      "name": "githoot-ai-dlq-staging",
+      "id": "7c50da5052de4b37ae83439d94f67965",
+      "status": "verified"
+    },
+    "pages": {
+      "name": "githoot-staging",
+      "domains": "githoot-staging.pages.dev",
+      "remotely_observed_bindings": {
+        "d1": "d9ccb357-a59c-44e7-a50a-236e51991d65",
+        "r2": "githoot-staging",
+        "kv": "efa9aa71d9104284976966dcbdfb111b",
+        "queue_producer": "githoot-ai-queue-staging"
+      },
+      "status": "verified"
+    },
+    "worker": {
+      "name": "githoot-generation-consumer-staging",
+      "id": "4cd17a33-a917-4529-901b-cc471f71061a",
+      "remotely_observed_bindings": {
+        "d1": "d9ccb357-a59c-44e7-a50a-236e51991d65",
+        "r2": "githoot-staging",
+        "kv": "efa9aa71d9104284976966dcbdfb111b",
+        "queue_producer": "githoot-ai-queue-staging"
+      },
+      "remotely_observed_consumer": {
+        "script": "githoot-generation-consumer-staging",
+        "queue_name": "githoot-ai-queue-staging",
+        "dead_letter_queue": "githoot-ai-dlq-staging",
+        "batch_size": 1,
+        "max_retries": 5,
+        "max_concurrency": 2
+      },
+      "status": "verified"
+    }
+  },
+  "applied_migrations": [
+    "0001_initial.sql",
+    "0002_hatch_pipeline_v2.sql",
+    "0003_ai_budget_ledger.sql"
+  ],
+  "credentials": {
+    "cloudflare_auth": "verified",
+    "GEMINI_API_KEY": "verified",
+    "AUTH_SECRET": "verified",
+    "ADMIN_REVIEW_SECRET": "verified",
+    "GITHUB_TOKENS": "verified",
+    "CLOUDFLARE_API_TOKEN": "verified"
+  },
+  "gemini_canary": {
+    "status": "verified",
+    "canary_status": "image_verified",
+    "configured_model": "nano-banana-pro-preview",
+    "available_models_count": 50,
+    "image_mime": "image/jpeg",
+    "image_bytes": 522228,
+    "dimensions": "1408x768"
+  },
+  "ready": true
+}

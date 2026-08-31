@@ -112,7 +112,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
 
               <div style={{ background: '#141b27', padding: '12px 14px', borderRadius: '8px' }}>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 'clamp(14px, 2.5vw, 16px)', fontWeight: 800, color: '#ffa800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {profile.top_languages[0] || 'Polyglot'}
+                  {profile.top_languages?.[0] || 'Polyglot'}
                 </div>
                 <div style={{ fontSize: '10px', color: '#53627a', textTransform: 'uppercase', fontWeight: 700 }}>Top Language</div>
               </div>

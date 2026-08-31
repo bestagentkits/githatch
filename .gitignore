@@ -3,6 +3,7 @@
 .env.local
 node_modules/
 dist/
+dist-worker/
 build/
 .wrangler/
 *.log
