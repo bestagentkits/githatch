@@ -233,3 +233,31 @@ authRouter.all('/logout', async (c) => {
   }
   return c.json({ success: true, authenticated: false });
 });
+
+// 5. Owner-only: delete my published private-inclusive aggregate snapshot (consent withdrawal).
+//    Refresh is achieved by re-authenticating via /auth/github (re-consent + re-fetch).
+authRouter.delete('/aggregate-stats/delete', async (c) => {
+  const secret = c.env.AUTH_SECRET;
+  if (!secret) {
+    return c.text('AUTH_SECRET not configured on server.', 500);
+  }
+  const cookieHeader = c.req.header('cookie') || '';
+  const match = cookieHeader.match(/githoot_session=([^;]+)/);
+  if (!match || !match[1]) {
+    return c.json({ success: false, error: 'Not authenticated' }, 401);
+  }
+  const user = await verifySessionToken(decodeURIComponent(match[1]), secret);
+  if (!user) {
+    return c.json({ success: false, error: 'Not authenticated' }, 401);
+  }
+
+  try {
+    await c.env.DB.prepare('DELETE FROM github_aggregate_stats WHERE github_user_id = ?').bind(user.id).run();
+    try {
+      await c.env.CACHE_KV.delete(`gh:profile:v3:${user.login.toLowerCase()}`);
+    } catch {}
+    return c.json({ success: true });
+  } catch {
+    return c.json({ success: false, error: 'Delete failed' }, 500);
+  }
+});

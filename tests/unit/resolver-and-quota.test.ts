@@ -983,3 +983,41 @@ describe('OAuth Callback Consent Boundary & Token Revocation', () => {
     }
   });
 });
+
+describe('Owner-only Aggregate Snapshot Deletion (consent withdrawal)', () => {
+  const secret = 'test-secret-32-chars-long-key-1!';
+
+  it('rejects GET (DELETE-only route) to prevent link/navigation-triggered erasure', async () => {
+    const env = { AUTH_SECRET: secret } as unknown as Env;
+    const res = await app.fetch(new Request('http://localhost/api/auth/aggregate-stats/delete'), env);
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects an unauthenticated DELETE with 401', async () => {
+    const env = { AUTH_SECRET: secret, DB: { prepare: () => ({ bind: () => ({ run: async () => ({}) }) }) }, CACHE_KV: { delete: async () => {} } } as unknown as Env;
+    const res = await app.fetch(new Request('http://localhost/api/auth/aggregate-stats/delete', { method: 'DELETE' }), env);
+    expect(res.status).toBe(401);
+  });
+
+  it('deletes the owner row and invalidates v3 cache for an authenticated owner', async () => {
+    let deletedId: number | null = null;
+    let invalidatedKey: string | null = null;
+    const env = {
+      AUTH_SECRET: secret,
+      DB: { prepare: () => ({ bind: (id: number) => { deletedId = id; return { run: async () => ({}) }; } }) },
+      CACHE_KV: { delete: async (k: string) => { invalidatedKey = k; } }
+    } as unknown as Env;
+
+    const token = await createSessionToken({ id: 6857382, login: 'MrGoonie', name: 'Duy', avatar_url: 'https://a/x' }, secret);
+    const res = await app.fetch(new Request('http://localhost/api/auth/aggregate-stats/delete', {
+      method: 'DELETE',
+      headers: { 'Cookie': `githoot_session=${encodeURIComponent(token)}` }
+    }), env);
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean };
+    expect(body.success).toBe(true);
+    expect(deletedId).toBe(6857382);
+    expect(invalidatedKey).toBe('gh:profile:v3:mrgoonie');
+  });
+});
