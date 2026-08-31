@@ -9,6 +9,31 @@ export interface OAuthStatePayload {
   timestamp: number;
   nonce: string;
 }
+function bytesToBase64url(bytes: Uint8Array): string {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(bytes).toString('base64url');
+  }
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64urlToBytes(b64: string): Uint8Array {
+  const normalized = b64.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized.padEnd(normalized.length + (4 - (normalized.length % 4)) % 4, '=');
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(padded, 'base64');
+  }
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
 
 export async function generateSignedState(claimUsername: string, secret: string, intent: 'login' | 'claim' = 'claim'): Promise<string> {
   const payload: OAuthStatePayload = {
@@ -18,6 +43,7 @@ export async function generateSignedState(claimUsername: string, secret: string,
     nonce: crypto.randomUUID()
   };
   const payloadStr = JSON.stringify(payload);
+  const payloadBytes = new TextEncoder().encode(payloadStr);
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
@@ -27,9 +53,9 @@ export async function generateSignedState(claimUsername: string, secret: string,
     ['sign']
   );
 
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payloadStr));
+  const signature = await crypto.subtle.sign('HMAC', key, payloadBytes as unknown as BufferSource);
   const sigHex = Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
-  const b64Payload = btoa(payloadStr);
+  const b64Payload = bytesToBase64url(payloadBytes);
 
   return `${b64Payload}.${sigHex}`;
 }
@@ -38,8 +64,8 @@ export async function verifySignedState(stateStr: string, secret: string): Promi
   try {
     const [b64Payload, sigHex] = stateStr.split('.');
     if (!b64Payload || !sigHex) return null;
-
-    const payloadStr = atob(b64Payload);
+    const payloadBytes = base64urlToBytes(b64Payload);
+    const payloadStr = new TextDecoder().decode(payloadBytes);
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',
@@ -50,8 +76,7 @@ export async function verifySignedState(stateStr: string, secret: string): Promi
     );
 
     const sigBytes = new Uint8Array(sigHex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []);
-    const isValid = await crypto.subtle.verify('HMAC', key, sigBytes, encoder.encode(payloadStr));
-
+    const isValid = await crypto.subtle.verify('HMAC', key, sigBytes as unknown as BufferSource, payloadBytes as unknown as BufferSource);
     if (!isValid) return null;
 
     const payload = JSON.parse(payloadStr) as OAuthStatePayload;
@@ -79,6 +104,7 @@ export async function createSessionToken(user: UserSession, secret: string): Pro
     timestamp: Date.now()
   };
   const payloadStr = JSON.stringify(payload);
+  const payloadBytes = new TextEncoder().encode(payloadStr);
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
@@ -88,9 +114,9 @@ export async function createSessionToken(user: UserSession, secret: string): Pro
     ['sign']
   );
 
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payloadStr));
+  const signature = await crypto.subtle.sign('HMAC', key, payloadBytes as unknown as BufferSource);
   const sigHex = Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
-  const b64Payload = btoa(payloadStr);
+  const b64Payload = bytesToBase64url(payloadBytes);
 
   return `${b64Payload}.${sigHex}`;
 }
@@ -100,7 +126,8 @@ export async function verifySessionToken(tokenStr: string, secret: string): Prom
     const [b64Payload, sigHex] = tokenStr.split('.');
     if (!b64Payload || !sigHex) return null;
 
-    const payloadStr = atob(b64Payload);
+    const payloadBytes = base64urlToBytes(b64Payload);
+    const payloadStr = new TextDecoder().decode(payloadBytes);
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',
@@ -111,12 +138,10 @@ export async function verifySessionToken(tokenStr: string, secret: string): Prom
     );
 
     const sigBytes = new Uint8Array(sigHex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []);
-    const isValid = await crypto.subtle.verify('HMAC', key, sigBytes, encoder.encode(payloadStr));
-
+    const isValid = await crypto.subtle.verify('HMAC', key, sigBytes as unknown as BufferSource, payloadBytes as unknown as BufferSource);
     if (!isValid) return null;
 
     const payload = JSON.parse(payloadStr) as SessionPayload;
-    // Session valid for 30 days
     if (Date.now() - payload.timestamp > 30 * 24 * 3600 * 1000) {
       return null;
     }
