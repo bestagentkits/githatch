@@ -12,6 +12,7 @@ import { renderSvgToPng } from '../../src/server/services/image/resvg-renderer';
 import type { Env, PublicConfig, EarlyAccessStatus, ResolvedProfile, GuardianSummary, UserSession } from '../../src/server/types';
 import app from '../../src/server/index';
 import { getEarlyAccessStatus } from '../../src/server/services/claim/quota';
+import { getGuardianImageDataUri } from '../../src/server/routes/og';
 describe('SWR Resolver & Degraded Seed Fallback', () => {
   it('generates a valid degraded profile from username alone when GitHub is throttled', async () => {
     const degraded = await generateDegradedProfile('torvalds');
@@ -827,5 +828,158 @@ describe('Private-Inclusive Aggregate Stats (owner-consented, sanitized counts o
     expect(await getAggregateStatsFromDb(424242, envNoRow)).toBeNull();
     // Zero github_user_id short-circuits to null (never queries).
     expect(await getAggregateStatsFromDb(0, envNoRow)).toBeNull();
+  });
+});
+
+describe('OG Guardian Image Embedding & Allowlist Hardening', () => {
+  const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+
+  it('embeds a local sample-pet PNG via the ASSETS binding', async () => {
+    const env = {
+      ASSETS: { fetch: async () => new Response(pngBytes, { status: 200, headers: { 'content-type': 'image/png' } }) }
+    } as unknown as Env;
+    const uri = await getGuardianImageDataUri('/assets/sample-pets/celestialdrake.webp', env, 'http://localhost/og/x');
+    expect(uri).not.toBeNull();
+    expect(uri?.startsWith('data:image/png;base64,')).toBe(true);
+  });
+
+  it('embeds a trusted CDN/R2 guardian hero via ASSETS_BUCKET', async () => {
+    const env = {
+      CDN_DOMAIN: 'cdn.githoot.com',
+      ASSETS_BUCKET: { get: async () => ({ size: pngBytes.length, arrayBuffer: async () => pngBytes.buffer }) }
+    } as unknown as Env;
+    const uri = await getGuardianImageDataUri('https://cdn.githoot.com/guardians/abc123/hero.png', env, 'http://localhost/og/x');
+    expect(uri).not.toBeNull();
+    expect(uri?.startsWith('data:image/png;base64,')).toBe(true);
+  });
+
+  it('rejects an untrusted host even if the path looks like a guardian hero', async () => {
+    const env = {
+      CDN_DOMAIN: 'cdn.githoot.com',
+      ASSETS_BUCKET: { get: async () => ({ size: pngBytes.length, arrayBuffer: async () => pngBytes.buffer }) }
+    } as unknown as Env;
+    const uri = await getGuardianImageDataUri('https://evil.example.com/guardians/abc123/hero.png', env, 'http://localhost/og/x');
+    expect(uri).toBeNull();
+  });
+
+  it('rejects oversized R2 objects via the size pre-check', async () => {
+    const env = {
+      CDN_DOMAIN: 'cdn.githoot.com',
+      ASSETS_BUCKET: { get: async () => ({ size: 4 * 1024 * 1024, arrayBuffer: async () => new ArrayBuffer(4 * 1024 * 1024) }) }
+    } as unknown as Env;
+    const uri = await getGuardianImageDataUri('https://cdn.githoot.com/guardians/abc123/hero.png', env, 'http://localhost/og/x');
+    expect(uri).toBeNull();
+  });
+
+  it('rejects non-png guardian keys and returns null for empty hero url', async () => {
+    const env = { CDN_DOMAIN: 'cdn.githoot.com', ASSETS_BUCKET: { get: async () => null } } as unknown as Env;
+    expect(await getGuardianImageDataUri('https://cdn.githoot.com/guardians/abc/hero.svg', env, 'http://localhost/og/x')).toBeNull();
+    expect(await getGuardianImageDataUri(undefined, env, 'http://localhost/og/x')).toBeNull();
+  });
+});
+
+describe('Token Revocation Retry Semantics', () => {
+  const env = { GITHUB_CLIENT_ID: 'cid', GITHUB_CLIENT_SECRET: 'sec' } as unknown as Env;
+
+  it('retries a transient 429 then succeeds on a subsequent 204', async () => {
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls++;
+      return calls === 1 ? new Response(null, { status: 429 }) : new Response(null, { status: 204 });
+    };
+    try {
+      expect(await revokeAccessToken('gho', env)).toBe(true);
+      expect(calls).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('gives up after 3 attempts on persistent 500 and returns false', async () => {
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; return new Response(null, { status: 500 }); };
+    try {
+      expect(await revokeAccessToken('gho', env)).toBe(false);
+      expect(calls).toBe(3);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('treats network errors as transient and returns false after retries', async () => {
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; throw new Error('network down'); };
+    try {
+      expect(await revokeAccessToken('gho', env)).toBe(false);
+      expect(calls).toBe(3);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('OAuth Callback Consent Boundary & Token Revocation', () => {
+  it('shows the consent interstitial before redirecting to GitHub (no bypass)', async () => {
+    const env = { AUTH_SECRET: 'test-secret-32-chars-long-key-1!', GITHUB_CLIENT_ID: 'cid', ENVIRONMENT: 'production', DOMAIN: 'githoot.com' } as unknown as Env;
+    const res = await app.fetch(new Request('http://localhost/auth/github'), env);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Authorize GitHoot');
+    expect(html.toLowerCase()).toContain('read/write');
+    expect(html).toContain('/auth/github?consent=1');
+  });
+
+  it('redirects to GitHub OAuth with repo read:user scope once consent is given', async () => {
+    const env = { AUTH_SECRET: 'test-secret-32-chars-long-key-1!', GITHUB_CLIENT_ID: 'cid', ENVIRONMENT: 'production', DOMAIN: 'githoot.com' } as unknown as Env;
+    const res = await app.fetch(new Request('http://localhost/auth/github?consent=1'), env);
+    expect(res.status).toBe(302);
+    const loc = res.headers.get('Location') || '';
+    expect(loc).toContain('github.com/login/oauth/authorize');
+    expect(decodeURIComponent(loc)).toContain('repo read:user');
+  });
+
+  it('revokes the OAuth token on the login callback path (finally block)', async () => {
+    const secret = 'test-secret-32-chars-long-key-1!';
+    const loginState = await generateSignedState('', secret, 'login');
+    let revokeCalled = false;
+    const env = {
+      AUTH_SECRET: secret,
+      GITHUB_CLIENT_ID: 'cid',
+      GITHUB_CLIENT_SECRET: 'sec',
+      ENVIRONMENT: 'production',
+      DOMAIN: 'githoot.com',
+      DB: { prepare: () => ({ bind: () => ({ first: async () => null, all: async () => ({ results: [] }), run: async () => ({}) }) }), batch: async () => {} },
+      CACHE_KV: { get: async () => null, put: async () => null, delete: async () => null }
+    } as unknown as Env;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('login/oauth/access_token')) {
+        return new Response(JSON.stringify({ access_token: 'gho_tok' }), { headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('api.github.com/user')) {
+        return new Response(JSON.stringify({ id: 321, login: 'revuser', name: 'Rev', avatar_url: 'https://a/x' }), { headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('api.github.com/graphql')) {
+        return new Response(JSON.stringify({ data: { viewer: { databaseId: 321, contributionsCollection: { contributionCalendar: { totalContributions: 5 } }, repositories: { totalCount: 3 } } } }), { headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('/applications/') && (init?.method === 'DELETE')) {
+        revokeCalled = true;
+        return new Response(null, { status: 204 });
+      }
+      return originalFetch(input as any, init);
+    };
+
+    try {
+      const res = await app.fetch(new Request(`http://localhost/auth/callback?code=c&state=${encodeURIComponent(loginState)}`), env);
+      expect(res.status).toBe(302);
+      expect(revokeCalled).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

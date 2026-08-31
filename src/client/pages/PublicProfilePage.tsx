@@ -554,7 +554,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   ✓ Free forever · Only the owner of @{profile.login} can claim this companion.
                 </div>
                 <div style={{ textAlign: 'left', fontSize: '10px', color: '#53627a', marginTop: '10px', lineHeight: 1.5, background: 'rgba(255,168,0,0.06)', border: '1px solid rgba(255,168,0,0.2)', borderRadius: '8px', padding: '10px 12px' }}>
-                  ⚠️ Sign-in requests GitHub's classic <strong style={{ color: '#ffa800' }}>repo</strong> permission — full read/write access to your public &amp; private repositories. GitHoot uses the token once to compute two public counts (contributions last year + owned repo total incl. private), stores <strong>no token and no private repo names/details</strong>, then immediately revokes it. Exact totals can reveal the volume of your private work.
+                  ⚠️ Sign-in requests GitHub's classic <strong style={{ color: '#ffa800' }}>repo</strong> permission — full read/write access to your public &amp; private repositories. GitHoot uses the token once to compute two public counts (contributions last year + owned repo total incl. private), stores <strong>no token and no private repo names/details</strong>, then <strong>attempts to revoke it immediately</strong> (you can also revoke anytime in GitHub settings). Exact totals can reveal the volume of your private work.
                 </div>
               </div>
             )}

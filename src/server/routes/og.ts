@@ -96,13 +96,15 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 const MAX_HERO_BYTES = 3 * 1024 * 1024;
 
-async function getGuardianImageDataUri(heroUrl: string | undefined, env: Env, reqUrl: string): Promise<string | null> {
+export async function getGuardianImageDataUri(heroUrl: string | undefined, env: Env, reqUrl: string): Promise<string | null> {
   if (!heroUrl) return null;
   try {
     // 1. Local deterministic sample-pet asset served by the Pages ASSETS binding.
+    //    Convert to the PNG variant and allow ONLY an exact sanitized path.
     if (heroUrl.includes('/assets/sample-pets/')) {
       if (!env.ASSETS) return null;
       const pngPath = heroUrl.replace(/\.(webp|jpg|jpeg)$/i, '.png');
+      if (!/^\/assets\/sample-pets\/[a-z0-9-]+\.png$/.test(pngPath)) return null;
       const res = await env.ASSETS.fetch(new Request(new URL(pngPath, reqUrl).toString()));
       if (!res.ok) return null;
       const ct = res.headers.get('content-type') || '';
@@ -121,11 +123,13 @@ async function getGuardianImageDataUri(heroUrl: string | undefined, env: Env, re
       return null;
     }
     const key = parsed.pathname.replace(/^\//, '');
-    if (parsed.hostname === cdnHost && key.startsWith('guardians/') && key.endsWith('.png')) {
+    if (parsed.hostname === cdnHost && /^guardians\/[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+\.png$/.test(key)) {
       if (!env.ASSETS_BUCKET) return null;
-      const obj = await env.ASSETS_BUCKET.get(key);
+      const obj = await env.ASSETS_BUCKET.get(key) as unknown as { size?: number; arrayBuffer(): Promise<ArrayBuffer> } | null;
       if (!obj) return null;
-      const bytes = new Uint8Array(await (obj as unknown as { arrayBuffer(): Promise<ArrayBuffer> }).arrayBuffer());
+      // Pre-check size before reading the full body when R2 exposes it.
+      if (typeof obj.size === 'number' && (obj.size === 0 || obj.size > MAX_HERO_BYTES)) return null;
+      const bytes = new Uint8Array(await obj.arrayBuffer());
       if (bytes.length === 0 || bytes.length > MAX_HERO_BYTES) return null;
       return `data:image/png;base64,${bytesToBase64(bytes)}`;
     }

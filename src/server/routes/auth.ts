@@ -49,6 +49,36 @@ authRouter.get('/github', async (c) => {
   if (!secret) {
     return c.text('AUTH_SECRET not configured on server.', 500);
   }
+
+  // Universal product-consent boundary in front of EVERY OAuth entry point
+  // (navbar login, mobile menu, claim CTA, direct URL). Shown before requesting
+  // GitHub's broad classic `repo` scope so no caller can bypass disclosure.
+  if (c.req.query('consent') !== '1') {
+    const continueHref = claimUsername
+      ? `/auth/github?consent=1&claim_username=${encodeURIComponent(claimUsername)}`
+      : `/auth/github?consent=1`;
+    return c.html(`<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Authorize GitHoot · GitHub Access</title></head>
+<body style="margin:0;background:#07090e;color:#f0f6fc;font-family:'Segoe UI',-apple-system,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px;">
+  <div style="max-width:560px;background:#0d111a;border:1px solid rgba(0,240,255,0.25);border-radius:16px;padding:32px;box-shadow:0 8px 40px rgba(0,0,0,0.6);">
+    <h1 style="font-size:22px;margin:0 0 8px;color:#00f0ff;">🦉 Authorize GitHoot</h1>
+    <p style="font-size:14px;line-height:1.6;color:#c8d6e5;">To include your <strong>private-repo activity</strong> in your public GitHoot profile, sign-in requests GitHub's classic <strong style="color:#ffa800;">repo</strong> permission.</p>
+    <ul style="font-size:13px;line-height:1.7;color:#8b9bb4;padding-left:18px;">
+      <li>Classic <strong style="color:#ffa800;">repo</strong> grants <strong>full read/write access to your public &amp; private repositories</strong> (and some org resources). It is not read-only.</li>
+      <li>GitHoot uses the token <strong>once</strong> to compute two <strong>public</strong> counts: contributions in the last year and total owned repositories (including private).</li>
+      <li>GitHoot stores <strong>no token</strong> and <strong>no private repo names, URLs, or details</strong> — only those two numbers.</li>
+      <li>GitHoot <strong>attempts to revoke the token immediately</strong> after use. You can also revoke access anytime in your <a href="https://github.com/settings/applications" target="_blank" rel="noopener noreferrer" style="color:#00f0ff;">GitHub settings</a>.</li>
+      <li>Exact public totals can reveal the <strong>volume</strong> of your private work (private repo count is inferable).</li>
+    </ul>
+    <div style="display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;">
+      <a href="${continueHref}" style="flex:1;text-align:center;background:linear-gradient(135deg,#00f0ff,#0099ff);color:#000;font-weight:800;padding:14px 20px;border-radius:10px;text-decoration:none;min-width:180px;">Continue with GitHub →</a>
+      <a href="/" style="flex:1;text-align:center;background:transparent;border:1px solid rgba(255,255,255,0.2);color:#8b9bb4;font-weight:700;padding:14px 20px;border-radius:10px;text-decoration:none;min-width:120px;">Cancel</a>
+    </div>
+  </div>
+</body></html>`);
+  }
+
   const state = await generateSignedState(claimUsername, secret, intent);
 
   const redirectUri = `${c.req.url.split('/auth')[0]}/auth/callback`;
