@@ -293,6 +293,25 @@ describe('Auth Session & OAuth State Integrity', () => {
     expect(verified?.name).toBe('Mona Lisa');
   });
 
+  it('correctly serializes and deserializes non-Latin, Vietnamese and Emoji user names without btoa errors', async () => {
+    const unicodeUser: UserSession = {
+      id: 777888,
+      login: 'do_owl',
+      name: 'Đỗ 🦉 Nguyễn Vũ',
+      avatar_url: 'https://avatars.githubusercontent.com/u/777888'
+    };
+
+    const sessionToken = await createSessionToken(unicodeUser, secret);
+    expect(typeof sessionToken).toBe('string');
+    expect(sessionToken.includes('.')).toBe(true);
+
+    const verified = await verifySessionToken(sessionToken, secret);
+    expect(verified).not.toBeNull();
+    expect(verified?.id).toBe(777888);
+    expect(verified?.login).toBe('do_owl');
+    expect(verified?.name).toBe('Đỗ 🦉 Nguyễn Vũ');
+  });
+
   it('rejects tampered session tokens', async () => {
     const user: UserSession = {
       id: 999,
