@@ -1021,3 +1021,60 @@ describe('Owner-only Aggregate Snapshot Deletion (consent withdrawal)', () => {
     expect(invalidatedKey).toBe('gh:profile:v3:mrgoonie');
   });
 });
+
+describe('Aggregate Withdrawal Is Effective Despite Profile Cache (D1 authoritative)', () => {
+  it('returns aggregate_stats:null on a fresh cache hit when D1 has no row (post-withdrawal)', async () => {
+    const cachedProfile: ResolvedProfile = {
+      github_user_id: 6857382,
+      login: 'mrgoonie',
+      name: 'Duy',
+      bio: null,
+      avatar_url: 'https://avatars.githubusercontent.com/u/6857382',
+      public_repos: 122,
+      followers: 942,
+      total_stars: 0,
+      top_languages: ['TypeScript'],
+      dna_seed: 'seed123',
+      egg_archetype_id: 'celestial-echo',
+      estimated_rarity: 'Common',
+      claimed: false,
+      guardian: null,
+      source: 'github_live',
+      last_synced_at: Date.now(),
+      activities: [],
+      highlighted_repos: [],
+      active_repos: [],
+      // Stale cached snapshot that MUST NOT be served after D1 withdrawal:
+      aggregate_stats: { contributions_last_year: 9999, owned_repositories_total: 888, period_started_at: '2025-01-01T00:00:00.000Z', period_ended_at: '2026-01-01T00:00:00.000Z', refreshed_at: '2026-01-01T00:00:00.000Z' }
+    };
+
+    const env = {
+      CACHE_KV: { get: async () => ({ timestamp: Date.now() - 5000, data: cachedProfile }), put: async () => {} },
+      // D1 row was deleted → getAggregateStatsFromDb returns null
+      DB: { prepare: () => ({ bind: () => ({ first: async () => null }) }) }
+    } as unknown as Env;
+
+    const profile = await resolveGitHubProfile('mrgoonie', env);
+    expect(profile.source).toBe('cache_fresh');
+    expect(profile.aggregate_stats).toBeNull();
+  });
+
+  it('overlays the current D1 snapshot (not the cached one) on a fresh cache hit', async () => {
+    const cachedProfile = {
+      github_user_id: 6857382, login: 'mrgoonie', name: 'Duy', bio: null,
+      avatar_url: 'https://a/x', public_repos: 122, followers: 942, total_stars: 0,
+      top_languages: ['TypeScript'], dna_seed: 's', egg_archetype_id: 'celestial-echo',
+      estimated_rarity: 'Common', claimed: false, guardian: null, source: 'github_live',
+      last_synced_at: Date.now(), activities: [], highlighted_repos: [], active_repos: [],
+      aggregate_stats: { contributions_last_year: 1, owned_repositories_total: 1, period_started_at: '2025-01-01T00:00:00.000Z', period_ended_at: '2026-01-01T00:00:00.000Z', refreshed_at: '2026-01-01T00:00:00.000Z' }
+    } as unknown as ResolvedProfile;
+    const nowMs = Date.now();
+    const env = {
+      CACHE_KV: { get: async () => ({ timestamp: Date.now() - 5000, data: cachedProfile }), put: async () => {} },
+      DB: { prepare: () => ({ bind: () => ({ first: async () => ({ contributions_last_year: 4242, owned_repositories_total: 77, period_started_at: nowMs - 1000, period_ended_at: nowMs, refreshed_at: nowMs }) }) }) }
+    } as unknown as Env;
+    const profile = await resolveGitHubProfile('mrgoonie', env);
+    expect(profile.aggregate_stats?.contributions_last_year).toBe(4242);
+    expect(profile.aggregate_stats?.owned_repositories_total).toBe(77);
+  });
+});

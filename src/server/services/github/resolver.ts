@@ -67,18 +67,20 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     throw new UserNotFoundError(cleanUsername);
   }
 
-  // Fresh cache hit (< 1 hour)
-  // Fresh cache hit (< 1 hour) with schema v2 validation
+  // Fresh cache hit (< 1 hour) with schema v3 validation.
+  // aggregate_stats is ALWAYS overlaid from D1 (authoritative) so owner withdrawal
+  // takes effect immediately, independent of the profile cache window.
   if (cached?.data && Array.isArray(cached.data.activities) && now - cached.timestamp < 3600 * 1000) {
     const data = cached.data;
     return {
       ...data,
       guardian: normalizeGuardianSummary(data.guardian),
+      aggregate_stats: await getAggregateStatsFromDb(data.github_user_id, env),
       source: 'cache_fresh'
     };
   }
 
-  // Stale cache hit (1 hour to 24 hours): Return stale immediately, enqueue revalidation
+  // Stale cache hit (1 hour to 24 hours): Return stale immediately, enqueue revalidation.
   if (cached?.data && Array.isArray(cached.data.activities) && now - cached.timestamp < 86400 * 1000) {
     if (env.AI_QUEUE) {
       env.AI_QUEUE.send({ type: 'REVALIDATE_PROFILE', username: cleanUsername }).catch(() => {});
@@ -87,6 +89,7 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     return {
       ...data,
       guardian: normalizeGuardianSummary(data.guardian),
+      aggregate_stats: await getAggregateStatsFromDb(data.github_user_id, env),
       source: 'cache_stale'
     };
   }

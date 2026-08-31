@@ -1,6 +1,6 @@
 # GitHoot Autonomous QA & Verification Report
 
-- **Date:** 2026-08-31T06:16:28.775Z
+- **Date:** 2026-08-31T06:26:26.968Z
 - **Target Domain:** `https://githoot.com`
 - **Runner:** Autonomous Edge QA Suite (scripts/run-autonomous-qa.ts)
 - **Total Tests Executed:** 13
@@ -10,15 +10,15 @@
 
 | Category | Test Name | Status | Duration | Details |
 |---|---|---|---|---|
-| **API** | Healthcheck Endpoint GET /health | ✅ PASS | 26ms | Status: ok, Domain: githoot.com |
+| **API** | Healthcheck Endpoint GET /health | ✅ PASS | 22ms | Status: ok, Domain: githoot.com |
 | **API** | Early Access Status GET /api/early-access/status | ✅ PASS | 1ms | Total Slots: 100, Free Available: true |
-| **API** | Dynamic SVG README Badge GET /badge/octocat.svg | ✅ PASS | 1190ms | SVG Length: 1010 bytes, Cache-Control: public, max-age=43200, s-maxage=43200 |
-| **API** | Dynamic OpenGraph PNG Card GET /og/octocat.png (with mixed Accept header) | ✅ PASS | 541ms | Format: PNG, Bytes: 185611, Content-Type: image/png |
-| **API** | Dynamic OpenGraph SVG Card GET /og/octocat.svg | ✅ PASS | 231ms | Format: SVG, Bytes: 7226, Content-Type: image/svg+xml; charset=utf-8 |
+| **API** | Dynamic SVG README Badge GET /badge/octocat.svg | ✅ PASS | 1245ms | SVG Length: 1010 bytes, Cache-Control: public, max-age=43200, s-maxage=43200 |
+| **API** | Dynamic OpenGraph PNG Card GET /og/octocat.png (with mixed Accept header) | ✅ PASS | 509ms | Format: PNG, Bytes: 185611, Content-Type: image/png |
+| **API** | Dynamic OpenGraph SVG Card GET /og/octocat.svg | ✅ PASS | 225ms | Format: SVG, Bytes: 7226, Content-Type: image/svg+xml; charset=utf-8 |
 | **API** | Crawler HTML Dynamic OpenGraph Tags GET /octocat | ✅ PASS | 1ms | Injected: og:image=/og/octocat.png?v=3, og:title=@octocat · GitHoot Realm Guardian |
 | **DNA** | Deterministic DNA Hash Consistency | ✅ PASS | 0ms | Species: Aether Neon Byte, Element: Cyber, Rarity: Common |
-| **Resolver** | GitHub Profile Resolution GET /api/profile/octocat | ✅ PASS | 231ms | Source: github_live, Egg: solar-flare, Login: @octocat |
-| **Resolver** | 404 User Not Found Propagation for Non-existent User | ✅ PASS | 321ms | HTTP 404 correctly returned for non-existent user |
+| **Resolver** | GitHub Profile Resolution GET /api/profile/octocat | ✅ PASS | 228ms | Source: github_live, Egg: solar-flare, Login: @octocat |
+| **Resolver** | 404 User Not Found Propagation for Non-existent User | ✅ PASS | 314ms | HTTP 404 correctly returned for non-existent user |
 | **Image** | Chroma Green Removal & Edge De-Spill | ✅ PASS | 0ms | Green background Alpha=0, Edge green de-spilled from 190 to 150 |
 | **Image** | Pure TS PNG Encode/Decode Roundtrip | ✅ PASS | 2ms | Encoded: 77 bytes -> Decoded: 2x1 RGBA |
 | **Image** | Smart Bounding Box Detection & Centering | ✅ PASS | 1ms | Original Bbox: [5,5..14,14] -> Centered at (128, 128) |
