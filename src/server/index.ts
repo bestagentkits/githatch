@@ -104,24 +104,21 @@ app.get('/api/early-access/status', async (c) => {
 // Static Asset & SPA Fallback with Dynamic OpenGraph Meta Tags for Cloudflare Pages
 app.all('*', async (c) => {
   if (c.env.ASSETS) {
-    const res = await c.env.ASSETS.fetch(c.req.raw);
-    if (res.status !== 404) return res;
     const url = new URL(c.req.url);
-    if (!url.pathname.includes('.')) {
+    const cleanUser = url.pathname.replace(/^\//, '').split('/')[0];
+    const isProfile = cleanUser && !url.pathname.includes('.') && cleanUser !== 'explore' && cleanUser !== 'design' && cleanUser !== 'docs' && cleanUser !== 'api' && cleanUser !== 'auth' && cleanUser !== 'badge' && cleanUser !== 'og';
+
+    if (isProfile) {
       const indexReq = new Request(new URL('/', c.req.url).toString(), c.req.raw);
       const indexRes = await c.env.ASSETS.fetch(indexReq);
-      
-      const cleanUser = url.pathname.replace(/^\//, '').split('/')[0];
-      const isProfile = cleanUser && cleanUser !== 'explore' && cleanUser !== 'design' && cleanUser !== 'docs';
-      
-      if (isProfile) {
-        const html = await indexRes.text();
-        const title = `@${cleanUser} · GitHoot Realm Guardian`;
-        const desc = `View @${cleanUser}'s developer identity, coding stats, and living hatched companion on GitHoot.`;
-        const ogImage = `${url.origin}/og/${encodeURIComponent(cleanUser)}.png`;
-        const ogUrl = `${url.origin}/${encodeURIComponent(cleanUser)}`;
+      const html = await indexRes.text();
 
-        const ogMeta = `
+      const title = `@${cleanUser} · GitHoot Realm Guardian`;
+      const desc = `View @${cleanUser}'s developer identity, coding stats, and living hatched companion on GitHoot.`;
+      const ogImage = `${url.origin}/og/${encodeURIComponent(cleanUser)}.png`;
+      const ogUrl = `${url.origin}/${encodeURIComponent(cleanUser)}`;
+
+      const ogMeta = `
     <title>${title}</title>
     <meta name="description" content="${desc}">
     <meta property="og:type" content="profile">
@@ -136,19 +133,28 @@ app.all('*', async (c) => {
     <meta name="twitter:title" content="${title}">
     <meta name="twitter:description" content="${desc}">
     <meta name="twitter:image" content="${ogImage}">
-        `.trim();
-        const modifiedHtml = html.replace('<title>GitHoot - Gamified Developer Identity &amp; Gacha Hatch</title>', ogMeta)
-          .replace('<title>GitHoot - Gamified Developer Identity & Gacha Hatch</title>', ogMeta);
+      `.trim();
 
-        return new Response(modifiedHtml, {
-          headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': 'public, max-age=0, must-revalidate'
-          }
-        });
-      }
+      // Strip generic tags and inject user-specific OpenGraph meta tags
+      let modifiedHtml = html.replace(/<title>.*?<\/title>/s, '')
+        .replace(/<meta\s+property="og:[^>]+>/gi, '')
+        .replace(/<meta\s+name="twitter:[^>]+>/gi, '');
 
-      return indexRes;
+      modifiedHtml = modifiedHtml.replace('</head>', `${ogMeta}\n</head>`);
+
+      return new Response(modifiedHtml, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'public, max-age=0, must-revalidate'
+        }
+      });
+    }
+
+    const res = await c.env.ASSETS.fetch(c.req.raw);
+    if (res.status !== 404) return res;
+    if (!url.pathname.includes('.')) {
+      const indexReq = new Request(new URL('/', c.req.url).toString(), c.req.raw);
+      return c.env.ASSETS.fetch(indexReq);
     }
     return res;
   }
