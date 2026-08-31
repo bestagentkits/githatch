@@ -128,6 +128,23 @@ async function runAutonomousQa() {
     if (!svgText.includes('GitHoot') || !svgText.includes('<svg')) throw new Error('Invalid SVG content');
     return `Format: SVG, Bytes: ${svgText.length}, Content-Type: ${contentType}`;
   });
+
+  await runTest('API', 'Crawler HTML Dynamic OpenGraph Tags GET /octocat', async () => {
+    const mockEnvWithAssets: Env = {
+      ...mockEnv,
+      ASSETS: {
+        fetch: async () => new Response('<!DOCTYPE html><html><head><title>GitHoot</title><meta property="og:image" content="fallback"></head><body><div id="root"></div></body></html>', {
+          headers: { 'Content-Type': 'text/html' }
+        })
+      }
+    };
+    const res = await app.fetch(new Request('http://localhost/octocat'), mockEnvWithAssets);
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+    if (!html.includes('/og/octocat.png')) throw new Error('Missing dynamic /og/octocat.png in og:image tag');
+    if (!html.includes('@octocat · GitHoot Realm Guardian')) throw new Error('Missing dynamic title in HTML');
+    return 'Injected: og:image=/og/octocat.png, og:title=@octocat · GitHoot Realm Guardian';
+  });
   // --- Tier 2: DNA & Anti-Throttling Resolver ---
   console.log('\n► Tier 2: Deterministic DNA & SWR Fallback Engine');
   await runTest('DNA', 'Deterministic DNA Hash Consistency', async () => {
