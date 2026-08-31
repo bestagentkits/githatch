@@ -138,7 +138,10 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
           claimed: guardianRecord !== null,
           guardian: guardianRecord,
           source: 'github_live',
-          last_synced_at: now
+          last_synced_at: now,
+          activities: [],
+          highlighted_repos: [],
+          active_repos: []
         };
         try {
           await env.CACHE_KV.put(cacheKey, JSON.stringify({ timestamp: now, data: profile }), {
@@ -376,7 +379,10 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
         claimed: guardianRecord !== null,
         guardian: guardianRecord,
         source: 'github_live',
-        last_synced_at: now
+        last_synced_at: now,
+        activities: [],
+        highlighted_repos: [],
+        active_repos: []
       };
     }
     return generateDegradedProfile(cleanUsername);
@@ -426,10 +432,12 @@ export async function generateDegradedProfile(username: string): Promise<Resolve
     claimed: false,
     guardian: null,
     source: 'degraded_seed',
-    last_synced_at: Date.now()
+    last_synced_at: Date.now(),
+    activities: [],
+    highlighted_repos: [],
+    active_repos: []
   };
 }
-
 export async function scrapeGitHubPublicProfile(username: string): Promise<{
   userId: number;
   name: string;

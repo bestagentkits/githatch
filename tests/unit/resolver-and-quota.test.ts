@@ -544,4 +544,129 @@ describe('Fail-Closed Authentication Configuration Security', () => {
     const text = await res.text();
     expect(text).toContain('AUTH_SECRET');
   });
+
+  it('fails closed with HTTP 500 when AUTH_SECRET is not configured on /auth/me', async () => {
+    const mockEnvNoSecret = {
+      ENVIRONMENT: 'production',
+      DOMAIN: 'githoot.com'
+    } as unknown as Env;
+
+    const res = await app.fetch(new Request('http://localhost/auth/me', {
+      headers: { 'Cookie': 'githoot_session=mock.session.token' }
+    }), mockEnvNoSecret);
+    expect(res.status).toBe(500);
+    const text = await res.text();
+    expect(text).toContain('AUTH_SECRET');
+  });
+
+  it('executes /auth/callback with intent: login, setting session cookie with zero claim transaction', async () => {
+    const secret = 'test-secret-32-chars-long-key-1!';
+    const loginState = await generateSignedState('', secret, 'login');
+
+    let dbBatchCalled = false;
+    const mockEnv = {
+      AUTH_SECRET: secret,
+      GITHUB_CLIENT_ID: 'client123',
+      GITHUB_CLIENT_SECRET: 'secret123',
+      ENVIRONMENT: 'production',
+      DOMAIN: 'githoot.com',
+      DB: {
+        prepare: () => ({ bind: () => ({ first: async () => null, all: async () => ({ results: [] }) }) }),
+        batch: async () => { dbBatchCalled = true; }
+      },
+      CACHE_KV: { get: async () => null, put: async () => null, delete: async () => null }
+    } as unknown as Env;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('github.com/login/oauth/access_token')) {
+        return new Response(JSON.stringify({ access_token: 'gho_mock_token_123' }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (url.includes('api.github.com/user')) {
+        return new Response(JSON.stringify({
+          id: 88888,
+          login: 'login_only_dev',
+          name: 'Login Only',
+          avatar_url: 'https://avatars.githubusercontent.com/u/88888'
+        }), { headers: { 'Content-Type': 'application/json' } });
+      }
+      return originalFetch(input);
+    };
+
+    try {
+      const res = await app.fetch(new Request(`http://localhost/auth/callback?code=mock_code&state=${encodeURIComponent(loginState)}`), mockEnv);
+      // Status 302 redirect to profile
+      expect(res.status).toBe(302);
+      const location = res.headers.get('Location') || '';
+      expect(location).toBe('/login_only_dev');
+      expect(location.includes('hatch=true')).toBe(false);
+      expect(location.includes('guardian_id=')).toBe(false);
+
+      // Session cookie is set with Secure; HttpOnly; SameSite=Lax
+      const cookie = res.headers.get('Set-Cookie') || '';
+      expect(cookie).toContain('githoot_session=');
+      expect(cookie).toContain('HttpOnly');
+      expect(cookie).toContain('Secure');
+
+      // DB batch (claim transaction) was NEVER called
+      expect(dbBatchCalled).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('ensures consecutive 403 fallback requests hit cache_fresh on v2 schema', async () => {
+    const store: Record<string, string> = {};
+    const mockKv = {
+      get: async (key: string, type: string) => {
+        const raw = store[key];
+        if (!raw) return null;
+        return type === 'json' ? JSON.parse(raw) : raw;
+      },
+      put: async (key: string, val: string) => {
+        store[key] = val;
+      }
+    };
+
+    const mockEnv = {
+      CACHE_KV: mockKv,
+      DB: { prepare: () => ({ bind: () => ({ first: async () => null }) }) },
+      ENVIRONMENT: 'test',
+      DOMAIN: 'githoot.com',
+      CDN_DOMAIN: 'cdn.githoot.com',
+      EARLY_ACCESS_TOTAL_SLOTS: '100',
+      AI_MODEL_TIER: 'nano-banana'
+    } as unknown as Env;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('api.github.com/users/rate_limited_dev')) {
+        return new Response('rate limit exceeded', { status: 403 });
+      }
+      if (url.includes('github.com/rate_limited_dev')) {
+        // Scrape HTML
+        const html = `<html><head><meta property="profile:username" content="rate_limited_dev"></head><body><div data-scope-id="10101"><span class="p-nickname">rate_limited_dev</span><img class="avatar-user" src="https://avatars.githubusercontent.com/u/10101" alt="avatar" /></div></body></html>`;
+        return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html' } });
+      }
+      return originalFetch(input);
+    };
+
+    try {
+      // First request: triggers 403 scrape fallback and writes to KV
+      const profile1 = await resolveGitHubProfile('rate_limited_dev', mockEnv);
+      expect(profile1.source).toBe('github_live');
+      expect(Array.isArray(profile1.activities)).toBe(true);
+      expect(Array.isArray(profile1.highlighted_repos)).toBe(true);
+
+      // Second request: MUST hit cache_fresh because v2 activities schema check passes
+      const profile2 = await resolveGitHubProfile('rate_limited_dev', mockEnv);
+      expect(profile2.source).toBe('cache_fresh');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

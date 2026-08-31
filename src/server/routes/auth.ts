@@ -110,7 +110,7 @@ authRouter.get('/me', async (c) => {
 
   const secret = c.env.AUTH_SECRET;
   if (!secret) {
-    return c.json({ authenticated: false, user: null });
+    return c.text('AUTH_SECRET not configured on server.', 500);
   }
 
   const sessionToken = decodeURIComponent(match[1]);
