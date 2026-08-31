@@ -348,33 +348,31 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   "{profile.guardian.mood_description || profile.mood?.description || 'Đang khỏe mạnh và chăm chỉ bảo vệ các repositories của bạn.'}"
                 </p>
 
-                {/* Honest XP Progression Bar */}
+                {/* Honest Raw Experience & Progression Stats */}
                 <div style={{
-                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '8px',
+                  padding: '8px 14px',
+                  margin: '0 auto 10px auto',
                   maxWidth: '320px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '9999px',
-                  padding: '3px',
                   boxSizing: 'border-box'
                 }}>
-                  <div style={{
-                    width: `${Math.min(100, Math.max(0, (profile.guardian.experience || 0) % 100))}%`,
-                    height: '6px',
-                    borderRadius: '9999px',
-                    background: 'linear-gradient(90deg, #00f0ff, #ff2a85)',
-                    boxShadow: (profile.guardian.experience || 0) > 0 ? '0 0 8px rgba(0, 240, 255, 0.5)' : 'none',
-                    transition: 'width 0.3s ease'
-                  }} />
-                </div>
-                <div style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: '10px',
-                  color: '#8b9bb4',
-                  marginTop: '6px',
-                  textAlign: 'center'
-                }}>
-                  EXPERIENCE: {profile.guardian.experience || 0} EXP · LEVEL {profile.guardian.level || 1} · SHIELDING {profile.public_repos} REPOSITORIES
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#00f0ff', fontWeight: 800 }}>
+                    LVL {profile.guardian.level || 1}
+                  </span>
+                  <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#c8d6e5', fontWeight: 700 }}>
+                    {profile.guardian.experience || 0} RAW EXP
+                  </span>
+                  <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#8b9bb4' }}>
+                    {profile.public_repos} REPOS
+                  </span>
                 </div>
               </div>
             ) : (

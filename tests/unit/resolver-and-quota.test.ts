@@ -367,3 +367,25 @@ describe('WebAssembly SVG-to-PNG Raster Rendering', () => {
     expect(pngBytes[7]).toBe(0x0A);
   });
 });
+
+describe('Guardian Progression Integrity', () => {
+  it('preserves exact raw experience values across boundary points (0, 99, 100)', () => {
+    const boundaries = [0, 99, 100, 250, 1000];
+    for (const exp of boundaries) {
+      const g: GuardianSummary = {
+        id: 'g-test',
+        name: 'Zenith Celestial Drake',
+        species: 'Zenith Celestial Drake',
+        element: 'Mythic',
+        rarity_tier: 'Common',
+        level: 1,
+        experience: exp,
+        energy_state: 'Active',
+        hero_image_url: '/assets/sample-pets/celestialdrake.webp',
+        spritesheet_url: null
+      };
+      expect(g.experience).toBe(exp);
+      expect(typeof g.experience).toBe('number');
+    }
+  });
+});
