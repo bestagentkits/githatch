@@ -14,7 +14,7 @@ on:
 jobs:
   quality-gates:
     runs-on: ubuntu-latest
-    name: Typecheck, Vitest, Autonomous QA & Build
+    name: Typecheck, Unit Tests, Determinism & Build
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -30,13 +30,16 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Run Unit Tests
-        run: npx vitest run
-
-      - name: Run Autonomous QA Suite
-        run: npm test
-
       - name: Build Project
         run: npm run build
         env:
           NODE_ENV: production
+
+      - name: Run Unit Tests
+        run: npx vitest run tests/unit
+
+      - name: Run Determinism & CLI Contract Tests
+        run: node --test .agents/skills/githoot-hatch/scripts/tests/determinism.test.mjs
+
+      - name: Verify Bundle Provenance
+        run: node scripts/bundle-provenance.mjs verify

@@ -10,10 +10,11 @@ describe('Phase 7: Deploy Provenance, Staging & CI Gates', () => {
   it('records and verifies single-source bundle provenance hash accurately', async () => {
     // @ts-ignore
     const { recordBundleProvenance, verifyBundleProvenance } = await import('../../scripts/bundle-provenance.mjs');
-    const tempWorkerPath = path.resolve(process.cwd(), 'dist-worker/test-artifact.js');
-    const tempProvPath = path.resolve(process.cwd(), 'dist-worker/test-prov.json');
+    const tempDir = path.resolve(process.cwd(), 'dist-worker');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+    const tempWorkerPath = path.join(tempDir, 'test-artifact.js');
+    const tempProvPath = path.join(tempDir, 'test-prov.json');
     fs.writeFileSync(tempWorkerPath, 'console.log("GitHoot Authoritative Worker");', 'utf8');
-
     // 1. Record provenance
     const record = recordBundleProvenance('dist-worker/test-artifact.js', 'dist-worker/test-prov.json');
     expect(record.sha256.length).toBe(64);
