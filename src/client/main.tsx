@@ -165,9 +165,9 @@ function App() {
   }, [resolveRoute]);
 
   const handleHatchReady = async () => {
-    if (!profileUsername) return;
+    if (!routeState.profileUsername) return;
     try {
-      const res = await fetch(`/api/profile/${encodeURIComponent(profileUsername)}`);
+      const res = await fetch(`/api/profile/${encodeURIComponent(routeState.profileUsername)}`);
       if (res.ok) {
         const data = (await res.json()) as ResolvedProfile;
         if (data.guardian) {
@@ -202,10 +202,10 @@ function App() {
         return <DocsPage />;
       case '/hatch/wait':
       case '/hatch/reveal':
-        return profileUsername ? (
+        return routeState.profileUsername ? (
           <HatchWaitPage
-            username={profileUsername}
-            guardianId={hatchGuardianId || ''}
+            username={routeState.profileUsername}
+            guardianId=""
             onReady={handleHatchReady}
           />
         ) : (
@@ -263,8 +263,8 @@ function App() {
           isOpen={hatchOpen}
           onClose={() => {
             setHatchOpen(false);
-            if (profileUsername) {
-              handleRouteChange(`/${encodeURIComponent(profileUsername)}`);
+            if (routeState.profileUsername) {
+              handleRouteChange(`/${encodeURIComponent(routeState.profileUsername)}`);
             }
           }}
         />

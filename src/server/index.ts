@@ -12,7 +12,7 @@ import { ogRouter } from './routes/og';
 import { handleQueueBatch, type GenerationQueueMessage } from './queue/generation-worker';
 import { processProfileRevalidation } from './queue/sync-worker';
 
-const app = new Hono<{ Bindings: Env }>();
+export const app = new Hono<{ Bindings: Env }>();
 
 // Enable CORS
 app.use('*', cors({

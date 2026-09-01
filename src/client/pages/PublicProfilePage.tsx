@@ -279,7 +279,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   style={{ '--pedestal-glow': getRarityGlowColor(profile.guardian.rarity_tier) } as React.CSSProperties}
                 >
                   <img
-                    src={profile.guardian.hero_image_url}
+                    src={profile.guardian.hero_image_url || undefined}
                     alt={profile.guardian.name}
                     className={`guardian-hero-sprite guardian-pet-anim-${(profile.guardian.energy_state || 'active').toLowerCase().replace(/_/g, '-')}`}
                   />

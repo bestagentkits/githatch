@@ -16,7 +16,7 @@ export const HatchWaitPage: React.FC<HatchWaitPageProps> = ({
   guardianId,
   onReady
 }) => {
-  const [progressStep, setProgressStep] = useState('Connecting to Gemini Nano Banana 2 Pipeline...');
+  const [statusMessage, setStatusMessage] = useState('Connecting to Cloudflare AI Queue DAG...');
   const [dots, setDots] = useState('');
   const [isTakingLong, setIsTakingLong] = useState(false);
 
@@ -25,15 +25,9 @@ export const HatchWaitPage: React.FC<HatchWaitPageProps> = ({
       setDots(prev => (prev.length >= 3 ? '' : prev + '.'));
     }, 400);
 
-    const steps = [
-      'Analyzing public commits and language fingerprint...',
-      'Compiling 4x2 Prompt Matrix for Gemini Nano Banana 2...',
-      'Synthesizing Hero Portrait & 7 expressive motion poses...',
-      'Extracting Alpha Mask & applying Green De-Spill filter...',
-      'Distributing WebP assets to Cloudflare R2 CDN...',
-      'Egg is ready to awaken!'
-    ];
-
+    const warnTimer = setTimeout(() => {
+      setIsTakingLong(true);
+    }, 20000);
     let isSubscribed = true;
 
     // Real status polling
@@ -108,11 +102,11 @@ export const HatchWaitPage: React.FC<HatchWaitPageProps> = ({
         border: '1px solid rgba(0,240,255,0.25)',
         padding: '10px 24px',
         borderRadius: '9999px',
-        maxWidth: '560px'
+        maxWidth: '560px',
+        marginBottom: '16px'
       }}>
-        Đang Tinh Luyện Linh Thú Cho @{username}
-      </h1>
-
+        Connecting to Cloudflare AI Queue DAG...
+      </div>
       <p style={{
         fontFamily: "'JetBrains Mono', monospace",
         fontSize: '14px',

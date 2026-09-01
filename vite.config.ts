@@ -55,6 +55,7 @@ export default defineConfig({
   },
   // @ts-ignore
   test: {
+    include: ['tests/**/*.test.ts'],
     server: {
       deps: {
         inline: [/@jsquash\/webp/, /\.wasm$/]
@@ -67,8 +68,5 @@ export default defineConfig({
     rollupOptions: {
       input: 'index.html'
     }
-  },
-  test: {
-    include: ['tests/**/*.test.ts']
   }
 });

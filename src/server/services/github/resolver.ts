@@ -3,7 +3,7 @@
 // (src/server/services/github/resolver.ts)
 // ============================================================================
 
-import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary, TelemetrySnapshot, MetricProvenance, AggregateStats } from '../../types';
+import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary, TelemetrySnapshot, MetricProvenance, AggregateStats, GitHubRepo, UserActivity } from '../../types';
 import { getHealthyGitHubToken, recordTokenResponse } from './token-pool';
 import { deriveGuardianDNA } from '../dna/seed';
 import { calculateGuardianMood } from '../progression/mood-engine';

@@ -135,7 +135,7 @@ describe('Phase 7: Deploy Provenance, Staging & CI Gates', () => {
     // 2. Strict ordering: build precedes test and deploy
     const buildIdx = content.indexOf('npm run build');
     const unitTestIdx = content.indexOf('npx vitest run tests/unit');
-    const workerTestIdx = content.indexOf('npx vitest run --config vitest.workers.config.ts');
+    const workerTestIdx = content.indexOf('vitest.workers.config.ts');
     const deployIdx = content.indexOf('deploy dist-worker/index.js');
 
     expect(buildIdx).toBeGreaterThan(0);

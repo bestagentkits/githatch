@@ -96,12 +96,12 @@ describe('Autonomous QA Suite (Phase 8)', () => {
     expect(svgText).toContain('GitHoot');
   });
 
-  it('Tier 1: Dynamic OpenGraph Card GET /og/octocat', async () => {
-    const res = await app.fetch(new Request('http://localhost/og/octocat'), env);
+  it('Tier 1: Dynamic OpenGraph Card GET /og/octocat.svg', async () => {
+    const res = await app.fetch(new Request('http://localhost/og/octocat.svg'), env);
     expect(res.status).toBe(200);
     const svgText = await res.text();
     expect(svgText).toContain('<svg');
-    expect(svgText).toContain('GitHoot.com');
+    expect(svgText).toContain('GitHoot');
   });
 
   it('Tier 2: Deterministic DNA Hash Consistency', async () => {

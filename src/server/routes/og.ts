@@ -96,7 +96,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 const MAX_HERO_BYTES = 3 * 1024 * 1024;
 
-export async function getGuardianImageDataUri(heroUrl: string | undefined, env: Env, reqUrl: string): Promise<string | null> {
+export async function getGuardianImageDataUri(heroUrl: string | null | undefined, env: Env, reqUrl: string): Promise<string | null> {
   if (!heroUrl) return null;
   try {
     // 1. Local deterministic sample-pet asset served by the Pages ASSETS binding.

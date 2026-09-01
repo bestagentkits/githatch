@@ -221,6 +221,8 @@ export interface GuardianSummary {
   experience: number;
   energy_state: string;
   manifest_url?: string | null;
+  mood_title?: string;
+  mood_description?: string;
 }
 
 export interface EarlyAccessStatus {

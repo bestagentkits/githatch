@@ -871,8 +871,9 @@ section {
   30%, 50%, 70% { transform: translate3d(-8px, 7px, 0) rotate(-1deg); }
   40%, 60% { transform: translate3d(8px, -5px, 0) rotate(0.8deg); }
   100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+}
+
 .scrubber-slider {
-  flex: 1;
   accent-color: var(--accent-cyan);
   cursor: pointer;
   min-height: 44px;
