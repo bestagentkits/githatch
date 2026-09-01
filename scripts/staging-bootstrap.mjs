@@ -241,14 +241,14 @@ export async function verifyOrProvisionStaging(
   }
 
   // Apply D1 Migrations on staging
-  const migrateResult = runner(`d1 migrations apply ${STAGING_RESOURCES.d1} --env staging --remote`);
+  const migrateResult = runner(`d1 migrations apply ${STAGING_RESOURCES.d1} --config wrangler.staging.toml --remote`);
   if (!migrateResult.ok) {
     failures.push(`D1 remote migration failed on ${STAGING_RESOURCES.d1}: ${migrateResult.output}`);
   }
 
   // Query and verify exact applied migration versions against disk files
   const expectedMigrations = getExpectedMigrationFiles();
-  const listMigQuery = runner(`d1 execute ${STAGING_RESOURCES.d1} --env staging --remote --command "SELECT name, applied_at FROM d1_migrations ORDER BY id ASC;" --json`);
+  const listMigQuery = runner(`d1 execute ${STAGING_RESOURCES.d1} --config wrangler.staging.toml --remote --command "SELECT name, applied_at FROM d1_migrations ORDER BY id ASC;" --json`);
   if (listMigQuery.ok) {
     try {
       const parsed = JSON.parse(listMigQuery.output);
@@ -707,7 +707,7 @@ export async function verifyOrProvisionStaging(
           // Enforce Atomic D1 Daily Budget Reservation before calling Gemini API
           const todayStr = new Date().toISOString().split('T')[0];
           const reserveQuery = `INSERT INTO ai_budget_ledger (day, reserved_cents, settled_cents, cap_cents, total_calls, updated_at) VALUES ('${todayStr}', 25, 0, 2000, 1, unixepoch()) ON CONFLICT(day) DO UPDATE SET reserved_cents = reserved_cents + 25, total_calls = total_calls + 1, updated_at = unixepoch() WHERE (reserved_cents + settled_cents + 25) <= cap_cents;`;
-          const reserveRes = runner(`d1 execute ${STAGING_RESOURCES.d1} --env staging --remote --command "${reserveQuery}" --json`);
+        const reserveRes = runner(`d1 execute ${STAGING_RESOURCES.d1} --config wrangler.staging.toml --remote --command "${reserveQuery}" --json`);
         let reservationGranted = false;
         if (reserveRes.ok) {
           try {
@@ -782,7 +782,7 @@ export async function verifyOrProvisionStaging(
           } finally {
             // Settle budget reservation in D1: book full 25 cents per attempted canary request (fail-closed if settlement fails)
             const settleQuery = `UPDATE ai_budget_ledger SET reserved_cents = MAX(0, reserved_cents - 25), settled_cents = settled_cents + 25, updated_at = unixepoch() WHERE day = '${todayStr}';`;
-            const settleRes = runner(`d1 execute ${STAGING_RESOURCES.d1} --env staging --remote --command "${settleQuery}" --json`);
+            const settleRes = runner(`d1 execute ${STAGING_RESOURCES.d1} --config wrangler.staging.toml --remote --command "${settleQuery}" --json`);
             if (!settleRes.ok) {
               failures.push(`Staging Gemini canary settlement failed in D1: ${settleRes.output}`);
             }
@@ -821,9 +821,12 @@ export async function verifyOrProvisionStaging(
 }
 
 if (process.argv[1] && process.argv[1].endsWith('staging-bootstrap.mjs')) {
-  verifyOrProvisionStaging('current').then(result => {
+  const label = process.argv[2] || 'run3';
+  verifyOrProvisionStaging(label).then(result => {
     if (!result.ok) {
+      console.error('Staging bootstrap verification failed:', result.failures);
       process.exit(1);
     }
+    console.log(`✓ Staging bootstrap verification succeeded! Saved manifest for ${label}.`);
   });
 }
