@@ -5,12 +5,16 @@ on:
     branches:
       - main
       - master
+  pull_request:
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
-    name: Build, Test, Migrate, Set Secrets & Deploy
+    name: Build, Typecheck, Unit & workerd Integration Tests
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -35,13 +39,35 @@ jobs:
         run: npx vitest run tests/unit
 
       - name: Run Workers Runtime Integration Test Suite (workerd)
-        run: npx vitest run --config vitest.workers.config.ts
+        run: npx vitest run tests/integration/harness.smoke.test.ts --config vitest.workers.config.ts
 
       - name: Run Determinism & CLI Contract Tests (Node Native)
         run: node --test .agents/skills/githoot-hatch/scripts/tests/determinism.test.mjs
 
       - name: Verify Pre-Deploy Local Bundle Provenance
         run: node scripts/bundle-provenance.mjs verify
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    name: Migrate, Set Secrets & Deploy to Cloudflare Edge
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Single-Source Artifacts & Record Provenance
+        run: npm run build
+        env:
+          NODE_ENV: production
 
       - name: Fail-Closed Secrets Preflight Gate (All Required Roles & Components)
         env:
