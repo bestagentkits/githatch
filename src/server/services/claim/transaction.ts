@@ -187,7 +187,11 @@ export async function executeClaimTransaction(
     }
   }
   try {
-    await env.CACHE_KV.delete(`gh:profile:${authUser.login.toLowerCase()}`);
+    await Promise.all([
+      env.CACHE_KV.delete(`gh:profile:v3:${authUser.login.toLowerCase()}`),
+      env.CACHE_KV.delete(`gh:profile:v2:${authUser.login.toLowerCase()}`),
+      env.CACHE_KV.delete(`gh:profile:${authUser.login.toLowerCase()}`)
+    ]);
   } catch {
     // KV delete non-fatal
   }

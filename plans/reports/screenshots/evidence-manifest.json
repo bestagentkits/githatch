@@ -1,23 +1,120 @@
 {
-  "timestamp": "2026-08-29T18:35:00.000Z",
+  "timestamp": "2026-08-30T09:35:00.000Z",
   "domain": "https://githoot.com",
-  "dns_apex_ip": ["104.21.21.191", "172.67.200.12"],
   "cdn": "https://cdn.githoot.com",
   "pages_project": "https://githoot.pages.dev",
   "design_system": "Option 1: Cyber-Arcade Fantasy",
-  "sample_pets_loaded": ["emberfox", "neonbyte", "abyssal", "verdant"],
-  "screenshots_captured": [
-    "01-desktop-1440px.png",
-    "02-tablet-portrait-768px.png",
-    "03-tablet-landscape-1024px.png",
-    "04-mobile-portrait-375px.png",
-    "05-mobile-gacha-modal-375px.png"
+  "verified_urls": [
+    {
+      "url": "https://github.com/bestagentkits/githatch",
+      "status": 200,
+      "purpose": "Configured repository origin for Footer conditional slot",
+      "verified_at": "2026-08-30T07:44:00Z"
+    },
+    {
+      "url": "https://agentkit.best",
+      "status": 200,
+      "purpose": "Creator primary project",
+      "verified_at": "2026-08-30T07:44:00Z"
+    },
+    {
+      "url": "https://nextlevelbuilder.io",
+      "status": 200,
+      "purpose": "Creator ecosystem link",
+      "verified_at": "2026-08-30T07:44:00Z"
+    },
+    {
+      "url": "https://goclaw.sh",
+      "status": 200,
+      "purpose": "Creator autonomous crawling engine",
+      "verified_at": "2026-08-30T07:44:00Z"
+    },
+    {
+      "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "status": 200,
+      "purpose": "Creator open source skill repository",
+      "verified_at": "2026-08-30T07:44:00Z"
+    },
+    {
+      "url": "https://cdn.zuey.me/avatar.png",
+      "status": 200,
+      "content_type": "image/png",
+      "source_bytes": 282949,
+      "purpose": "Zuey avatar source for local 96x96 WebP derivation",
+      "verified_at": "2026-08-30T07:44:00Z"
+    }
   ],
-  "viewports_verified": [
-    "Desktop 1440x900 (Landscape 2-col)",
-    "Tablet 768x1024 (Portrait 1-col stacked)",
-    "Tablet 1024x768 (Landscape 2-col)",
-    "Mobile 375x667 (Portrait 1-col touch-ready)",
-    "Mobile 375x667 (Gacha Reveal Modal scrollable viewport)"
+  "derivative_assets": [
+    {
+      "file": "assets/sample-pets/neonbyte-poster.webp",
+      "bytes": 37848,
+      "cap": 40000,
+      "width": 460,
+      "height": 460,
+      "purpose": "S1 Hero single critical-path image"
+    },
+    {
+      "file": "assets/sample-pets/zuey-avatar-96.webp",
+      "bytes": 2350,
+      "cap": 12000,
+      "width": 96,
+      "height": 96,
+      "purpose": "S6 Creator block lazy WebP avatar"
+    },
+    {
+      "file": "assets/sample-pets/neonbyte-landing16-strip.webp",
+      "bytes": 286362,
+      "frames": 16,
+      "purpose": "S2 Signature demo lazy-loaded on intersection"
+    }
+  ],
+  "bundle_measurements": {
+    "dist_total_bytes": 24059188,
+    "previous_unfiltered_bytes": 34876151,
+    "dead_weight_excluded_bytes": 10816963,
+    "critical_client_entry": {
+      "html_raw_bytes": 847,
+      "html_gzip_bytes": 499,
+      "css_raw_bytes": 20778,
+      "css_gzip_bytes": 4808,
+      "js_raw_bytes": 277225,
+      "js_gzip_bytes": 81041,
+      "total_client_gzip_bytes": 86348,
+      "baseline_client_gzip_bytes": 77897,
+      "gzip_delta_bytes": 8451,
+      "gzip_increase_itemization": "Added Cyber-Arcade interactive 8-section UI, 16-frame superhero landing scrubber controls, Dot Matrix Genesis grid, and non-PII analytics telemetry runtime."
+    }
+  },
+  "touch_target_measurements": {
+    "brand_height": 44,
+    "scrubber_height": 44,
+    "chip_height": 44,
+    "min_footer_link_height": 44,
+    "all_pass_44px": true
+  },
+  "accessibility_and_motion": {
+    "document_lang": "en",
+    "reduced_motion_player_animation": "none",
+    "reduced_motion_player_position": "-3840px 0px",
+    "reduced_motion_egg_wobble_suppressed": true,
+    "reduced_motion_scroll_behavior": "auto"
+  },
+  "screenshots_captured": [
+    "landing-desktop-1440-first-viewport.png",
+    "landing-desktop-1440-full.png",
+    "landing-tablet-768-first-viewport.png",
+    "landing-tablet-768-full.png",
+    "landing-mobile-375-first-viewport.png",
+    "landing-mobile-375-full.png",
+    "landing-mobile-375-menu-open.png",
+    "landing-375x812-reduced-motion.png",
+    "landing-keyboard-focus.png",
+    "landing-live-quota.png",
+    "live-home-healthy-d1.png",
+    "live-home-full-verified.png",
+    "live-page-explore.png",
+    "live-page-design.png",
+    "live-page-docs.png",
+    "live-page-octocat.png"
   ]
 }

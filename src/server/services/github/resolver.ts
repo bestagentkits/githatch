@@ -3,9 +3,10 @@
 // (src/server/services/github/resolver.ts)
 // ============================================================================
 
-import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary, TelemetrySnapshot, MetricProvenance } from '../../types';
+import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary, TelemetrySnapshot, MetricProvenance, AggregateStats } from '../../types';
 import { getHealthyGitHubToken, recordTokenResponse } from './token-pool';
 import { deriveGuardianDNA } from '../dna/seed';
+import { calculateGuardianMood } from '../progression/mood-engine';
 
 export class UserNotFoundError extends Error {
   constructor(username: string) {
@@ -20,9 +21,36 @@ interface CachedEntry {
   notFound?: boolean;
 }
 
+export function normalizeGuardianSummary(guardian: GuardianSummary | null): GuardianSummary | null {
+  if (!guardian) return null;
+
+  let heroUrl = guardian.hero_image_url;
+  if (heroUrl && heroUrl.includes('/assets/sample-pets/')) {
+    const speciesMap: Record<string, string> = {
+      'Ignis Emberfox': 'emberfox',
+      'Aether Neon Byte': 'neonbyte',
+      'Nox Abyssal Pearl': 'abyssal',
+      'Sylvan Verdant Golem': 'verdant',
+      'Helios Solar Griffin': 'solargriffin',
+      'Astral Void Stalker': 'voidstalker',
+      'Ferrum Rust Golem': 'rustgolem',
+      'Zenith Celestial Drake': 'celestialdrake'
+    };
+    const slug = speciesMap[guardian.species] || speciesMap[guardian.name];
+    if (slug) {
+      heroUrl = `/assets/sample-pets/${slug}.webp`;
+    } else {
+      heroUrl = heroUrl.replace(/\.jpg$/, '.webp');
+    }
+  }
+  return {
+    ...guardian,
+    hero_image_url: heroUrl
+  };
+}
 export async function resolveGitHubProfile(username: string, env: Env): Promise<ResolvedProfile> {
   const cleanUsername = username.trim().toLowerCase();
-  const cacheKey = `gh:profile:${cleanUsername}`;
+  const cacheKey = `gh:profile:v3:${cleanUsername}`;
 
   // 1. Check Cloudflare KV Cache
   let cached: CachedEntry | null = null;
@@ -39,20 +67,32 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     throw new UserNotFoundError(cleanUsername);
   }
 
-  // Fresh cache hit (< 1 hour)
-  if (cached?.data && now - cached.timestamp < 3600 * 1000) {
-    return { ...cached.data, source: 'cache_fresh' };
+  // Fresh cache hit (< 1 hour) with schema v3 validation.
+  // aggregate_stats is ALWAYS overlaid from D1 (authoritative) so owner withdrawal
+  // takes effect immediately, independent of the profile cache window.
+  if (cached?.data && Array.isArray(cached.data.activities) && now - cached.timestamp < 3600 * 1000) {
+    const data = cached.data;
+    return {
+      ...data,
+      guardian: normalizeGuardianSummary(data.guardian),
+      aggregate_stats: await getAggregateStatsFromDb(data.github_user_id, env),
+      source: 'cache_fresh'
+    };
   }
 
-  // Stale cache hit (1 hour to 24 hours): Return stale immediately, enqueue revalidation
-  if (cached?.data && now - cached.timestamp < 86400 * 1000) {
+  // Stale cache hit (1 hour to 24 hours): Return stale immediately, enqueue revalidation.
+  if (cached?.data && Array.isArray(cached.data.activities) && now - cached.timestamp < 86400 * 1000) {
     if (env.AI_QUEUE) {
       env.AI_QUEUE.send({ type: 'REVALIDATE_PROFILE', username: cleanUsername }).catch(() => {});
     }
-    return { ...cached.data, source: 'cache_stale' };
+    const data = cached.data;
+    return {
+      ...data,
+      guardian: normalizeGuardianSummary(data.guardian),
+      aggregate_stats: await getAggregateStatsFromDb(data.github_user_id, env),
+      source: 'cache_stale'
+    };
   }
-
-  // 2. Fetch from GitHub API via Token Pool
   try {
     const token = await getHealthyGitHubToken(env);
     const headers: Record<string, string> = {
@@ -85,6 +125,7 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
       if (scraped && scraped.userId > 0) {
         const dna = await deriveGuardianDNA(scraped.userId, cleanUsername, scraped.topLanguages);
         const guardianRecord = await getGuardianFromDb(scraped.userId, env);
+        const aggregateStats = await getAggregateStatsFromDb(scraped.userId, env);
         const profile: ResolvedProfile = {
           github_user_id: scraped.userId,
           login: cleanUsername,
@@ -101,7 +142,11 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
           claimed: guardianRecord !== null,
           guardian: guardianRecord,
           source: 'github_live',
-          last_synced_at: now
+          last_synced_at: now,
+          activities: [],
+          highlighted_repos: [],
+          active_repos: [],
+          aggregate_stats: aggregateStats
         };
         try {
           await env.CACHE_KV.put(cacheKey, JSON.stringify({ timestamp: now, data: profile }), {
@@ -119,33 +164,161 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
 
     const rawUser = (await res.json()) as GitHubUserRaw;
 
-    // Fetch top languages and stars from user repos
+    // Fetch top languages, stars, highlighted repos & active repos from user repos
     let topLanguages: string[] = [];
     let totalStars = 0;
+    let highlightedRepos: GitHubRepo[] = [];
+    let activeRepos: GitHubRepo[] = [];
+    let latestRepoPushTime = 0;
+
     try {
       const reposRes = await fetch(`https://api.github.com/users/${encodeURIComponent(cleanUsername)}/repos?per_page=30&sort=updated`, { headers });
       if (reposRes.ok) {
-        const repos = (await reposRes.json()) as Array<{ language: string | null; stargazers_count?: number }>;
+        const repos = (await reposRes.json()) as Array<{
+          name: string;
+          full_name: string;
+          description: string | null;
+          html_url: string;
+          language: string | null;
+          stargazers_count?: number;
+          forks_count?: number;
+          fork?: boolean;
+          private?: boolean;
+          pushed_at?: string;
+          updated_at?: string;
+        }>;
         const langCounts: Record<string, number> = {};
+        const mappedRepos: GitHubRepo[] = [];
+
         for (const r of repos) {
           if (r.language) {
             langCounts[r.language] = (langCounts[r.language] || 0) + 1;
           }
-          if (typeof r.stargazers_count === 'number') {
-            totalStars += r.stargazers_count;
+          const stars = typeof r.stargazers_count === 'number' ? r.stargazers_count : 0;
+          totalStars += stars;
+
+          const pushTime = r.pushed_at ? new Date(r.pushed_at).getTime() : (r.updated_at ? new Date(r.updated_at).getTime() : 0);
+          if (pushTime > latestRepoPushTime) {
+            latestRepoPushTime = pushTime;
           }
+
+          mappedRepos.push({
+            name: r.name,
+            full_name: r.full_name || `${cleanUsername}/${r.name}`,
+            description: r.description || null,
+            html_url: r.html_url || `https://github.com/${cleanUsername}/${r.name}`,
+            stargazers_count: stars,
+            forks_count: typeof r.forks_count === 'number' ? r.forks_count : 0,
+            language: r.language || null,
+            is_private: Boolean(r.private),
+            is_fork: Boolean(r.fork),
+            updated_at: r.pushed_at || r.updated_at
+          });
         }
         topLanguages = Object.keys(langCounts).sort((a, b) => (langCounts[b] ?? 0) - (langCounts[a] ?? 0)).slice(0, 3);
+        
+        // Highlighted: top starred repos (non-fork preferred)
+        highlightedRepos = [...mappedRepos]
+          .sort((a, b) => {
+            if (a.is_fork !== b.is_fork) return a.is_fork ? 1 : -1;
+            return b.stargazers_count - a.stargazers_count;
+          })
+          .slice(0, 4);
+
+        // Active: most recently pushed / updated
+        activeRepos = [...mappedRepos]
+          .sort((a, b) => {
+            const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+            const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+            return timeB - timeA;
+          })
+          .slice(0, 4);
       }
     } catch {
       // Non-blocking
     }
 
+    // Fetch recent public activities
+    let activities: UserActivity[] = [];
+    let latestEventTime = 0;
+    try {
+      const eventsRes = await fetch(`https://api.github.com/users/${encodeURIComponent(cleanUsername)}/events/public?per_page=10`, { headers });
+      if (eventsRes.ok) {
+        const rawEvents = (await eventsRes.json()) as Array<{
+          id: string;
+          type: string;
+          repo?: { name: string; url: string };
+          created_at: string;
+          payload?: {
+            commits?: Array<{ message: string }>;
+            action?: string;
+            ref_type?: string;
+            ref?: string;
+            pull_request?: { number?: number; title?: string };
+            issue?: { number?: number; title?: string };
+          };
+        }>;
+
+        for (const ev of rawEvents) {
+          const evTime = new Date(ev.created_at).getTime();
+          if (evTime > latestEventTime) {
+            latestEventTime = evTime;
+          }
+          const repoName = ev.repo?.name || `${cleanUsername}/repo`;
+          let summary = 'Activity in repository';
+          
+          if (ev.type === 'PushEvent') {
+            const count = ev.payload?.commits?.length || 1;
+            const msg = ev.payload?.commits?.[0]?.message?.split('\n')[0] || '';
+            summary = msg ? `Pushed ${count} commit${count > 1 ? 's' : ''}: "${msg.slice(0, 50)}${msg.length > 50 ? '...' : ''}"` : `Pushed ${count} commit${count > 1 ? 's' : ''}`;
+          } else if (ev.type === 'PullRequestEvent') {
+            const action = ev.payload?.action || 'updated';
+            summary = `${action.charAt(0).toUpperCase() + action.slice(1)} Pull Request #${ev.payload?.pull_request?.number || ''}`;
+          } else if (ev.type === 'IssuesEvent') {
+            const action = ev.payload?.action || 'updated';
+            summary = `${action.charAt(0).toUpperCase() + action.slice(1)} Issue #${ev.payload?.issue?.number || ''}`;
+          } else if (ev.type === 'CreateEvent') {
+            summary = `Created ${ev.payload?.ref_type || 'branch'} ${ev.payload?.ref || ''}`.trim();
+          } else if (ev.type === 'WatchEvent') {
+            summary = 'Starred repository';
+          } else if (ev.type === 'ForkEvent') {
+            summary = 'Forked repository';
+          } else if (ev.type === 'ReleaseEvent') {
+            summary = 'Published a release';
+          }
+
+          activities.push({
+            id: ev.id,
+            type: ev.type,
+            repo: repoName,
+            repo_url: `https://github.com/${repoName}`,
+            summary,
+            created_at: ev.created_at
+          });
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
+
+    // Calculate Guardian Mood based on real coding activity timestamps (no synthetic timestamps)
+    const lastActiveTimestamp = Math.max(latestEventTime, latestRepoPushTime);
+    const mood = lastActiveTimestamp > 0 ? calculateGuardianMood(lastActiveTimestamp) : undefined;
+
     // Derive deterministic DNA
     const dna = await deriveGuardianDNA(rawUser.id, rawUser.login, topLanguages);
 
-    // Check D1 database for existing Guardian
-    const guardianRecord = await getGuardianFromDb(rawUser.id, env);
+    // Check D1 database for existing Guardian and owner-consented aggregate stats
+    let guardianRecord = await getGuardianFromDb(rawUser.id, env);
+    const aggregateStats = await getAggregateStatsFromDb(rawUser.id, env);
+    if (guardianRecord) {
+      guardianRecord = {
+        ...guardianRecord,
+        energy_state: mood ? mood.state : guardianRecord.energy_state,
+        mood_title: mood ? mood.title : undefined,
+        mood_description: mood ? mood.description : undefined
+      };
+    }
 
     const profile: ResolvedProfile = {
       github_user_id: rawUser.id,
@@ -163,9 +336,19 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
       claimed: guardianRecord !== null,
       guardian: guardianRecord,
       source: 'github_live',
-      last_synced_at: now
+      last_synced_at: now,
+      activities,
+      highlighted_repos: highlightedRepos,
+      active_repos: activeRepos,
+      mood: mood ? {
+        state: mood.state,
+        title: mood.title,
+        description: mood.description,
+        badgeColor: mood.badgeColor,
+        recommendedPose: mood.recommendedPose
+      } : undefined,
+      aggregate_stats: aggregateStats
     };
-
     // Save to KV Cache (3 days max)
     try {
       await env.CACHE_KV.put(cacheKey, JSON.stringify({ timestamp: now, data: profile }), {
@@ -187,6 +370,7 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     if (scraped && scraped.userId > 0) {
       const dna = await deriveGuardianDNA(scraped.userId, cleanUsername, scraped.topLanguages);
       const guardianRecord = await getGuardianFromDb(scraped.userId, env);
+      const aggregateStats = await getAggregateStatsFromDb(scraped.userId, env);
       return {
         github_user_id: scraped.userId,
         login: cleanUsername,
@@ -203,7 +387,11 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
         claimed: guardianRecord !== null,
         guardian: guardianRecord,
         source: 'github_live',
-        last_synced_at: now
+        last_synced_at: now,
+        activities: [],
+        highlighted_repos: [],
+        active_repos: [],
+        aggregate_stats: aggregateStats
       };
     }
     return generateDegradedProfile(cleanUsername);
@@ -263,6 +451,33 @@ async function getGuardianFromDb(githubUserId: number, env: Env): Promise<Guardi
       spritesheet_url: isPublished && row.spritesheet_key ? `https://${cdnHost}/${row.spritesheet_key}` : null,
       manifest_url: isPublished && row.manifest_key ? `https://${cdnHost}/${row.manifest_key}` : null
     };
+  } catch {
+    return null;
+  }
+}
+
+export async function getAggregateStatsFromDb(githubUserId: number, env: Env): Promise<AggregateStats | null> {
+  if (!githubUserId || !env.DB) return null;
+  try {
+    const row = await env.DB.prepare(
+      'SELECT contributions_last_year, owned_repositories_total, period_started_at, period_ended_at, refreshed_at FROM github_aggregate_stats WHERE github_user_id = ?'
+    ).bind(githubUserId).first<{
+      contributions_last_year: number;
+      owned_repositories_total: number;
+      period_started_at: number;
+      period_ended_at: number;
+      refreshed_at: number;
+    }>();
+
+    if (!row) return null;
+
+    return {
+      contributions_last_year: row.contributions_last_year,
+      owned_repositories_total: row.owned_repositories_total,
+      period_started_at: new Date(row.period_started_at).toISOString(),
+      period_ended_at: new Date(row.period_ended_at).toISOString(),
+      refreshed_at: new Date(row.refreshed_at).toISOString()
+    };
   } catch (err) {
     console.error('[Resolver] getGuardianFromDb query failed:', err);
     return null;
@@ -287,7 +502,10 @@ export async function generateDegradedProfile(username: string): Promise<Resolve
     claimed: false,
     guardian: null,
     source: 'degraded_seed',
-    last_synced_at: Date.now()
+    last_synced_at: Date.now(),
+    activities: [],
+    highlighted_repos: [],
+    active_repos: []
   };
 }
 
@@ -571,7 +789,6 @@ export async function fetchTelemetrySnapshot(
     provenance
   };
 }
-
 export async function scrapeGitHubPublicProfile(username: string): Promise<{
   userId: number;
   name: string;
@@ -588,9 +805,10 @@ export async function scrapeGitHubPublicProfile(username: string): Promise<{
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
     });
-
-    if (res.status === 404 || !res.ok) return null;
-
+    if (res.status === 404) {
+      throw new UserNotFoundError(username);
+    }
+    if (!res.ok) return null;
     const html = await res.text();
 
     const userIdMatch = html.match(/&quot;profile_user_id&quot;:(\d+)/) || html.match(/data-scope-id="(\d+)"/);
@@ -643,7 +861,8 @@ export async function scrapeGitHubPublicProfile(username: string): Promise<{
       followers,
       topLanguages
     };
-  } catch {
+  } catch (err) {
+    if (err instanceof UserNotFoundError) throw err;
     return null;
   }
 }

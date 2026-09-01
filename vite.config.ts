@@ -67,5 +67,8 @@ export default defineConfig({
     rollupOptions: {
       input: 'index.html'
     }
+  },
+  test: {
+    include: ['tests/**/*.test.ts']
   }
 });

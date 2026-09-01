@@ -20,6 +20,7 @@
   "dependencies": {
     "@hono/zod-validator": "^0.4.3",
     "@jsquash/webp": "^1.5.0",
+    "@resvg/resvg-wasm": "^2.6.2",
     "hono": "^4.7.2",
     "wasm-feature-detect": "^1.9.0",
     "zod": "^3.24.2"

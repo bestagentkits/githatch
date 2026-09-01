@@ -1,10 +1,11 @@
 // ============================================================================
 // GitHoot Design System & Spritesheet Studio (src/client/pages/DesignSystemPage.tsx)
+// Option 1 Cyber-Arcade tokens, typography and studio in English.
 // ============================================================================
 
 import React, { useState } from 'react';
 import type { GuardianSummary } from '../../server/types';
-import { PetSpritesheetPlayer, type PetPose } from '../components/PetSpritesheetPlayer';
+import { PetSpritesheetPlayer } from '../components/PetSpritesheetPlayer';
 import { EggSpritesheetPlayer } from '../components/EggSpritesheetPlayer';
 
 export const DesignSystemPage: React.FC = () => {
@@ -67,36 +68,39 @@ export const DesignSystemPage: React.FC = () => {
         
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', fontWeight: 800, color: '#00f0ff', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>
-            ✦ Option 1: Cyber-Arcade Fantasy ✦
+          <div className="eyebrow" style={{ marginBottom: '12px' }}>
+            <span>✦</span>
+            <span>OPTION 1: CYBER-ARCADE FANTASY ✦ DESIGN TOKENS</span>
+            <span>✦</span>
           </div>
-          <h1 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '36px', fontWeight: 900, marginBottom: '12px' }}>
-            Design System & Spritesheet Studio
+          <h1 style={{ fontFamily: "'Archivo', sans-serif", fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 900, marginBottom: '12px' }}>
+            Design System & Sprite Studio
           </h1>
-          <p style={{ color: '#8b9bb4', fontSize: '15px', maxWidth: '640px', margin: '0 auto' }}>
-            Môi trường thử nghiệm trực tiếp các token màu sắc, typography, hoạt ảnh trứng Canvas và các mẫu Linh thú được sinh bởi <strong>Gemini Nano Banana 2</strong>.
+          <p style={{ color: '#8b9bb4', fontSize: '15px', maxWidth: '640px', margin: '0 auto', lineHeight: 1.6 }}>
+            Live laboratory for visual design tokens, typography scales, pure CSS egg rendering, and Gemini Nano Banana 2 multi-pose companion animations.
           </p>
         </div>
 
         {/* Studio Grid: Pet Player + Egg Simulator */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', marginBottom: '48px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '32px', marginBottom: '48px' }}>
           
           {/* Pet Spritesheet Studio */}
           <div style={{ background: '#0d111a', border: '1px solid rgba(0,240,255,0.15)', borderRadius: '16px', padding: '24px' }}>
             <h3 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '18px', fontWeight: 800, marginBottom: '16px', color: '#00f0ff' }}>
-              1. Gemini Nano Banana 2 Pet Player
+              1. Gemini Nano Banana 2 Sprite Engine
             </h3>
             <PetSpritesheetPlayer guardian={selectedPet} interactive={true} />
 
             {/* Pet Thumbnails Switcher */}
             <div style={{ marginTop: '20px' }}>
               <div style={{ fontSize: '11px', fontFamily: "'JetBrains Mono', monospace", color: '#53627a', marginBottom: '8px' }}>
-                Chọn Linh thú mẫu sinh từ Gemini:
+                Select sample Gemini-generated archetype:
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                 {samplePets.map(p => (
-                  <div
+                  <button
                     key={p.id}
+                    type="button"
                     onClick={() => setSelectedPet(p)}
                     style={{
                       background: selectedPet.id === p.id ? '#1c2637' : '#141b27',
@@ -104,14 +108,15 @@ export const DesignSystemPage: React.FC = () => {
                       borderRadius: '8px',
                       padding: '4px',
                       cursor: 'pointer',
-                      textAlign: 'center'
+                      textAlign: 'center',
+                      fontFamily: 'inherit'
                     }}
                   >
                     <img src={p.hero_image_url || ''} alt={p.name} style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '4px' }} />
                     <div style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", marginTop: '4px', color: '#8b9bb4' }}>
                       {p.name?.split(' ')?.[1] || p.name}
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -120,11 +125,11 @@ export const DesignSystemPage: React.FC = () => {
           {/* Egg Simulator */}
           <div style={{ background: '#0d111a', border: '1px solid rgba(0,240,255,0.15)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <h3 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '18px', fontWeight: 800, marginBottom: '16px', color: '#ff2a85' }}>
-              2. Canvas Egg Spritesheet Simulator
+              2. Pure CSS Egg Simulator
             </h3>
             <EggSpritesheetPlayer archetypeId="neon-byte" />
-            <div style={{ fontSize: '12px', color: '#8b9bb4', marginTop: '16px', textAlign: 'center' }}>
-              Tương tác trực tiếp: Click vào trứng để kích hoạt âm thanh Web Audio và hiệu ứng nứt vỏ.
+            <div style={{ fontSize: '12px', color: '#8b9bb4', marginTop: '16px', textAlign: 'center', maxWidth: '340px' }}>
+              Zero AI and zero image asset download. Tap or click egg to trigger Web Audio sound synthesis and CSS fracture lines.
             </div>
           </div>
 
@@ -133,7 +138,7 @@ export const DesignSystemPage: React.FC = () => {
         {/* Color Palette Tokens Grid */}
         <div style={{ background: '#0d111a', border: '1px solid rgba(0,240,255,0.15)', borderRadius: '16px', padding: '32px' }}>
           <h3 style={{ fontFamily: "'Archivo', sans-serif", fontSize: '20px', fontWeight: 800, marginBottom: '16px' }}>
-            Color Tokens (Cyber-Arcade Standard)
+            Color Tokens (Cyber-Arcade Standard 60/30/10)
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
             <div style={{ background: '#07090e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px' }}>

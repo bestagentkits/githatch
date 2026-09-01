@@ -1,0 +1,34 @@
+name = "githoot-staging"
+compatibility_date = "2025-02-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+# D1 Databases
+[[d1_databases]]
+binding = "DB"
+database_name = "githoot_db_staging"
+database_id = "d9ccb357-a59c-44e7-a50a-236e51991d65"
+migrations_dir = "src/server/db/migrations"
+
+# R2 Object Storage
+[[r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "githoot-staging"
+
+# Workers KV Cache
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "efa9aa71d9104284976966dcbdfb111b"
+
+# Cloudflare Queues (Producer only on Pages)
+[[queues.producers]]
+binding = "AI_QUEUE"
+queue = "githoot-ai-queue-staging"
+
+# Environment Variables
+[vars]
+ENVIRONMENT = "staging"
+DOMAIN = "staging.githoot.com"
+CDN_DOMAIN = "staging-cdn.githoot.com"
+EARLY_ACCESS_TOTAL_SLOTS = "100"
+AI_MODEL_TIER = "nano-banana-pro-preview"

@@ -4,6 +4,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import type { GuardianSummary } from '../../server/types';
+import { track } from '../lib/analytics';
 import { launchConfettiBurst } from '../utils/particles';
 import { SocialSharePanel } from './SocialSharePanel';
 
@@ -26,7 +27,6 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
   const [isShaking, setIsShaking] = useState<boolean>(false);
 
   const stripUrl = guardian.spritesheet_url || '';
-
   useEffect(() => {
     if (isOpen && canvasRef.current) {
       const stopConfetti = launchConfettiBurst(canvasRef.current, getRarityColor(guardian.rarity_tier));
@@ -69,7 +69,6 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
       setTimeout(() => setIsShaking(false), 400);
     }
   };
-
   if (!isOpen) return null;
 
   // Formula: -(k - 1) * 256px
@@ -104,30 +103,32 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
         className={`githoot-modal-card shake-box ${isShaking ? 'active-shake' : ''}`}
         style={{
           border: `2px solid ${getRarityColor(guardian.rarity_tier)}`,
-          boxShadow: `0 0 50px ${getRarityGlow(guardian.rarity_tier)}`
+          boxShadow: `0 0 60px ${getRarityGlow(guardian.rarity_tier)}, 0 20px 60px rgba(0,0,0,0.85)`
         }}
       >
-        {/* Hologram Rarity Header */}
+        {/* Hologram Rarity Header Pill */}
         <div style={{
-          display: 'inline-block',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
           background: getRarityGradient(guardian.rarity_tier),
           color: '#000',
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: '11px',
           fontWeight: 900,
-          padding: '6px 18px',
+          padding: '6px 20px',
           borderRadius: '9999px',
           textTransform: 'uppercase',
-          letterSpacing: '0.1em',
-          marginBottom: '16px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.5)'
+          letterSpacing: '0.12em',
+          marginBottom: '14px',
+          boxShadow: `0 0 20px ${getRarityGlow(guardian.rarity_tier)}`
         }}>
           ★ ★ ★ {guardian.rarity_tier} HATCH REVEALED ★ ★ ★
         </div>
 
         <h2 style={{
           fontFamily: "'Archivo', sans-serif",
-          fontSize: 'clamp(22px, 5vw, 32px)',
+          fontSize: 'clamp(24px, 5vw, 36px)',
           fontWeight: 900,
           color: '#ffffff',
           marginBottom: '4px'
@@ -234,9 +235,11 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
         </div>
 
         {/* Social Share Embedded Section */}
-        <SocialSharePanel username={username} guardian={guardian} />
+        <div style={{ marginBottom: '24px' }}>
+          <SocialSharePanel username={username} guardian={guardian} />
+        </div>
 
-        <div style={{ marginTop: '20px' }}>
+        <div>
           <button
             onClick={onClose}
             className="btn-touch"
@@ -244,18 +247,19 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
               background: '#00f0ff',
               color: '#000',
               border: 'none',
-              padding: '12px 28px',
-              borderRadius: '8px',
+              padding: '14px 32px',
+              borderRadius: '10px',
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: '14px',
               fontWeight: 800,
               cursor: 'pointer',
-              boxShadow: '0 0 20px rgba(0,240,255,0.35)',
+              boxShadow: '0 0 30px rgba(0,240,255,0.4)',
               width: '100%',
-              maxWidth: '320px'
+              maxWidth: '360px',
+              transition: 'transform 0.15s, box-shadow 0.15s'
             }}
           >
-            Vào Trang Profile Chính Thức →
+            View Official Profile →
           </button>
         </div>
       </div>

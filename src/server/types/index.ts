@@ -17,8 +17,9 @@ export interface Env {
   EARLY_ACCESS_TOTAL_SLOTS: string;
   AI_MODEL_TIER: string;
 
-  // Encrypted Runtime Secrets
+  // Encrypted Runtime Secrets & Keys
   GEMINI_API_KEY?: string;
+  POSTHOG_API_KEY?: string;
   GITHUB_TOKENS?: string; // JSON string array of PATs
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
@@ -33,6 +34,17 @@ export interface Env {
   CF_ACCESS_JWKS?: string;
 }
 
+export interface PublicConfig {
+  quota_total: number;
+  free_until: number;
+  charge_after_usd: number;
+  posthog_configured: boolean;
+  analytics_enabled: boolean;
+  environment: string;
+  domain: string;
+  cdn_domain: string;
+}
+
 export interface GitHubUserRaw {
   id: number;
   login: string;
@@ -42,6 +54,43 @@ export interface GitHubUserRaw {
   public_repos: number;
   followers: number;
   created_at: string;
+}
+
+export interface GitHubRepo {
+  name: string;
+  full_name: string;
+  description: string | null;
+  html_url: string;
+  stargazers_count: number;
+  forks_count: number;
+  language: string | null;
+  is_private?: boolean;
+  is_fork?: boolean;
+  updated_at?: string;
+}
+
+export interface UserActivity {
+  id: string;
+  type: string;
+  repo: string;
+  repo_url: string;
+  summary: string;
+  created_at: string;
+}
+
+export interface UserSession {
+  id: number;
+  login: string;
+  name: string | null;
+  avatar_url: string;
+}
+
+export interface AggregateStats {
+  contributions_last_year: number;
+  owned_repositories_total: number;
+  period_started_at: string;
+  period_ended_at: string;
+  refreshed_at: string;
 }
 
 export interface ResolvedProfile {
@@ -61,6 +110,17 @@ export interface ResolvedProfile {
   guardian: GuardianSummary | null;
   source: 'cache_fresh' | 'cache_stale' | 'github_live' | 'degraded_seed';
   last_synced_at: number;
+  activities?: UserActivity[];
+  highlighted_repos?: GitHubRepo[];
+  active_repos?: GitHubRepo[];
+  mood?: {
+    state: EnergyState;
+    title: string;
+    description: string;
+    badgeColor: string;
+    recommendedPose: string;
+  };
+  aggregate_stats?: AggregateStats | null;
 }
 
 export type RarityTier = 'Common' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
@@ -165,11 +225,12 @@ export interface GuardianSummary {
 
 export interface EarlyAccessStatus {
   total: number;
-  claimed: number;
-  remaining: number;
+  claimed: number | null;
+  remaining: number | null;
   is_available?: boolean;
   is_free?: boolean;
   user_has_claimed?: boolean;
+  degraded?: boolean;
 }
 
 export interface ReferenceCandidateRecord {

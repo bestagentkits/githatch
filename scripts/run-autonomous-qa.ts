@@ -126,14 +126,46 @@ async function runAutonomousQa() {
     return `Valid SVG Badge generated (${svgText.length} bytes)`;
   });
 
-  await runTest('API', 'Dynamic OpenGraph Card GET /og/octocat', async () => {
-    const res = await app.fetch(new Request('http://localhost/og/octocat'), mockEnv);
-    if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
-    const htmlText = await res.text();
-    if (!htmlText.includes('twitter:card') || !htmlText.includes('og:title')) throw new Error('Missing OG metadata');
-    return `Valid OpenGraph HTML Card rendered (${htmlText.length} bytes)`;
+  await runTest('API', 'Dynamic OpenGraph PNG Card GET /og/octocat.png (with mixed Accept header)', async () => {
+    const res = await app.fetch(new Request('http://localhost/og/octocat.png', {
+      headers: { 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/svg+xml,image/*,*/*;q=0.8' }
+    }), mockEnv);
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+    const contentType = res.headers.get('Content-Type') || '';
+    if (!contentType.includes('image/png')) throw new Error(`Expected image/png, got ${contentType}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4E || bytes[3] !== 0x47) {
+      throw new Error('Invalid PNG binary header');
+    }
+    return `Format: PNG, Bytes: ${bytes.length}, Content-Type: ${contentType}`;
   });
 
+  await runTest('API', 'Dynamic OpenGraph SVG Card GET /og/octocat.svg', async () => {
+    const res = await app.fetch(new Request('http://localhost/og/octocat.svg'), mockEnv);
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+    const contentType = res.headers.get('Content-Type') || '';
+    if (!contentType.includes('image/svg+xml')) throw new Error(`Expected image/svg+xml, got ${contentType}`);
+    const svgText = await res.text();
+    if (!svgText.includes('GitHoot') || !svgText.includes('<svg')) throw new Error('Invalid SVG content');
+    return `Format: SVG, Bytes: ${svgText.length}, Content-Type: ${contentType}`;
+  });
+
+  await runTest('API', 'Crawler HTML Dynamic OpenGraph Tags GET /octocat', async () => {
+    const mockEnvWithAssets: Env = {
+      ...mockEnv,
+      ASSETS: {
+        fetch: async () => new Response('<!DOCTYPE html><html><head><title>GitHoot</title><meta property="og:image" content="fallback"></head><body><div id="root"></div></body></html>', {
+          headers: { 'Content-Type': 'text/html' }
+        })
+      }
+    };
+    const res = await app.fetch(new Request('http://localhost/octocat'), mockEnvWithAssets);
+    if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
+    if (!html.includes('/og/octocat.png?v=3')) throw new Error('Missing dynamic /og/octocat.png?v=3 in og:image tag');
+    if (!html.includes('@octocat · GitHoot Realm Guardian')) throw new Error('Missing dynamic title in HTML');
+    return 'Injected: og:image=/og/octocat.png?v=3, og:title=@octocat · GitHoot Realm Guardian';
+  });
   // --- Tier 2: DNA & Anti-Throttling Resolver ---
   console.log('\n► Tier 2: Deterministic DNA & SWR Fallback Engine');
   await runTest('DNA', 'Deterministic DNA Hash Consistency', async () => {
@@ -240,8 +272,9 @@ async function runAutonomousQa() {
 
 - **Date:** ${new Date().toISOString()}
 - **Target Domain:** \`https://githoot.com\`
+- **Runner:** Autonomous Edge QA Suite (scripts/run-autonomous-qa.ts)
 - **Total Tests Executed:** ${totalCount}
-- **Status:** ${failedCount === 0 ? '✅ 100% PASSED (ZERO DEFECTS)' : '❌ FAILURES DETECTED'}
+- **Status:** ${failedCount === 0 ? '✅ 100% PASSED (0 TEST FAILURES)' : `❌ FAILED (${failedCount} FAILURES)`}
 
 ## 1. Test Results Summary
 
@@ -256,19 +289,25 @@ ${results.map(r => `| **${r.category}** | ${r.name} | ${r.status === 'PASSED' ? 
 3. **Smart Bounding-Box Centering:** Tested contour detector; offsets characters accurately to center of 256x256 frame without edge clipping.
 4. **Tamagotchi Positive Progression:** 4 energy mood states verified mathematically from activity timestamps.
 5. **Edge Social Assets:** \`/badge/:username.svg\` and \`/og/:username\` SVG/PNG renderers verified with correct cache headers.
-`.trim();
 
+## 3. Automated Test Suite Verdict
+
+- **Test Result:** ${failedCount === 0 ? '0 Test Failures across all 4 verification tiers.' : `${failedCount} failure(s) detected during automated suite run.`}
+- **Status:** ${failedCount === 0 ? 'AUTOMATED SUITE PASSED' : 'SUITE FAILED'}
+`.trim();
   const reportPath = path.join(reportsDir, 'qa-verification-report.md');
   fs.writeFileSync(reportPath, reportMd, 'utf-8');
   console.log(`\n✦ QA Report written to: ${reportPath}`);
   console.log(`✦ Result: ${passedCount}/${totalCount} Passed (${failedCount} Failures).`);
 
   if (failedCount > 0) {
+    console.error(`\n❌ Autonomous QA Failed with ${failedCount} failure(s).`);
     process.exit(1);
   }
+  console.log(`✦ Ready for Final Ship!`);
 }
 
 runAutonomousQa().catch((err) => {
-  console.error('Fatal QA Runner Error:', err);
+  console.error(err);
   process.exit(1);
 });

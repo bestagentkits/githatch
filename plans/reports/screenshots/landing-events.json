@@ -1,0 +1,74 @@
+{
+  "audit_date": "2026-08-30T10:19:17.312Z",
+  "privacy_guarantee": "Zero PII transmitted; no username, email, avatar URL, or free text stored in telemetry payloads.",
+  "home_scenario_events": [
+    {
+      "name": "landing_viewed",
+      "properties": {
+        "viewport_bucket": "desktop",
+        "reduced_motion": false
+      },
+      "timestamp": 1788085155575
+    },
+    {
+      "name": "demo_interacted",
+      "properties": {
+        "control": "play",
+        "frame_index": 1
+      },
+      "timestamp": 1788085155994
+    },
+    {
+      "name": "demo_interacted",
+      "properties": {
+        "control": "slowmo",
+        "frame_index": 1
+      },
+      "timestamp": 1788085155995
+    },
+    {
+      "name": "demo_interacted",
+      "properties": {
+        "control": "replay",
+        "frame_index": 16
+      },
+      "timestamp": 1788085155995
+    },
+    {
+      "name": "archetype_selected",
+      "properties": {
+        "archetype_id": "neon-byte",
+        "element": "Cyber / TypeScript & Web"
+      },
+      "timestamp": 1788085155995
+    },
+    {
+      "name": "creator_link_clicked",
+      "properties": {
+        "destination": "agentkit"
+      },
+      "timestamp": 1788085155995
+    }
+  ],
+  "home_zero_egg_viewed": true,
+  "profile_scenario_events": [
+    {
+      "name": "egg_viewed",
+      "properties": {
+        "archetype_id": "solar-flare",
+        "rarity_tier": "Common"
+      },
+      "timestamp": 1788085156423
+    },
+    {
+      "name": "claim_started",
+      "properties": {
+        "archetype_id": "solar-flare"
+      },
+      "timestamp": 1788085157006
+    }
+  ],
+  "profile_egg_viewed_fired": true,
+  "profile_claim_started_fired": true,
+  "all_events_zero_pii": true
+}
