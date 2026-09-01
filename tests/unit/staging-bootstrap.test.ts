@@ -746,7 +746,7 @@ describe('Staging Bootstrap & Prerequisite Contracts', () => {
         if (cmd.includes('ai_budget_ledger')) {
           return { ok: true, output: JSON.stringify([{ meta: { changes: 1 } }]) };
         }
-        const mFiles = ['0001_initial.sql', '0002_github_aggregate_stats.sql', '0002_hatch_pipeline_v2.sql', '0003_ai_budget_ledger.sql', '0004_pose_leases_outbox.sql', '0005_publication_pointer.sql', '0006_review_records.sql'];
+        const mFiles = ['0001_initial.sql', '0002_hatch_pipeline_v2.sql', '0003_ai_budget_ledger.sql', '0004_pose_leases_outbox.sql', '0005_publication_pointer.sql', '0006_review_records.sql', '0007_github_aggregate_stats.sql'];
         return {
           ok: true,
           output: JSON.stringify([{ results: mFiles.map(name => ({ name })) }])
