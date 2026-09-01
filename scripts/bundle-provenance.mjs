@@ -8,6 +8,30 @@ import path from 'path';
 import crypto from 'crypto';
 import { execSync } from 'child_process';
 
+function loadLocalEnv() {
+  const envPath = process.env.GITHOOT_ENV_PATH || 'D:/www/oss/githatch/.env';
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx > 0) {
+        const key = trimmed.slice(0, idx).trim();
+        let val = trimmed.slice(idx + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  }
+}
+
+loadLocalEnv();
+
 /**
  * Computes SHA-256 and byte length of a file.
  * @param {string} filePath
@@ -98,7 +122,7 @@ export function verifyDeployedWorker(
 ) {
   const runner = customRunner || ((cmd) => {
     try {
-      const out = execSync(`npx wrangler ${cmd}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+      const out = execSync(`npx wrangler ${cmd}`, { encoding: 'utf8', env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
       return { ok: true, output: out };
     } catch (err) {
       return { ok: false, output: err.stderr || err.stdout || err.message };

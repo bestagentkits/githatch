@@ -54,24 +54,3 @@ id = "f8302add2b1249bc9b7eb503eeeea284"
 binding = "AI_QUEUE"
 queue = "githoot-ai-queue"
 
-# Staging Overrides
-[env.staging]
-vars = { ENVIRONMENT = "staging", DOMAIN = "staging.githoot.com", CDN_DOMAIN = "staging-cdn.githoot.com", EARLY_ACCESS_TOTAL_SLOTS = "100", AI_MODEL_TIER = "nano-banana-pro-preview" }
-
-[[env.staging.d1_databases]]
-binding = "DB"
-database_name = "githoot_db_staging"
-database_id = "d9ccb357-a59c-44e7-a50a-236e51991d65"
-migrations_dir = "src/server/db/migrations"
-
-[[env.staging.r2_buckets]]
-binding = "ASSETS_BUCKET"
-bucket_name = "githoot-staging"
-
-[[env.staging.kv_namespaces]]
-binding = "CACHE_KV"
-id = "efa9aa71d9104284976966dcbdfb111b"
-
-[[env.staging.queues.producers]]
-binding = "AI_QUEUE"
-queue = "githoot-ai-queue-staging"

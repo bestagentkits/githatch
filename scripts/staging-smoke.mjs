@@ -7,6 +7,30 @@
 import fs from 'fs';
 import path from 'path';
 
+function loadLocalEnv() {
+  const envPath = process.env.GITHOOT_ENV_PATH || 'D:/www/oss/githatch/.env';
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx > 0) {
+        const key = trimmed.slice(0, idx).trim();
+        let val = trimmed.slice(idx + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  }
+}
+
+loadLocalEnv();
+
 function getReportsDir() {
   const reportsDir = path.resolve(process.cwd(), 'plans/260831-1233-hatch-pipeline-production-hardening/reports');
   if (!fs.existsSync(reportsDir)) {
@@ -20,7 +44,7 @@ function getReportsDir() {
  * prints all frame and reference URLs for human review, and pauses.
  */
 export async function inspectStagingJob(jobId, options = {}) {
-  const stagingDomain = options.stagingDomain || process.env.STAGING_DOMAIN || 'staging.githoot.com';
+  const stagingDomain = options.stagingDomain || process.env.STAGING_DOMAIN || 'githoot-staging.pages.dev';
   const adminSecret = options.adminSecret || process.env.ADMIN_REVIEW_SECRET;
 
   if (!adminSecret) {
@@ -97,7 +121,7 @@ export async function inspectStagingJob(jobId, options = {}) {
  * Submits an explicit human/operator review decision to the staging review route.
  */
 export async function submitStagingDecision(jobId, options = {}) {
-  const stagingDomain = options.stagingDomain || process.env.STAGING_DOMAIN || 'staging.githoot.com';
+  const stagingDomain = options.stagingDomain || process.env.STAGING_DOMAIN || 'githoot-staging.pages.dev';
   const adminSecret = options.adminSecret || process.env.ADMIN_REVIEW_SECRET;
   const decision = options.decision;
   const reviewer = options.reviewer;
