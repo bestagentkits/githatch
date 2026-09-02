@@ -377,14 +377,13 @@ reviewRouter.post('/:jobId/composite', async (c) => {
   }
 
   const { handleHatchComposite } = await import('../queue/generation-worker');
-  const dummyMsg: Message<unknown> = {
+  const dummyMsg = {
     id: `comp-admin-${Date.now()}`,
     timestamp: new Date(),
-    attempts: 1,
     body: { v: 1, type: 'HATCH_COMPOSITE', jobId, guardianId: job.guardian_id },
     ack: () => {},
     retry: () => {}
-  };
+  } as unknown as Message<unknown>;
 
   try {
     await handleHatchComposite({ v: 1, type: 'HATCH_COMPOSITE', jobId, guardianId: job.guardian_id }, c.env, dummyMsg);
