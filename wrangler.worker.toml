@@ -1,0 +1,117 @@
+name = "githoot-generation-consumer"
+main = "dist-worker/index.js"
+compatibility_date = "2025-02-01"
+compatibility_flags = ["nodejs_compat"]
+
+[limits]
+cpu_ms = 300000
+
+# Cron Triggers (Scheduled Outbox Drainer & Stale Reservation Reconciler)
+[triggers]
+crons = ["* * * * *"]
+
+# D1 Databases
+[[d1_databases]]
+binding = "DB"
+database_name = "githoot_db"
+database_id = "c21566c3-9188-4291-aef2-f443c27c2799"
+migrations_dir = "src/server/db/migrations"
+
+# R2 Object Storage
+[[r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "githoot"
+
+# Workers KV Cache
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "f8302add2b1249bc9b7eb503eeeea284"
+
+# Cloudflare Queues Producer (for outbox relay & next DAG steps)
+[[queues.producers]]
+binding = "AI_QUEUE"
+queue = "githoot-ai-queue"
+
+# Cloudflare Queues Consumer (Batch size = 1 for isolate memory safety, Max concurrency = 2)
+[[queues.consumers]]
+queue = "githoot-ai-queue"
+max_batch_size = 1
+max_batch_timeout = 30
+max_retries = 5
+max_concurrency = 2
+dead_letter_queue = "githoot-ai-dlq"
+
+# Environment Variables (Public non-secret)
+[vars]
+ENVIRONMENT = "development"
+DOMAIN = "githoot.com"
+CDN_DOMAIN = "cdn.githoot.com"
+EARLY_ACCESS_TOTAL_SLOTS = "100"
+AI_MODEL_TIER = "nano-banana-pro-preview"
+
+# Production Overrides
+[env.production]
+main = "dist-worker/index.js"
+vars = { ENVIRONMENT = "production", DOMAIN = "githoot.com", CDN_DOMAIN = "cdn.githoot.com", EARLY_ACCESS_TOTAL_SLOTS = "100", AI_MODEL_TIER = "nano-banana-pro-preview" }
+
+[env.production.triggers]
+crons = ["* * * * *"]
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "githoot_db"
+database_id = "c21566c3-9188-4291-aef2-f443c27c2799"
+
+[[env.production.r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "githoot"
+
+[[env.production.kv_namespaces]]
+binding = "CACHE_KV"
+id = "f8302add2b1249bc9b7eb503eeeea284"
+
+[[env.production.queues.producers]]
+binding = "AI_QUEUE"
+queue = "githoot-ai-queue"
+
+[[env.production.queues.consumers]]
+queue = "githoot-ai-queue"
+max_batch_size = 1
+max_batch_timeout = 30
+max_retries = 5
+max_concurrency = 2
+dead_letter_queue = "githoot-ai-dlq"
+
+# Staging Overrides
+[env.staging]
+main = "dist-worker/index.js"
+vars = { ENVIRONMENT = "staging", DOMAIN = "staging.githoot.com", CDN_DOMAIN = "staging-cdn.githoot.com", EARLY_ACCESS_TOTAL_SLOTS = "100", AI_MODEL_TIER = "nano-banana-pro-preview" }
+
+[env.staging.triggers]
+crons = ["* * * * *"]
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "githoot_db_staging"
+database_id = "d9ccb357-a59c-44e7-a50a-236e51991d65"
+migrations_dir = "src/server/db/migrations"
+
+[[env.staging.r2_buckets]]
+binding = "ASSETS_BUCKET"
+bucket_name = "githoot-staging"
+
+[[env.staging.kv_namespaces]]
+binding = "CACHE_KV"
+id = "efa9aa71d9104284976966dcbdfb111b"
+
+[[env.staging.queues.producers]]
+binding = "AI_QUEUE"
+queue = "githoot-ai-queue-staging"
+
+[[env.staging.queues.consumers]]
+queue = "githoot-ai-queue-staging"
+max_batch_size = 1
+max_batch_timeout = 30
+max_retries = 5
+max_concurrency = 2
+dead_letter_queue = "githoot-ai-dlq-staging"

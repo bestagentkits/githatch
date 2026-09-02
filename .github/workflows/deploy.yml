@@ -5,12 +5,17 @@ on:
     branches:
       - main
       - master
+  pull_request:
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
-    name: Build, Migrate, Set Secrets & Deploy
+    timeout-minutes: 10
+    name: Build, Typecheck, Unit & workerd Integration Tests
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -23,17 +28,87 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Typecheck & Lint
-        run: |
-          npm run typecheck
+      - name: Typecheck & Compile Verification
+        run: npm run typecheck
 
-      - name: Run Unit Tests
-        run: npm test
-
-      - name: Build Project
+      - name: Build Single-Source Artifacts & Record Provenance
         run: npm run build
         env:
           NODE_ENV: production
+
+      - name: Run Unit Test Suite (Node Vitest)
+        run: npx vitest run tests/unit
+
+      - name: Run Workers Runtime Integration Test Suite (workerd)
+        run: npx vitest run tests/integration/harness.smoke.test.ts --config vitest.workers.config.ts
+
+      - name: Run Determinism & CLI Contract Tests (Node Native)
+        run: node --test .agents/skills/githoot-hatch/scripts/tests/determinism.test.mjs
+
+      - name: Verify Pre-Deploy Local Bundle Provenance
+        run: node scripts/bundle-provenance.mjs verify
+
+      - name: Upload Single-Source Dist Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: single-source-dist
+          path: |
+            dist/
+            dist-worker/
+          if-no-files-found: error
+          retention-days: 7
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    name: Migrate, Set Secrets & Deploy to Cloudflare Edge
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Download Tested Single-Source Dist Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: single-source-dist
+
+      - name: Assert Downloaded Artifact Provenance Before Deploy
+        run: node scripts/bundle-provenance.mjs verify
+
+      - name: Fail-Closed Secrets Preflight Gate (All Required Roles & Components)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          ADMIN_REVIEW_SECRET: ${{ secrets.ADMIN_REVIEW_SECRET }}
+          GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
+          GH_CLIENT_ID: ${{ secrets.GH_CLIENT_ID }}
+          GH_CLIENT_SECRET: ${{ secrets.GH_CLIENT_SECRET }}
+          CF_ACCESS_AUD: ${{ secrets.CF_ACCESS_AUD }}
+          CF_ACCESS_TEAM_NAME: ${{ secrets.CF_ACCESS_TEAM_NAME }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: node scripts/secret-preflight.mjs all
+
+      - name: Verify Staging Infrastructure & Canary Readiness
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          ADMIN_REVIEW_SECRET: ${{ secrets.ADMIN_REVIEW_SECRET }}
+          GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
+        run: node scripts/staging-bootstrap.mjs
 
       - name: Apply D1 Production Migrations
         uses: cloudflare/wrangler-action@v3
@@ -45,7 +120,60 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Deploy to Cloudflare Pages
+      - name: Upload Secrets for Dedicated Queue Consumer Worker (Production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          ADMIN_REVIEW_SECRET: ${{ secrets.ADMIN_REVIEW_SECRET }}
+          GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
+        run: |
+          printf '%s' "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY --config wrangler.worker.toml --env production
+          printf '%s' "$AUTH_SECRET" | npx wrangler secret put AUTH_SECRET --config wrangler.worker.toml --env production
+          printf '%s' "$ADMIN_REVIEW_SECRET" | npx wrangler secret put ADMIN_REVIEW_SECRET --config wrangler.worker.toml --env production
+          printf '%s' "$GITHUB_TOKENS" | npx wrangler secret put GITHUB_TOKENS --config wrangler.worker.toml --env production
+
+      - name: Upload Secrets for Cloudflare Pages Edge (Production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
+          GH_CLIENT_ID: ${{ secrets.GH_CLIENT_ID }}
+          GH_CLIENT_SECRET: ${{ secrets.GH_CLIENT_SECRET }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          ADMIN_REVIEW_SECRET: ${{ secrets.ADMIN_REVIEW_SECRET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          CF_ACCESS_AUD: ${{ secrets.CF_ACCESS_AUD }}
+          CF_ACCESS_TEAM_NAME: ${{ secrets.CF_ACCESS_TEAM_NAME }}
+          CF_ACCESS_JWKS: ${{ secrets.CF_ACCESS_JWKS }}
+        run: |
+          printf '%s' "$GEMINI_API_KEY" | npx wrangler pages secret put GEMINI_API_KEY --project-name=githoot
+          printf '%s' "$GITHUB_TOKENS" | npx wrangler pages secret put GITHUB_TOKENS --project-name=githoot
+          printf '%s' "$AUTH_SECRET" | npx wrangler pages secret put AUTH_SECRET --project-name=githoot
+          printf '%s' "$ADMIN_REVIEW_SECRET" | npx wrangler pages secret put ADMIN_REVIEW_SECRET --project-name=githoot
+          printf '%s' "$GH_CLIENT_ID" | npx wrangler pages secret put GITHUB_CLIENT_ID --project-name=githoot
+          printf '%s' "$GH_CLIENT_SECRET" | npx wrangler pages secret put GITHUB_CLIENT_SECRET --project-name=githoot
+          printf '%s' "$R2_ACCESS_KEY_ID" | npx wrangler pages secret put R2_ACCESS_KEY_ID --project-name=githoot
+          printf '%s' "$R2_SECRET_ACCESS_KEY" | npx wrangler pages secret put R2_SECRET_ACCESS_KEY --project-name=githoot
+          printf '%s' "$R2_BUCKET_NAME" | npx wrangler pages secret put R2_BUCKET_NAME --project-name=githoot
+          printf '%s' "$CF_ACCESS_AUD" | npx wrangler pages secret put CF_ACCESS_AUD --project-name=githoot
+          printf '%s' "$CF_ACCESS_TEAM_NAME" | npx wrangler pages secret put CF_ACCESS_TEAM_NAME --project-name=githoot
+
+      - name: Deploy Dedicated Queue Consumer Worker (Single-Source --no-bundle)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy dist-worker/index.js --no-bundle --config wrangler.worker.toml --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Cloudflare Pages Application
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -55,24 +183,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Upload Encrypted Runtime Secrets to Cloudflare Pages Functions
+      - name: Post-Deploy Live Worker Provenance Assertion
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GH_TOKENS: ${{ secrets.GH_TOKENS }}
-          GH_CLIENT_ID: ${{ secrets.GH_CLIENT_ID }}
-          GH_CLIENT_SECRET: ${{ secrets.GH_CLIENT_SECRET }}
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-        run: |
-          [ -n "$GEMINI_API_KEY" ] && printf '%s' "$GEMINI_API_KEY" | npx wrangler pages secret put GEMINI_API_KEY --project-name=githoot || true
-          [ -n "$GH_TOKENS" ] && printf '%s' "$GH_TOKENS" | npx wrangler pages secret put GITHUB_TOKENS --project-name=githoot || true
-          [ -n "$GH_CLIENT_ID" ] && printf '%s' "$GH_CLIENT_ID" | npx wrangler pages secret put GITHUB_CLIENT_ID --project-name=githoot || true
-          [ -n "$GH_CLIENT_SECRET" ] && printf '%s' "$GH_CLIENT_SECRET" | npx wrangler pages secret put GITHUB_CLIENT_SECRET --project-name=githoot || true
-          [ -n "$AUTH_SECRET" ] && printf '%s' "$AUTH_SECRET" | npx wrangler pages secret put AUTH_SECRET --project-name=githoot || true
-          [ -n "$R2_ACCESS_KEY_ID" ] && printf '%s' "$R2_ACCESS_KEY_ID" | npx wrangler pages secret put R2_ACCESS_KEY_ID --project-name=githoot || true
-          [ -n "$R2_SECRET_ACCESS_KEY" ] && printf '%s' "$R2_SECRET_ACCESS_KEY" | npx wrangler pages secret put R2_SECRET_ACCESS_KEY --project-name=githoot || true
-          [ -n "$R2_BUCKET_NAME" ] && printf '%s' "$R2_BUCKET_NAME" | npx wrangler pages secret put R2_BUCKET_NAME --project-name=githoot || true
+        run: node scripts/bundle-provenance.mjs verify-deployed wrangler.worker.toml production

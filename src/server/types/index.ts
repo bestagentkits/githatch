@@ -24,10 +24,14 @@ export interface Env {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   AUTH_SECRET?: string;
+  ADMIN_REVIEW_SECRET?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
+  CF_ACCESS_AUD?: string;
+  CF_ACCESS_TEAM_NAME?: string;
+  CF_ACCESS_JWKS?: string;
 }
 
 export interface PublicConfig {
@@ -121,21 +125,64 @@ export interface ResolvedProfile {
 
 export type RarityTier = 'Common' | 'Rare' | 'Epic' | 'Legendary' | 'Mythic';
 
-export type EnergyState = 'Energetic' | 'Active' | 'Resting' | 'Hungry_for_code';
+export type GuardianStatus = 'PENDING' | 'GENERATING' | 'VERIFYING' | 'QUARANTINED' | 'ASSET_READY' | 'FAILED';
 
-export interface GuardianSummary {
-  id: string;
-  name: string;
-  species: string;
+export type EnergyState = 'Energetic' | 'Active' | 'Resting' | 'Sleeping' | 'Hungry_for_code';
+
+export type MetricProvenance = 'measured' | 'unavailable';
+
+export interface TelemetrySnapshot {
+  topLanguages: string[];
+  stars: number;
+  forks: number;
+  publicRepos: number;
+  followers: number;
+  accountAgeYears: number;
+  mergedExternalPRs: number;
+  releases: number;
+  reviewRatio: number;
+  collaborators: number;
+  activeWeeks: number;
+  nightCommitRatio: number;
+  provenance: Record<
+    | 'topLanguages'
+    | 'stars'
+    | 'forks'
+    | 'publicRepos'
+    | 'followers'
+    | 'accountAgeYears'
+    | 'mergedExternalPRs'
+    | 'releases'
+    | 'reviewRatio'
+    | 'collaborators'
+    | 'activeWeeks'
+    | 'nightCommitRatio',
+    MetricProvenance
+  >;
+}
+
+export interface IdentitySpec {
+  identitySpecVersion: string;
+  dnaVersion: string;
+  telemetrySnapshotVersion: string;
+  githubUserId: string;
+  dnaSeed: string;
+  telemetrySnapshotHash: string;
   element: string;
-  rarity_tier: RarityTier;
-  level: number;
-  experience: number;
-  energy_state: EnergyState;
-  hero_image_url: string;
-  spritesheet_url: string | null;
-  mood_title?: string;
-  mood_description?: string;
+  rarity: RarityTier;
+  merit: number;
+  species: string;
+  speciesName: string;
+  anatomy: string;
+  build: string;
+  silhouette: string;
+  crest: string;
+  markings: string;
+  material: string;
+  aura: string;
+  temperament: string;
+  pinnedFields?: string[];
+  identityHash: string;
 }
 
 export interface GuardianDNA {
@@ -143,6 +190,8 @@ export interface GuardianDNA {
   dna_seed: string;
   egg_archetype_id: string;
   species: string;
+  species_name?: string;
+  anatomy?: string;
   element: string;
   rarity_tier: RarityTier;
   palette: {
@@ -154,13 +203,76 @@ export interface GuardianDNA {
   silhouette: string;
   temperament: string;
   archetype: string;
+  identity_spec?: IdentitySpec;
+}
+
+export interface GuardianSummary {
+  id: string;
+  name: string;
+  egg_type?: string;
+  species: string;
+  species_name?: string;
+  anatomy?: string;
+  element: string;
+  rarity_tier: RarityTier;
+  status?: GuardianStatus;
+  hero_image_url?: string | null;
+  spritesheet_url?: string | null;
+  level: number;
+  experience: number;
+  energy_state: string;
+  manifest_url?: string | null;
+  mood_title?: string;
+  mood_description?: string;
 }
 
 export interface EarlyAccessStatus {
   total: number;
   claimed: number | null;
   remaining: number | null;
-  is_free: boolean;
-  user_has_claimed: boolean;
-  degraded: boolean;
+  is_available?: boolean;
+  is_free?: boolean;
+  user_has_claimed?: boolean;
+  degraded?: boolean;
+}
+
+export interface ReferenceCandidateRecord {
+  id: string;
+  guardian_id: string;
+  candidate_sha256: string;
+  identity_hash: string;
+  prompt_hash: string;
+  model_id: string;
+  raw_sha256: string;
+  state: 'VERIFYING' | 'APPROVED' | 'REJECTED';
+  reviewer: string | null;
+  verdict_data: string | null;
+  created_at: number;
+}
+
+export interface HatchJobRecord {
+  id: string;
+  guardian_id: string;
+  request_fingerprint: string;
+  state: GuardianStatus;
+  model_id: string;
+  attempts_count: number;
+  frames_completed: number;
+  manifest_url: string | null;
+  error_log: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface HatchFrameRecord {
+  id: string;
+  job_id: string;
+  pose_id: string;
+  pose_index: number;
+  frame_sha256: string;
+  raw_sha256: string;
+  state: 'ACCEPTED' | 'REJECTED' | 'QUARANTINED';
+  raw_gate_metrics: string | null;
+  semantic_verdict: string | null;
+  created_at: number;
 }

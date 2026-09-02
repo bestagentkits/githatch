@@ -1,0 +1,16 @@
+{
+  "timestamp": 1788341229937,
+  "stagingDomain": "githoot-staging.pages.dev",
+  "jobId": "7695fe7a-afef-49b7-a036-c87df1be2db5",
+  "decision": "approve",
+  "reviewer": "admin@githoot.com",
+  "bundleSha": "5ada56ff91c4f2532d0c304d1dd66d704e6e7af2ed94ad2212b7341a225d5bad",
+  "notes": "Phase 8 live staging review ceremony signoff",
+  "response": {
+    "success": true,
+    "status": "ASSET_READY",
+    "manifestUrl": "https://staging-cdn.githoot.com/manifests/9e01e573d0dd14950846ccf4c90096d666d25985cebd4f95e7fd2663f18344b6.json",
+    "bundleSha": "5ada56ff91c4f2532d0c304d1dd66d704e6e7af2ed94ad2212b7341a225d5bad"
+  },
+  "verdict": "GO"
+}

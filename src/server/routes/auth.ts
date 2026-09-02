@@ -1,5 +1,5 @@
 // ============================================================================
-// GitHoot Authentication & OAuth Router (src/server/routes/auth.ts)
+// GitHoot Authentication & Admin Review Router (src/server/routes/auth.ts)
 // ============================================================================
 
 import { Hono } from 'hono';
@@ -7,6 +7,10 @@ import type { Env } from '../types';
 import { generateSignedState, verifySignedState, exchangeCodeForAccessToken, fetchAuthenticatedUser, createSessionToken, verifySessionToken, fetchAggregateStats, revokeAccessToken } from '../services/auth/oauth';
 import type { UserSession } from '../types';
 import { executeClaimTransaction } from '../services/claim/transaction';
+import { twoPhaseApproveReference } from '../services/ai/reference-manager';
+import { approveGuardianPosesAndPublish } from '../services/ai/hatch-admin';
+import { verifyReviewerAuthorization } from '../services/auth/admin-auth';
+import { reviewRouter } from './review';
 
 export const authRouter = new Hono<{ Bindings: Env }>();
 function escapeHtml(unsafe: string): string {
@@ -23,7 +27,10 @@ function escapeHtml(unsafe: string): string {
 }
 
 
-// 1. Initiate GitHub OAuth
+// Mount Admin Review Router (/auth/admin/review/:jobId)
+authRouter.route('/admin/review', reviewRouter);
+
+// 1. Initiate GitHub OAuth Login & Hatch flow
 authRouter.get('/github', async (c) => {
   const rawClaimUser = c.req.query('claim_username');
   let claimUsername = '';
@@ -93,7 +100,7 @@ authRouter.get('/callback', async (c) => {
   const state = c.req.query('state');
 
   if (!code || !state) {
-    return c.text('Invalid OAuth callback: missing code or state.', 400);
+    return c.text('Missing required OAuth code or state parameter.', 400);
   }
   const secret = c.env.AUTH_SECRET;
   if (!secret) {
@@ -259,5 +266,37 @@ authRouter.delete('/aggregate-stats/delete', async (c) => {
     return c.json({ success: true });
   } catch {
     return c.json({ success: false, error: 'Delete failed' }, 500);
+  }
+});
+
+// 3. Admin & Reviewer Endpoint: Approve Reference Candidate (Protected by Cloudflare Access / Admin Token)
+authRouter.post('/admin/approve-reference', async (c) => {
+  try {
+    const principal = await verifyReviewerAuthorization(c.req.raw.headers, c.env);
+
+    const body = await c.req.json() as {
+      guardianId: string;
+      candidateId: string;
+      candidateSha256: string;
+      verdict: 'pass';
+    };
+
+    if (!body.guardianId || !body.candidateId || !body.candidateSha256 || body.verdict !== 'pass') {
+      return c.json({ error: 'Missing required approval fields or verdict is not strictly "pass"' }, 400);
+    }
+
+    const result = await twoPhaseApproveReference({
+      guardianId: body.guardianId,
+      candidateId: body.candidateId,
+      candidateSha256: body.candidateSha256,
+      reviewer: principal.email,
+      verdict: 'pass',
+      env: c.env
+    });
+    return c.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Reference approval failed';
+    const status = message.includes('Unauthorized') ? 401 : 400;
+    return c.json({ error: message }, status);
   }
 });

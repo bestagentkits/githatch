@@ -751,12 +751,129 @@ section {
   max-width: 420px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 12px;
 }
 
+/* Main Grid: Responsive Side-by-Side to Stack */
+.githoot-main-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .githoot-main-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+/* Cards */
+.githoot-card {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-subtle);
+}
+
+/* Modal Responsiveness */
+.githoot-modal-card {
+  width: 100%;
+  max-width: 580px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: radial-gradient(circle at center, #141b27 0%, #07090e 100%);
+  border-radius: 16px;
+  padding: clamp(20px, 5vw, 36px);
+  text-align: center;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+}
+
+/* Buttons */
+.githoot-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+  color: #000;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.3);
+}
+
+.githoot-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(255, 42, 133, 0.4);
+}
+
+.githoot-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--bg-surface-2);
+  color: #f0f6fc;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.githoot-btn-secondary:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* 16-Frame Superhero Landing Spritesheet Animation */
+.landing-sprite-frame {
+  width: 256px;
+  height: 256px;
+  background-repeat: no-repeat;
+  background-size: 4096px 256px;
+  background-position: 0 0;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 16px rgba(0, 240, 255, 0.45));
+}
+
+.landing-sprite-frame.play {
+  animation: runLanding16 var(--dur, 1.1s) steps(15) forwards;
+}
+
+@keyframes runLanding16 {
+  from { background-position: 0 0; }
+  to { background-position: -3840px 0; }
+}
+
+.shake-box.active-shake {
+  animation: seismicShock 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes seismicShock {
+  10%, 90% { transform: translate3d(-4px, 5px, 0) rotate(-0.6deg); }
+  20%, 80% { transform: translate3d(6px, -6px, 0) rotate(0.8deg); }
+  30%, 50%, 70% { transform: translate3d(-8px, 7px, 0) rotate(-1deg); }
+  40%, 60% { transform: translate3d(8px, -5px, 0) rotate(0.8deg); }
+  100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+}
+
 .scrubber-slider {
-  flex: 1;
   accent-color: var(--accent-cyan);
   cursor: pointer;
   min-height: 44px;

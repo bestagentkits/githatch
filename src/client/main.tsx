@@ -14,6 +14,7 @@ import { ExplorePage } from './pages/ExplorePage';
 import { DesignSystemPage } from './pages/DesignSystemPage';
 import { DocsPage } from './pages/DocsPage';
 import { PublicProfilePage } from './pages/PublicProfilePage';
+import { HatchWaitPage } from './pages/HatchWaitPage';
 import { GachaRevealModal } from './components/GachaRevealModal';
 import { CheckoutModal } from './components/CheckoutModal';
 interface RouteState {
@@ -34,6 +35,14 @@ function parsePath(pathStr: string): RouteState {
   }
   if (path === '/docs') {
     return { route: '/docs', profileUsername: null };
+  }
+  if (path.startsWith('/hatch/wait/')) {
+    const user = path.replace('/hatch/wait/', '');
+    return { route: '/hatch/wait', profileUsername: user };
+  }
+  if (path.startsWith('/hatch/reveal/')) {
+    const user = path.replace('/hatch/reveal/', '');
+    return { route: '/hatch/reveal', profileUsername: user };
   }
 
   // Profile Route: /:username
@@ -57,7 +66,6 @@ function App() {
     loading: true,
     error: false
   });
-
   const [hatchOpen, setHatchOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [guardian, setGuardian] = useState<GuardianSummary | null>(null);
@@ -156,6 +164,23 @@ function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [resolveRoute]);
 
+  const handleHatchReady = async () => {
+    if (!routeState.profileUsername) return;
+    try {
+      const res = await fetch(`/api/profile/${encodeURIComponent(routeState.profileUsername)}`);
+      if (res.ok) {
+        const data = (await res.json()) as ResolvedProfile;
+        if (data.guardian) {
+          setGuardian(data.guardian);
+          setHatchOpen(true);
+        }
+      }
+    } catch {
+      // Fallback open
+      setHatchOpen(true);
+    }
+  };
+
   const renderActivePage = () => {
     switch (routeState.route) {
       case '/':
@@ -175,6 +200,17 @@ function App() {
         return <DesignSystemPage />;
       case '/docs':
         return <DocsPage />;
+      case '/hatch/wait':
+      case '/hatch/reveal':
+        return routeState.profileUsername ? (
+          <HatchWaitPage
+            username={routeState.profileUsername}
+            guardianId=""
+            onReady={handleHatchReady}
+          />
+        ) : (
+          <HomePage onRouteChange={handleRouteChange} />
+        );
       case '/profile':
         return routeState.profileUsername ? (
           <PublicProfilePage username={routeState.profileUsername} />
@@ -225,7 +261,12 @@ function App() {
           username={routeState.profileUsername}
           guardian={guardian}
           isOpen={hatchOpen}
-          onClose={() => setHatchOpen(false)}
+          onClose={() => {
+            setHatchOpen(false);
+            if (routeState.profileUsername) {
+              handleRouteChange(`/${encodeURIComponent(routeState.profileUsername)}`);
+            }
+          }}
         />
       )}
 

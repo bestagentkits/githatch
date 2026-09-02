@@ -3,19 +3,26 @@
 ## 1. Essential Commands & Tooling
 ```bash
 # Build & Dev (wrangler serves dist/ — run build before dev on clean clone)
-npm run build              # React Client (Vite) + Edge Worker (esbuild) to dist/
+npm run build              # React Client (Vite) + Edge Worker + Consumer to dist/ & dist-worker/
 npm run dev                # Local Edge Worker + D1 + KV + R2 on port 8788
 npx vite                   # Frontend dev server on 5173 (proxies /api, /badge, /og, /auth to :8788)
 
 # Quality Gates & Verification (Definition of Done: typecheck + vitest + npm test)
 npm run typecheck          # tsc --noEmit (0 type errors required)
-npx vitest run             # Unit tests (resolver, token pool, chroma de-spill, DNA)
-npm test                   # Autonomous Edge API & QA runner (scripts/run-autonomous-qa.ts)
+npx vitest run tests/unit  # Unit tests (resolver, frame gate, budget, auth, outbox)
+npx vitest run --config vitest.workers.config.ts # Real workerd runtime integration tests
+node --test .agents/skills/githoot-hatch/scripts/tests/determinism.test.mjs # Determinism tests
+npm test                   # Autonomous Edge API & QA runner
 
-# Database & Deploy (Warning: npm run deploy ships straight to live production)
+# Provenance & Secrets Verification
+node scripts/bundle-provenance.mjs verify  # Verify on-disk artifact against recorded SHA-256
+node scripts/secret-preflight.mjs all      # Fail-closed check for all required secrets
+
+# Database & Deploy
 npm run d1:migrate:local   # Apply migrations to local githoot_db
-npm run d1:migrate:prod    # Apply migrations to remote githoot_db_prod
-npm run deploy             # Deploy dist to production on Cloudflare Pages
+npx wrangler d1 migrations apply githoot_db --remote # Apply migrations to remote production D1
+npx wrangler deploy dist-worker/index.js --no-bundle --config wrangler.worker.toml --env production # Deploy Consumer Worker
+npx wrangler pages deploy dist --project-name=githoot # Deploy Client & Pages Functions
 ```
 
 ---
@@ -48,13 +55,14 @@ npm run deploy             # Deploy dist to production on Cloudflare Pages
 
 5. **Cloudflare Runtime Secrets Pipeline:**
    - Passing secrets in GitHub Actions `env:` only sets them in the CI runner, not the edge runtime.
-   - Secrets MUST be uploaded via direct stdin pipe:
+   - Secrets MUST be uploaded via direct stdin pipe with explicit environment targeting:
+     `printf '%s' "$SECRET" | npx wrangler secret put <KEY> --config wrangler.worker.toml --env production`
      `printf '%s' "$SECRET" | npx wrangler pages secret put <KEY> --project-name=githoot`.
    - Never use `wrangler-action@v3` command input for secrets (prepends `wrangler` and corrupts shell pipes).
-   - Production secrets (`GEMINI_API_KEY`, `GITHUB_TOKENS`, `AUTH_SECRET`, `R2_*`) must be bound explicitly to Cloudflare Pages Functions.
+   - Production secrets (`GEMINI_API_KEY`, `GITHUB_TOKENS`, `AUTH_SECRET`, `ADMIN_REVIEW_SECRET`, `CF_ACCESS_*`, `R2_*`) must be bound explicitly to Cloudflare Pages Functions and Consumer Worker before deploying code.
+   - **Secret separation:** `AUTH_SECRET` is strictly for OAuth state signing. Admin reviewer authorization strictly requires `ADMIN_REVIEW_SECRET` ($\ge 16$ bytes) compared via `constantTimeEqual`.
    - **Local dev on this PC only:** `GEMINI_API_KEY` may be sourced out-of-band from the untracked file `D:/www/oss/githatch/.env` — this absolute path is valid ONLY on this machine (Windows dev box where that file exists). Scripts MUST read it at runtime (override via `GITHOOT_ENV_PATH`), MUST fail closed when the file or key is missing, and MUST NEVER print the key or copy it into tracked files, reports, screenshots, logs, or chat output. On any other machine/CI, provide the key through the environment or the Cloudflare secret above instead.
    - **Model allowlist:** image generation MUST target a Nano Banana 2/Pro id (`nano-banana-pro-preview`, `gemini-3-pro-image`, `gemini-3-pro-image-preview`), confirmed against live `ListModels`. Reject non-allowlisted overrides and never silently fall back to Nano Banana 1 (`gemini-2.5-flash-image`).
-
 6. **Tamagotchi Inactivity Policy:**
    - Never penalize users or kill pets during GitHub inactivity — only adjust visual mood states (`mood-engine.ts:calculateGuardianMood`).
 
@@ -69,4 +77,14 @@ npm run deploy             # Deploy dist to production on Cloudflare Pages
    - NEVER build heavyweight out-of-scope features during MVP: Arena combat, in-game store/inventory, Guilds, or real-time webhook ingestion.
 
 10. **Kongming Supervisory Signoff:**
+
+11. **Single-Source Bundle Provenance & CI/CD Deployment Invariants:**
+    - The tested bundle is the deployed bundle: `npm run build` compiles `dist-worker/index.js` and records `dist-worker/provenance.json` with its exact SHA-256 hash.
+    - Cloudflare Queue Consumer MUST be deployed with `deploy dist-worker/index.js --no-bundle --config wrangler.worker.toml --env production`. Re-bundling by Wrangler during deploy is strictly forbidden.
+    - Post-deploy verification (`node scripts/bundle-provenance.mjs verify-deployed`) queries Cloudflare deployment records to assert live deployment of the recorded artifact.
+
+12. **In-Repo Review Surface & Cryptographic Provenance:**
+    - All companion pose publications MUST be reviewed and approved via the named route `GET/POST /auth/admin/review/:jobId`. Automated 16-pass stamp paths are strictly prohibited.
+    - `GET /auth/admin/review/:jobId` returns the immutable review bundle with canonical `bundleSha`.
+    - `POST /auth/admin/review/:jobId` validates the exact `bundleSha`, records an immutable audit entry in `guardian_review_records`, attaches 16 hash-bound semantic verdicts in D1, and executes the single-row pointer CAS in `guardian_publication`.
     - Major verification loops and fix cycles are supervised by subagent `kongming` and require a formal **GO Verdict** with 0 defects before final ship.

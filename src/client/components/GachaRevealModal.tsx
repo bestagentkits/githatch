@@ -2,11 +2,12 @@
 // GitHoot Gacha Hatch Reveal Ritual Modal (src/client/components/GachaRevealModal.tsx)
 // ============================================================================
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { GuardianSummary } from '../../server/types';
 import { track } from '../lib/analytics';
 import { launchConfettiBurst } from '../utils/particles';
 import { SocialSharePanel } from './SocialSharePanel';
+import { EggSpritesheetPlayer } from './EggSpritesheetPlayer';
 
 export interface GachaRevealModalProps {
   username: string;
@@ -22,13 +23,57 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
   onClose
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [currentFrame, setCurrentFrame] = useState<number>(16);
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [isShaking, setIsShaking] = useState<boolean>(false);
+
+  const stripUrl = guardian.spritesheet_url || '';
   useEffect(() => {
     if (isOpen && canvasRef.current) {
       const stopConfetti = launchConfettiBurst(canvasRef.current, getRarityColor(guardian.rarity_tier));
       return stopConfetti;
     }
   }, [isOpen, guardian.rarity_tier]);
+
+  useEffect(() => {
+    if (isOpen && stripUrl) {
+      playLanding(1.1);
+    }
+  }, [isOpen, stripUrl]);
+
+  const playLanding = (duration = 1.1) => {
+    setIsPlaying(false);
+    setIsShaking(false);
+    setCurrentFrame(1);
+
+    setTimeout(() => {
+      setIsPlaying(true);
+      // Synchronize seismic shock at ~45% timeline (Frame 7: Three-Point Landing)
+      setTimeout(() => {
+        setIsShaking(true);
+        setTimeout(() => setIsShaking(false), 560);
+      }, duration * 1000 * 0.45);
+
+      // Settle at Frame 16
+      setTimeout(() => {
+        setIsPlaying(false);
+        setCurrentFrame(16);
+      }, duration * 1000);
+    }, 50);
+  };
+
+  const handleScrub = (frameIndex: number) => {
+    setIsPlaying(false);
+    setCurrentFrame(frameIndex);
+    if (frameIndex === 7 || frameIndex === 8) {
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 400);
+    }
+  };
   if (!isOpen) return null;
+
+  // Formula: -(k - 1) * 256px
+  const bgPositionX = -((currentFrame - 1) * 256);
 
   return (
     <div style={{
@@ -56,7 +101,7 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
 
       {/* Main Reveal Card */}
       <div
-        className="githoot-modal-card"
+        className={`githoot-modal-card shake-box ${isShaking ? 'active-shake' : ''}`}
         style={{
           border: `2px solid ${getRarityColor(guardian.rarity_tier)}`,
           boxShadow: `0 0 60px ${getRarityGlow(guardian.rarity_tier)}, 0 20px 60px rgba(0,0,0,0.85)`
@@ -79,21 +124,7 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
           marginBottom: '14px',
           boxShadow: `0 0 20px ${getRarityGlow(guardian.rarity_tier)}`
         }}>
-          <span>✦ ✦ ✦</span>
-          <span>{guardian.rarity_tier} HATCH</span>
-          <span>✦ ✦ ✦</span>
-        </div>
-
-        <div style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: '12px',
-          fontWeight: 700,
-          color: '#00f0ff',
-          letterSpacing: '0.15em',
-          textTransform: 'uppercase',
-          marginBottom: '4px'
-        }}>
-          Ritual Complete · Genesis Awakening
+          ★ ★ ★ {guardian.rarity_tier} HATCH REVEALED ★ ★ ★
         </div>
 
         <h2 style={{
@@ -101,68 +132,111 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
           fontSize: 'clamp(24px, 5vw, 36px)',
           fontWeight: 900,
           color: '#ffffff',
-          margin: '0 0 8px 0',
-          textShadow: '0 0 24px rgba(255,255,255,0.3)'
+          marginBottom: '4px'
         }}>
-          {guardian.name}
+          {guardian.species_name || guardian.name} Đã Thức Tỉnh!
         </h2>
 
-        <p style={{ fontSize: '13px', color: '#8b9bb4', margin: '0 auto 20px auto', maxWidth: '460px', lineHeight: 1.5 }}>
-          Living Guardian bound to protect <strong style={{ color: '#00f0ff' }}>@{username}</strong>'s open-source realm.
+        <p style={{ fontSize: '13px', color: '#8b9bb4', marginBottom: '16px' }}>
+          Linh thú hộ mệnh hệ <strong>{guardian.element}</strong> bảo vệ các dự án mã nguồn mở của <strong>@{username}</strong>.
         </p>
 
-        {/* Grand Floating Pedestal Stage */}
-        <div className="guardian-stage">
-          <div
-            className="guardian-pedestal"
-            style={{ '--pedestal-glow': getRarityGlow(guardian.rarity_tier) } as React.CSSProperties}
-          >
-            <img
-              src={guardian.hero_image_url}
-              alt={guardian.name}
-              className="guardian-hero-sprite"
-            />
+        {/* 16-Frame Landing Player Viewport */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: '16px'
+        }}>
+          <div style={{
+            width: '256px',
+            height: '256px',
+            borderRadius: '12px',
+            border: '2px solid #00f0ff',
+            boxShadow: '0 0 24px rgba(0, 240, 255, 0.35)',
+            background: 'radial-gradient(circle at 50% 80%, rgba(0,240,255,0.12), #07090e 70%)',
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            {stripUrl ? (
+              <div
+                className={`landing-sprite-frame ${isPlaying ? 'play' : ''}`}
+                style={{
+                  backgroundImage: `url(${stripUrl})`,
+                  backgroundPosition: isPlaying ? undefined : `${bgPositionX}px 0`
+                }}
+              />
+            ) : guardian.hero_image_url ? (
+              <img
+                src={guardian.hero_image_url}
+                alt={guardian.name}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain'
+                }}
+              />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+                <EggSpritesheetPlayer archetypeId={guardian.egg_type || 'neon-byte'} state="wobble" interactive={false} />
+              </div>
+            )}
           </div>
 
-          {/* Elemental & Progression Badges */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '20px' }}>
-            <span style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '11px',
-              fontWeight: 800,
-              padding: '4px 12px',
-              borderRadius: '6px',
-              background: 'rgba(255, 42, 133, 0.12)',
-              border: '1px solid rgba(255, 42, 133, 0.35)',
-              color: '#ff2a85'
-            }}>
-              🔥 {guardian.element}
-            </span>
-            <span style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '11px',
-              fontWeight: 800,
-              padding: '4px 12px',
-              borderRadius: '6px',
-              background: 'rgba(0, 240, 255, 0.12)',
-              border: '1px solid rgba(0, 240, 255, 0.35)',
-              color: '#00f0ff'
-            }}>
-              LVL {guardian.level}
-            </span>
-            <span style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '11px',
-              fontWeight: 800,
-              padding: '4px 12px',
-              borderRadius: '6px',
-              background: 'rgba(0, 255, 136, 0.12)',
-              border: '1px solid rgba(0, 255, 136, 0.35)',
-              color: '#00ff88'
-            }}>
-              ⚡ {guardian.energy_state}
-            </span>
-          </div>
+          {/* Scrubber Controls */}
+          {stripUrl && (
+            <div style={{ width: '100%', maxWidth: '340px', marginTop: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#8b9bb4', marginBottom: '4px' }}>
+                <span>FRAME: {currentFrame}/16</span>
+                <span style={{ color: currentFrame === 7 ? '#ff2a85' : '#00f0ff' }}>
+                  {currentFrame === 7 ? '⚡ TIẾP ĐẤT 3 ĐIỂM' : currentFrame === 16 ? '👑 THẾ ANH HÙNG' : 'HẠ CÁNH'}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="16"
+                value={currentFrame}
+                onChange={(e) => handleScrub(parseInt(e.target.value, 10))}
+                style={{ width: '100%', accentColor: '#00f0ff', cursor: 'pointer' }}
+              />
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '8px' }}>
+                <button
+                  onClick={() => playLanding(1.1)}
+                  style={{
+                    background: 'rgba(0,240,255,0.1)',
+                    border: '1px solid #00f0ff',
+                    color: '#00f0ff',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '11px',
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ▶ Replay (1.1s)
+                </button>
+                <button
+                  onClick={() => playLanding(4.4)}
+                  style={{
+                    background: '#141b27',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#f0f6fc',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: '11px',
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🐌 Slow-Mo
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Social Share Embedded Section */}

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hatch Pipeline Production Hardening — Plan</title>
+<style>
+  :root{--paper:#faf7f2;--panel:#f0ebe1;--ink:#0a0a0a;--muted:#6b6258;--accent:#b8232c;--hair:#d8d0c4;--ok:#3a7d44;--warn:#b8860b}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;line-height:1.55;-webkit-font-smoothing:antialiased;background-image:radial-gradient(rgba(120,110,95,.035) 1px,transparent 1px);background-size:3px 3px}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  .mono{font-family:"SFMono-Regular",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace}
+  .eyebrow{font-family:ui-monospace,monospace;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent)}
+  h1,h2,h3{line-height:1.15;letter-spacing:-.01em}
+  h1{font-size:clamp(34px,6vw,64px);margin:.1em 0 .2em;font-weight:800}
+  h2{font-size:clamp(24px,3.4vw,36px);margin:0 0 .4em;font-weight:700}
+  h3{font-size:20px;margin:0 0 .3em}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(184,35,44,.35)}
+  a:hover{border-bottom-color:var(--accent)}
+  hr{border:0;border-top:1px solid var(--hair);margin:0}
+  .cover{padding:88px 0 40px;border-bottom:2px solid var(--ink)}
+  .cover .lede{font-size:clamp(17px,2.2vw,22px);color:var(--muted);max-width:70ch;font-style:italic}
+  .statband{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--hair);border:1px solid var(--hair);margin:36px 0}
+  .stat{background:var(--paper);padding:20px 16px}
+  .stat .n{font-size:34px;font-weight:800;font-family:ui-monospace,monospace}
+  .stat .l{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+  section{padding:52px 0;border-bottom:1px solid var(--hair)}
+  .pull{border-left:3px solid var(--accent);padding:6px 0 6px 20px;margin:28px 0;font-style:italic;font-size:20px;color:#2a2620}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  td .mono{font-size:12px;color:var(--muted)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:24px}
+  .card{background:var(--panel);border:1px solid var(--hair);padding:20px;cursor:pointer;position:relative;transition:transform .12s ease,border-color .12s ease}
+  .card:hover,.card:focus-visible{transform:translateY(-2px);border-color:var(--accent);outline:none}
+  .card .ph{font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.16em;color:var(--accent);text-transform:uppercase}
+  .card h3{margin:8px 0 6px;font-size:19px}
+  .card .obj{font-size:14px;color:#39332c;margin:0 0 12px}
+  .card ul{margin:0 0 12px;padding-left:18px;font-size:13px;color:#39332c}
+  .card ul li{margin:3px 0}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .tag{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border:1px solid var(--hair);background:var(--paper);color:var(--muted)}
+  .tag.p1{border-color:var(--accent);color:var(--accent)}
+  .open{position:absolute;right:16px;bottom:14px;font-family:ui-monospace,monospace;font-size:11px;color:var(--accent)}
+  dialog{max-width:820px;width:calc(100% - 32px);border:1px solid var(--ink);background:var(--paper);color:var(--ink);padding:0;box-shadow:0 0 0 100vmax rgba(10,10,10,.45)}
+  dialog::backdrop{background:rgba(10,10,10,.45)}
+  .dlg-head{position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--ink);padding:16px 22px;display:flex;justify-content:space-between;align-items:center}
+  .dlg-body{padding:22px 26px 34px}
+  .dlg-body h1{font-size:26px;margin-top:0}
+  .dlg-body h2{font-size:19px;margin:22px 0 6px;padding-top:12px;border-top:1px solid var(--hair)}
+  .dlg-body h3{font-size:16px;margin:16px 0 4px}
+  .dlg-body ul{padding-left:20px}
+  .dlg-body li{margin:4px 0}
+  .dlg-body code{font-family:ui-monospace,monospace;font-size:12.5px;background:var(--panel);padding:1px 5px;border:1px solid var(--hair)}
+  .dlg-body pre{background:#1a1712;color:#f0ebe1;padding:14px;overflow:auto;font-size:12.5px}
+  .dlg-body pre code{background:none;border:0;color:inherit;padding:0}
+  .dlg-body blockquote{border-left:3px solid var(--accent);margin:10px 0;padding:4px 14px;color:#39332c;font-style:italic}
+  .cbx{list-style:none;padding-left:0}
+  .cbx li{padding-left:24px;position:relative}
+  .cbx li::before{content:"\2610";position:absolute;left:0;font-family:ui-monospace,monospace;color:var(--muted)}
+  .cbx li.done::before{content:"\2611";color:var(--ok)}
+  .xbtn{font-family:ui-monospace,monospace;font-size:12px;background:none;border:1px solid var(--ink);padding:6px 12px;cursor:pointer;color:var(--ink)}
+  .xbtn:hover{background:var(--ink);color:var(--paper)}
+  .diagram{width:100%;height:auto;border:1px solid var(--hair);background:var(--panel);margin:20px 0}
+  .legend{font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap;margin-top:8px}
+  .swatch{display:inline-block;width:11px;height:11px;margin-right:5px;vertical-align:middle}
+  .qbox{background:var(--panel);border:1px solid var(--hair);padding:18px 22px;margin-top:16px}
+  footer{padding:40px 0 80px;color:var(--muted);font-family:ui-monospace,monospace;font-size:12px}
+  .nav{position:fixed;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:9px;z-index:50}
+  .nav a{width:9px;height:9px;border-radius:50%;background:var(--hair);border:0;display:block}
+  .nav a:hover,.nav a.active{background:var(--accent)}
+  @media(max-width:640px){.statband{grid-template-columns:repeat(2,1fr)}.nav{display:none}}
+</style>
+</head>
+<body>
+<nav class="nav" aria-label="Section navigation">
+  <a href="#cover" title="Cover"></a><a href="#why" title="Why"></a>
+  <a href="#blockers" title="Blockers"></a><a href="#flow" title="Flow"></a>
+  <a href="#phases" title="Phases"></a><a href="#accept" title="Acceptance"></a>
+</nav>
+
+<header id="cover" class="cover">
+  <div class="wrap">
+    <div class="eyebrow">GitHoot &middot; Remediation Plan &middot; 260831-1233</div>
+    <h1>Hatch Pipeline<br>Production Hardening</h1>
+    <p class="lede">A test-first, linear remediation of the twelve Kongming NO-GO blockers &mdash; per-pose generation, a fail-closed contour image gate, an idempotent cost-bounded queue DAG, atomic single-pointer publication, and a full live staging hatch ending in a fresh zero-defect signoff.</p>
+    <div class="statband">
+      <div class="stat"><div class="n">12</div><div class="l">Blockers Mapped</div></div>
+      <div class="stat"><div class="n">8</div><div class="l">TDD Phases</div></div>
+      <div class="stat"><div class="n">3&times;</div><div class="l">Kongming Reviews Banked</div></div>
+      <div class="stat"><div class="n">GO</div><div class="l">Exit Condition</div></div>
+    </div>
+  </div>
+</header>
+
+<section id="why">
+  <div class="wrap">
+    <div class="eyebrow">The Problem</div>
+    <h2>Green tests, unproven contract</h2>
+    <p>The Hatch Pet pipeline passes 81 Vitest + 35 determinism tests and builds cleanly, yet Kongming's autonomous review returned a <strong>formal NO-GO</strong> &mdash; twice: once on the implementation (12 blockers) and once on the first draft of this very plan (12 required edits, all folded in). Every passing check was mock-bound; none exercised the real Cloudflare Queue&rarr;Gemini&rarr;R2&rarr;D1&rarr;review&rarr;publish lifecycle, its failure modes, its cost controls, or the artifact that actually ships.</p>
+    <div class="pull">The decision is not whether the code compiles. It is whether an authenticated production claim can consume authentic telemetry, generate one immutable identity, survive queue duplication and partial failure without unbounded spend, reject corrupt or visually invalid assets, publish only cryptographically verified bytes, and deploy the same Worker that was tested.</div>
+    <p>This plan fixes every release blocker under strict TDD on real <span class="mono">workerd</span> bindings, honoring the binding <span class="mono">AGENTS.md</span> invariant #4: per-pose generation (one pose per API call composited locally) with contour bounding-box extraction, and content-addressed publication.</p>
+  </div>
+</section>
+
+<section id="blockers">
+  <div class="wrap">
+    <div class="eyebrow">Traceability</div>
+    <h2>Twelve blockers &rarr; eight phases</h2>
+    <table>
+      <thead><tr><th>#</th><th>Blocker</th><th>Evidence anchor</th><th>Phase</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Claim fabricates telemetry (stars/forks/PRs/reviews/weeks = 0)</td><td class="mono">transaction.ts:59-68</td><td>2</td></tr>
+        <tr><td>12</td><td>SHA-256 hasher silently falls back to FNV-64</td><td class="mono">compiler.ts:16-25</td><td>2</td></tr>
+        <tr><td>2</td><td>No authoritative image gate: blank/collage/oversized pass</td><td class="mono">slicer.ts:30-98</td><td>3</td></tr>
+        <tr><td>3</td><td>Generation proceeds with <span class="mono">referenceImage:null</span></td><td class="mono">generation-worker.ts</td><td>3</td></tr>
+        <tr><td>11a/c</td><td>Dead fixed-grid slicing; <span class="mono">Queue&lt;any&gt;</span>, unchecked JSON.parse, synthesized identity defaults</td><td class="mono">slicer.ts:138-214; types:10; gw:104-128</td><td>2,3,4</td></tr>
+        <tr><td>4</td><td>Sequential invoke risks 15-min wall limit; no lease</td><td class="mono">generation-worker.ts</td><td>4</td></tr>
+        <tr><td>7a</td><td>Enqueue failures swallowed as success</td><td class="mono">transaction.ts:160-179</td><td>4</td></tr>
+        <tr><td>5</td><td>Preflight checks hash <em>presence</em>, no byte digests / cross-field</td><td class="mono">publication-preflight.ts:105-184</td><td>5</td></tr>
+        <tr><td>7b</td><td>Publication CAS ignores affected rows; <span class="mono">changes:0</span> = success</td><td class="mono">hatch-admin.ts:112-153</td><td>5</td></tr>
+        <tr><td>6a</td><td>Manifest stays <span class="mono">VERIFYING</span>; cross-store race</td><td class="mono">generation-worker.ts:380-389</td><td>5</td></tr>
+        <tr><td>8</td><td>Mutable master keys served <span class="mono">immutable</span></td><td class="mono">R2 key scheme</td><td>5</td></tr>
+        <tr><td>10</td><td>Trusted body identity hash; reused secret; no const-time; JWKS bypass</td><td class="mono">auth.ts / admin-auth.ts</td><td>6</td></tr>
+        <tr><td>9</td><td>CI deploys source worker before build; no <span class="mono">--env production</span></td><td class="mono">deploy.yml:29-107</td><td>7</td></tr>
+        <tr><td>11b</td><td><span class="mono">max_concurrency</span> absent; soft secret checks</td><td class="mono">wrangler.worker.toml</td><td>7</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="flow">
+  <div class="wrap">
+    <div class="eyebrow">Implementation Workflow</div>
+    <h2>Linear order, harness first</h2>
+    <p>Kongming's plan review forced a boring linear order: P1 stands up a real-runtime harness <em>and bootstraps isolated staging</em>; the identity&rarr;image&rarr;per-pose-queue&rarr;publication spine is sequential; reviewer-auth (P6) is <strong>not</strong> independent (it consumes P2's hash and overlaps P4/P5); deploy (P7) needs P6's admin secret; the full live staging hatch + fresh Kongming GO (P8) closes it out.</p>
+    <svg class="diagram" viewBox="0 0 980 250" role="img" aria-label="Linear phase dependency flow diagram">
+      <defs>
+        <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="#6b6258"/>
+        </marker>
+        <style>
+          .box{fill:#f0ebe1;stroke:#0a0a0a;stroke-width:1.5}
+          .spine{fill:#f5e9e0;stroke:#b8232c;stroke-width:1.5}
+          .gate{fill:#faf7f2;stroke:#b8860b;stroke-width:1.5;stroke-dasharray:4 3}
+          .t{font-family:ui-monospace,monospace;font-size:12px;fill:#0a0a0a}
+          .tt{font-family:ui-monospace,monospace;font-size:9.5px;fill:#6b6258}
+          .ln{stroke:#6b6258;stroke-width:1.4;fill:none;marker-end:url(#arw)}
+        </style>
+      </defs>
+      <rect class="box"   x="18"  y="100" width="104" height="52" rx="2"/><text class="t" x="70"  y="122" text-anchor="middle">P1</text><text class="tt" x="70"  y="138" text-anchor="middle">harness+staging</text>
+      <rect class="spine" x="140" y="100" width="104" height="52" rx="2"/><text class="t" x="192" y="122" text-anchor="middle">P2</text><text class="tt" x="192" y="138" text-anchor="middle">identity</text>
+      <rect class="spine" x="262" y="100" width="104" height="52" rx="2"/><text class="t" x="314" y="122" text-anchor="middle">P3</text><text class="tt" x="314" y="138" text-anchor="middle">contour gate</text>
+      <rect class="spine" x="384" y="100" width="104" height="52" rx="2"/><text class="t" x="436" y="122" text-anchor="middle">P4</text><text class="tt" x="436" y="138" text-anchor="middle">per-pose queue</text>
+      <rect class="spine" x="506" y="100" width="104" height="52" rx="2"/><text class="t" x="558" y="122" text-anchor="middle">P5</text><text class="tt" x="558" y="138" text-anchor="middle">atomic pub</text>
+      <rect class="box"   x="628" y="100" width="104" height="52" rx="2"/><text class="t" x="680" y="122" text-anchor="middle">P6</text><text class="tt" x="680" y="138" text-anchor="middle">reviewer auth</text>
+      <rect class="box"   x="750" y="100" width="104" height="52" rx="2"/><text class="t" x="802" y="122" text-anchor="middle">P7</text><text class="tt" x="802" y="138" text-anchor="middle">deploy+CI</text>
+      <rect class="gate"  x="872" y="100" width="92"  height="52" rx="2"/><text class="t" x="918" y="122" text-anchor="middle">P8</text><text class="tt" x="918" y="138" text-anchor="middle">live+GO</text>
+      <path class="ln" d="M122 126 L140 126"/>
+      <path class="ln" d="M244 126 L262 126"/>
+      <path class="ln" d="M366 126 L384 126"/>
+      <path class="ln" d="M488 126 L506 126"/>
+      <path class="ln" d="M610 126 L628 126"/>
+      <path class="ln" d="M732 126 L750 126"/>
+      <path class="ln" d="M854 126 L872 126"/>
+    </svg>
+    <div class="legend">
+      <span><span class="swatch" style="background:#f5e9e0;border:1px solid #b8232c"></span>Correctness spine</span>
+      <span><span class="swatch" style="background:#f0ebe1;border:1px solid #0a0a0a"></span>Infra / auth / deploy</span>
+      <span><span class="swatch" style="background:#faf7f2;border:1px dashed #b8860b"></span>Final verification gate</span>
+    </div>
+  </div>
+</section>
+
+<section id="phases">
+  <div class="wrap">
+    <div class="eyebrow">The Work</div>
+    <h2>Eight phases, tests first</h2>
+    <p>Each phase opens with a <strong>failing</strong> contract test (captured RED baseline), then makes it pass on real bindings. Click any phase for detail.</p>
+    <div class="cards" id="cards"></div>
+  </div>
+</section>
+
+<section id="accept">
+  <div class="wrap">
+    <div class="eyebrow">Definition of Done</div>
+    <h2>Plan-level acceptance</h2>
+    <ul class="cbx">
+      <li>Every blocker has a test with a captured RED baseline and a GREEN result; import/config failure is not blocker proof.</li>
+      <li>Real <span class="mono">@cloudflare/vitest-plugin</span> suite green on workerd; mock-only lifecycle test retired.</li>
+      <li>Invalid queue/manifest/identity JSON quarantines to DLQ; identity never synthesized (fails closed).</li>
+      <li>No fabricated telemetry; known SHA-256 vectors match Node&harr;workerd.</li>
+      <li>Transparent/collage(&gt;4 components)/multi-subject(&gt;30%)/malformed/oversized image, missing reference, altered frame/master &mdash; each prevents <span class="mono">ASSET_READY</span>.</li>
+      <li>Duplicate delivery converges to one accepted pose (at-least-once queue); post-crash spend bounded by per-job/day cap, reservations reconciled (reference + poses).</li>
+      <li>Worst-case consumer duration under a safety margin below 15 min.</li>
+      <li>Single atomic D1 pointer publication; no crash leaves mixed state; losers get a truthful conflict; readers resolve only the content-addressed manifest.</li>
+      <li>Reviewer identity hash server-derived; dedicated admin secret; constant-time; JWKS rotation; exact-bytes review evidence persisted.</li>
+      <li>One authoritative bundle (recorded SHA-256), deployed == tested, <span class="mono">--env production</span> on deploy+secrets, component-scoped hard secret gates, explicit <span class="mono">max_concurrency</span>.</li>
+      <li>Root <span class="mono">AGENTS.md</span> refreshed and reconciled via <span class="mono">/ak:docs agent-context</span> during Phase 7 to document the single-source deploy artifact, secrets pipeline, and zero-defect verification rules.</li>
+      <li>Isolated staging bootstrapped in P1; a full live hatch (reference + 16 poses) reaches <span class="mono">ASSET_READY</span> only after real human review at the named review route; digests agree.</li>
+      <li>Fresh Kongming verdict = <strong>GO</strong>, zero defects.</li>
+    </ul>
+    <div class="qbox">
+      <div class="eyebrow">Resolved Decisions</div>
+      <ul>
+        <li><strong>Generation granularity (P4):</strong> per-pose fan-out (16 pose calls composited locally) per binding <span class="mono">AGENTS.md</span> #4; contour detection per frame, never fixed-slice.</li>
+        <li><strong>Publication scheme (P5):</strong> content-addressed masters + content-addressed manifest, immutable-first, one D1-selected pointer.</li>
+        <li><strong>Reviewer surface (P6/P8):</strong> in-repo authenticated route <span class="mono">/auth/admin/review/:jobId</span> behind Cloudflare Access; immutable bundle + explicit approve/reject; persisted reviewer principal, bundleSha, frame/manifest hashes, timestamp.</li>
+      </ul>
+      <div class="eyebrow" style="margin-top:14px">Open Questions</div>
+      <ul>
+        <li><strong>Gemini idempotency:</strong> a provider-side idempotency key would allow strengthening the external-charge invariant toward exactly-once; assumed absent (ledger+cap+reconcile is the ceiling).</li>
+        <li><strong>Staging Gemini budget:</strong> confirm a capped key funds one full live hatch (reference + 16 poses); else P8 splits into a labeled canary + fixture smoke and GO is withheld until a full live hatch runs.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <hr style="margin-bottom:24px">
+    <div>PLAN &middot; hatch-pipeline-production-hardening &middot; P1 &middot; TDD-first &middot; linear &middot; under kongming (--advice)</div>
+    <div style="margin-top:8px">Canonical files: plan.md + phase-01..08. Citations:
+      <a href="https://developers.cloudflare.com/queues/platform/limits/">CF Queue limits</a> &middot;
+      <a href="https://developers.cloudflare.com/d1/worker-api/d1-database/#batch">D1 batch changes:0</a> &middot;
+      <a href="https://developers.cloudflare.com/workers/testing/vitest-integration/write-your-first-test/">vitest-plugin</a>
+    </div>
+  </div>
+</footer>
+
+<dialog id="modal">
+  <div class="dlg-head"><span class="eyebrow" id="modal-tag">Phase</span>
+    <button class="xbtn" onclick="document.getElementById('modal').close()">CLOSE &times;</button></div>
+  <div class="dlg-body" id="modal-body"></div>
+</dialog>
+
+<script>
+const PHASES=[
+ {n:"P1",title:"TDD Harness + Staging Bootstrap Foundation",pri:"P1",eff:"1.5d",dep:"none",
+  obj:"Real workerd harness + idempotent staging bootstrap so every fix is falsifiable and the plan can reach its own later phases.",
+  bullets:["@cloudflare/vitest-plugin (Vitest 4.1+) on workerd: D1+R2+KV+Queue+WASM","readD1Migrations + applyD1Migrations inside the Workers test","Dimension Contract: \u22641024px/\u22644MB caps; 1024\u00b2 scales, 1600\u00b2 rejects","staging-bootstrap.mjs create-or-verify isolated staging resources"],
+  md:"# Phase 1: TDD Harness + Staging Bootstrap Foundation\n\n## Overview\nStand up a real Workers-runtime harness (current Cloudflare stack) and idempotently bootstrap isolated staging. Kongming's core finding: the green suite is mock-bound and staging must exist before coding, not be deferred to P8.\n\n## Requirements\n- `@cloudflare/vitest-plugin` on **Vitest 4.1+** via `cloudflareTest()`, `cloudflare:workers`/`cloudflare:test`; bindings mirror `wrangler.worker.toml` + WASM rule for `@jsquash/webp`.\n- Migrations via `readD1Migrations()` (Node config) + `applyD1Migrations(env.DB, ...)` **inside** the Workers test (Node globalSetup cannot touch worker-scoped D1).\n- `staging-bootstrap.mjs` **create-or-verify** provisions isolated staging D1/R2/KV/Queue/DLQ + Worker/Pages, applies staging migrations, confirms credentials/Gemini quota; hard-stops only on an uncreatable prerequisite.\n\n## Dimension Contract (single source; resolves P1/P3/P8 caps)\n- Accepted frame: \u22641024px/side, \u22644MB, PNG only. `1024\u00d71024` is within cap (scale fixture); `>1024`/`>4MB` rejects. Constants live in `GATES`.\n\n## Test-Boundary Honesty\n- Real: D1, R2, KV, WASM, workerd ack/retry. Controlled doubles: Gemini + forced Queue faults \u2014 handler-semantics integration, **not** broker/provider E2E (that is P8 staging).\n\n## TDD Gate\n- [ ] **RED:** harness smoke fails (plugin/bindings absent) \u2014 capture command + reason.\n- [ ] **GREEN:** all five binding classes + WASM pass on workerd.\n- [ ] Meta: current `verifyPublicationReady` returns `ready:true` on a transparent frame \u2014 baseline P3/P5 flip.\n- [ ] Staging bootstrap create-or-verifies idempotently + applies staging migrations.\n\n## Risk\nIf plugin/workerd cannot run in CI/sandbox \u2192 Wrangler `--local` harness; if blocked, gate P8 on a manual `wrangler dev` smoke \u2014 never mock business logic. Resource creation is automated; only credentials/quota can hard-block."},
+ {n:"P2",title:"Authentic Telemetry & Deterministic Identity",pri:"P1",eff:"1d",dep:"P1",
+  obj:"Real GitHub telemetry, one true SHA-256, no synthesized identity defaults.",
+  bullets:["Freeze enriched snapshot; per-field provenance, no fabricated 0","Single Web Crypto SHA-256; delete FNV fallback + dynamic require","Known SHA-256 vectors match Node\u2194workerd exactly","Run /ak:docs update to refresh DNA & identity docs"],
+  md:"# Phase 2: Authentic Telemetry & Deterministic Identity\n\n## Overview\nThe claim writes measured-looking zeros and the hasher substitutes FNV-64 when `require('node:crypto')` fails. Both violate zero-fake-data and byte-identical identity. Blocker #11c: the worker synthesizes identity defaults.\n\n## Requirements\n- Freeze a full `TelemetrySnapshot` with per-field `provenance` (`measured`|`unavailable`) before `compileIdentitySpec`; never fabricate 0.\n- One deterministic `crypto.subtle` SHA-256 everywhere; FNV removed.\n- Missing/invalid persisted `identity_spec` **fails closed** (quarantine); no in-worker default synthesis.\n\n## TDD Gate\n- [ ] **RED:** no `compileIdentitySpec` input is a fabricated 0 when the API returned nothing.\n- [ ] **RED (discriminating):** exact SHA-256 of `\"\"`, `\"abc\"`, a non-ASCII string matches published digests in **both** Node and workerd (catches FNV even if runtimes agree; import failure is not valid RED).\n- [ ] **RED:** garbage `identity_spec` \u2192 quarantine, no synthesized identity.\n- [ ] **GREEN:** all pass; determinism suite stable over 1000 derivations.\n\n## Risk\nExtra API calls \u2192 GraphQL batch + KV SWR + `unavailable` degraded identity; never block/fabricate. Confirm with user before altering any already-issued identity."},
+ {n:"P3",title:"Fail-Closed Image Acceptance Gate",pri:"P1",eff:"1.5d",dep:"P2",
+  obj:"One fail-closed single-subject contour gate; scale-to-fit; require reference bytes.",
+  bullets:["Per AGENTS.md #4: one pose per API call \u2014 every output is a single-subject frame","AGENTS.md:46 thresholds: collage >4 comps, 2nd >30%, fill <6%, aspect >3.2","Contour bounding-box detection (TS), never fixed-slice; scale-to-fit not crop","Run /ak:docs update to document image acceptance gate rules"],
+  md:"# Phase 3: Fail-Closed Image Acceptance Gate\n\n## Overview\nReplace permissive handling with one fail-closed single-subject gate. Today a transparent frame passes, oversized output is blind-cropped, the AGENTS-mandated component/dominance/fill/aspect gates are absent, MIME ignored, and a dead fake fallback + fixed-grid slicing remain. Per binding `AGENTS.md` #4 generation is one pose per API call, so every output is a single-subject frame \u2014 no grid to slice.\n\n## Requirements (thresholds per AGENTS.md:46)\n- `validateAndNormalizeFrame(bytes)`: structural PNG/MIME/dimension (P1 caps) \u2192 Green De-Spill chroma \u2192 bounding-box/contour detection \u2192 reject collage (>4 large components), multi-subject (2nd >30% of main), too-small (<6% fill), over-wide (aspect >3.2) \u2192 scale-to-fit + center 256.\n- Generation requires canonical reference bytes; `referenceImage:null` forbidden.\n- Re-validate cached frames vs R2 bytes every run; retain `raw/<sha>` gate inputs for P5 recompute.\n- Detection is contour/bounding-box (TS `chroma-removal` + `findCharacterBoundingBox`); `AGENTS.md:43` requires bounding-box detection, not a specific WASM module. Only the WebP codec is WASM.\n\n## TDD Gate\n- [ ] **RED:** transparent reject; collage(>4) reject; 2nd-subject(>30%) reject; single centered subject accept.\n- [ ] **RED:** 1024\u00b2 within cap scales no-clip; JPEG/truncated/>1024/>4MB reject; <6% fill and aspect>3.2 reject.\n- [ ] **RED:** missing reference \u2192 quarantine; cached-frame re-validation rejects a corrupted cache; re-run on `raw/<sha>` reproduces accepted hash.\n- [ ] **GREEN:** valid fixture centered at expected offset.\n\n## Risk\nComponent+resample cost per frame \u2192 per-pose fan-out (P4) bounds each invocation to one pose; single-pass O(pixels). Thresholds are exactly AGENTS.md:46 from `GATES`; kongming check before loosening any bound."},
+ {n:"P4",title:"Resumable Per-Pose Queue DAG, Envelope & Cost Control",pri:"P1",eff:"2.5d",dep:"P3",
+  obj:"Per-pose, schema-validated, resumable, cost-bounded DAG on an at-least-once queue.",
+  bullets:["16 HATCH_POSE + reference + compositor; lease/retry/budget unit = pose","Versioned discriminated envelope; invalid payload \u2192 DLQ; typed Queue","Idempotent consumer: deterministic claim key + unique accepted row (at-least-once)","Run /ak:docs update to document Queue DAG & outbox architecture"],
+  md:"# Phase 4: Resumable Per-Pose Queue DAG, Envelope & Cost Control\n\n## Overview\nToday one invocation runs 16 sequential poses (worst case \u2248 24.8 min > 15-min limit); failures fall through to `ack()`; enqueue failures are swallowed; the queue is `Queue<any>` with unchecked `JSON.parse`; no lease.\n\n## Binding contract (AGENTS.md #4)\nThe model is never trusted to emit an exact grid \u2014 generate **one pose per API call** and composite locally. The DAG emits `HATCH_REFERENCE`, sixteen `HATCH_POSE`, one `HATCH_COMPOSITE`. Lease/retry/budget unit = the pose.\n\n## At-least-once reality\nCloudflare Queues deliver at least once; duplicates are expected. The goal is an **idempotent consumer**: a deterministic `(job,pose,attempt)` claim key + a unique `(job,pose)` accepted row so any duplicate converges to one accepted pose and spend stays within caps \u2014 not suppression of redelivery.\n\n## Requirements\n- Typed versioned discriminated envelope; schema parse at every consume/JSON.parse; invalid \u2192 DLQ.\n- Per-pose lease + deterministic claim key + unique accepted row.\n- Retry-not-ack; DLQ + replay runbook.\n- Operational outbox: Cron drainer, claim keys, delivery marking, reclaim, backoff, poison, alert, replay. Claim returns accepted/pending-delivery truthfully.\n- Corrected charge invariant: lease bounds concurrency, not billing after crash. No unleased call; one accepted frame per (job,pose); durable ledger; bounded retries; per-job+day cap; reconciliation \u2014 reference AND poses. Exactly-one-call only in the no-crash test.\n\n## TDD Gate\n- [ ] **RED:** malformed/unknown-version payload \u2192 DLQ.\n- [ ] **RED:** duplicate HATCH_POSE (no crash) \u2192 one accepted pose, one call.\n- [ ] **RED (at-least-once):** send-before-mark crash re-delivers \u2192 converges to one accepted pose, spend capped; redelivery expected not suppressed.\n- [ ] **RED:** crash after Gemini-accept \u2192 reconciled, retry bounded, cap held.\n- [ ] **RED:** exhausted attempts \u2192 resumable not acked; enqueue failure \u2192 pending-delivery + outbox; compositor 15/16 \u2192 re-enqueue.\n- [ ] **GREEN:** measured worst-case single-pose invocation under the margin.\n\n## Risk\nDuplicate accepted row \u2192 unique `(job,pose)` constraint is the backstop. No provider idempotency key assumed \u2192 ledger+cap+reconcile is the ceiling."},
+ {n:"P5",title:"Atomic Publication Integrity & Single Pointer",pri:"P1",eff:"2d",dep:"P4",
+  bullets:["Recompute SHA-256 over ALL 16 frames + 4 masters + manifest (no sampling)","Cross-field agreement: identity/telemetry/reference/model/version/pose-map/keys","Immutable content-addressed bytes first, then one atomic D1 pointer flip","Run /ak:docs update to document publication protocol & manifest schema"],
+  md:"# Phase 5: Atomic Publication Integrity & Single Pointer\n\n## Overview\nPreflight checks only presence + truthy hash strings; the CAS checks nothing; the manifest is written `VERIFYING` before D1 and never updated; fixed master keys are served `immutable` though overwritable.\n\n## Committed scheme\nContent-addressed everything, immutable-first, one pointer: write `masters/<sha>` + `manifests/<manifestSha>.json` (listing all digests + identity/reference/model/version) **first**; then **one authoritative D1 primitive** (unique-insert winner row + state transition) points the guardian at `<manifestSha>`. Readers resolve only via that pointer. The manifest body need not contain its own SHA-256 \u2014 its identity is the content-addressed key + D1 pointer. Checking `meta.changes` after a batch is not rollback \u2014 the single primitive avoids the mixed-commit window.\n\n## Requirements\n- Recompute SHA-256 over every authoritative object (16 frames + 4 masters + manifest); D1==manifest==bytes; **no sampling**.\n- Cross-field agreement across D1 and manifest (identity/telemetry/reference/model/version/pose ids 0-15 unique/keys/digests).\n- Gate metrics re-parsed AND recomputed by re-running the Phase 3 TS contour extraction over retained `raw/<sha>`.\n- Verdict contract (SemanticVerdict bound to frame_sha256) owned in P5 so P5 tests turn green without P6; exact-review provenance enforced in P6.\n- 16 hash-bound semantic verdicts present + valid.\n- Single D1 pointer; loser \u2192 truthful conflict; already-published+matching \u2192 idempotent success.\n\n## TDD Gate\n- [ ] **RED:** correct manifest hash but mutated R2 bytes \u2192 fail.\n- [ ] **RED:** D1/manifest field disagreement \u2192 fail; junk gate metrics / gate re-run mismatch \u2192 fail.\n- [ ] **RED:** concurrent publish \u2192 one winner, loser conflict.\n- [ ] **RED (crash matrix):** crash after each R2 write and around the pointer flip \u2192 no pointer OR pointer to complete immutable manifest; never partial/mutable.\n- [ ] **RED:** resolved public manifest state === ASSET_READY.\n- [ ] **GREEN:** happy-path publish reaches ASSET_READY with agreeing surfaces.\n\n## Risk\nHashing 21 objects is fine (publish is rare/admin-triggered); cache digests at write but the gate always recomputes over bytes \u2014 no sampling. Clients resolve via the pointer/manifest indirection, never a hardcoded key."},
+ {n:"P6",title:"Reviewer Auth Hardening & Provenance",pri:"P1",eff:"1d",dep:"P5",
+  obj:"Server-derived identity hash; dedicated secret; constant-time; JWKS rotation; exact-bytes review evidence.",
+  bullets:["Named review route GET/POST /auth/admin/review/:jobId behind Cloudflare Access","Derive currentIdentityHash from D1, not request body","Dedicated ADMIN_REVIEW_SECRET \u2260 OAuth secret; constant-time compare","Unknown kid \u2192 one JWKS refresh before reject; persist reviewer+bundleSha+hashes+timestamp"],
+  md:"# Phase 6: Reviewer Auth Hardening & Provenance\n\n## Overview\nRS256/aud/iss/exp/nbf are sound, but approval trusts a body-supplied `currentIdentityHash`, reuses the OAuth state secret as admin bearer, compares tokens non-constant-time, and bypasses dynamic JWKS whenever `CF_ACCESS_JWKS` is static (rotation cannot recover an unknown kid). It is not independent \u2014 it consumes P2's hash and overlaps P4/P5, so it lands after P5.\n\n## Requirements\n- Derive `currentIdentityHash` server-side from the D1 identity spec; drop the body field.\n- Dedicated `ADMIN_REVIEW_SECRET` distinct from `AUTH_SECRET`; constant-time compare.\n- Unknown `kid` \u2192 one dynamic JWKS refresh before reject (static becomes a seed/cache).\n- Persist exact-bytes review evidence (reviewer principal, manifest hash, frame hashes, timestamp, artifact shown).\n\n## TDD Gate\n- [ ] **RED:** forged body identity hash ignored; server-derived used.\n- [ ] **RED:** OAuth secret as bearer \u2192 rejected; only ADMIN_REVIEW_SECRET accepted.\n- [ ] **RED:** JWT with kid absent from static JWKS \u2192 refresh recovers.\n- [ ] **RED:** token compare constant-time (no early-return branch).\n- [ ] **GREEN:** existing 8 admin-auth tests still green.\n\n## Risk\nMissing new secret breaks admin \u2192 P7 hard-gates it. Bad-kid refresh flood \u2192 single-flight + short negative cache."},
+ {n:"P7",title:"Deploy Provenance, Staging & CI Gates",pri:"P1",eff:"1d",dep:"P6",
+  obj:"Ship the single-source tested artifact, gated, env-complete; deploy onto P1-provisioned staging.",
+  bullets:["One authoritative bundle; recorded SHA-256; deployed == tested","--env production on deploy AND secret ops; [env.production]/[env.staging] parity","Component/role hard secret gates (CI creds vs runtime; incl GITHUB_TOKENS)","Run /ak:docs agent-context to update root AGENTS.md with new production invariants"],
+  md:"# Phase 7: Deploy Provenance, Staging & CI Gates\n\n## Overview\nCI deploys the consumer from source before `npm run build`, so the cited `dist-worker/index.js` never ships; the deploy omits `--env production`; secret checks are soft; `max_concurrency` is unset; staging resources are provisioned in P1 (this phase only deploys onto them).\n\n## Requirements\n- **Single-source artifact:** one authoritative bundle, recorded SHA-256/version, deploy exactly that, assert deployed == recorded. No dual bundling paths.\n- **Env-complete:** `--env production` on deploy AND every `wrangler secret put`; `[env.production]` parity asserted.\n- **Hard secret gates by component/role:** CI creds (`CLOUDFLARE_*`) vs runtime secrets (`GEMINI_API_KEY`, `AUTH_SECRET`, `ADMIN_REVIEW_SECRET`, `CF_ACCESS_*`, `GITHUB_TOKENS`, OAuth, R2). No soft skips.\n- Explicit `max_concurrency` (1-2), `max_batch_size=1`, DLQ + Cron drainer.\n- Deploy/config `[env.staging]` onto the P1-bootstrapped resources; run `staging-bootstrap.mjs` create-or-verify in CI before P8.\n- CI runs unit + integration + determinism before deploy.\n\n## TDD Gate\n- [ ] **RED:** provenance/lint check fails on deploy-before-build + missing `--env production`.\n- [ ] **RED:** secret-preflight exits nonzero on any missing component/role secret (incl GITHUB_TOKENS, ADMIN_REVIEW_SECRET).\n- [ ] **RED:** config assert fails when `max_concurrency` absent or env parity violated.\n- [ ] **GREEN:** build precedes deploy; deployed SHA-256 == recorded; gates enforced.\n\n## Risk\nIf the integration plugin cannot run in CI \u2192 Wrangler `--local`; else gate on P8 manual smoke \u2014 never drop the gate. Config drift \u2192 parity assertion blocks it."},
+ {n:"P8",title:"Full Live Staging E2E & Kongming Signoff",pri:"P1",eff:"1.5d",dep:"P7",
+  obj:"Prove the whole contract on real bindings + a full live per-pose staging hatch; obtain a fresh zero-defect GO.",
+  bullets:["Falsifiable matrix on real workerd bindings","Full live hatch: reference + 16 poses \u2192 ASSET_READY","Real human-review ceremony at /auth/admin/review/:jobId over exact hash-bound bytes","Fresh Kongming GO is the only exit"],
+  md:"# Phase 8: Full Live Staging E2E & Kongming Signoff\n\n## Overview\nConvert the mock-only lifecycle test into a real-binding suite, run the falsifiable matrix on workerd, and execute a **full live staging hatch** (reference + 16 poses composited locally) through the deployed staging Worker, ending only after a **real human review** at `/auth/admin/review/:jobId`.\n\n## Live-smoke contract\nA full hatch needs 17 Gemini calls (reference + 16 poses per AGENTS.md #4), so a one-call full hatch is impossible. Preferred: a capped full live hatch is the signoff evidence. Fallback (quota-limited): a one-pose live canary + a labeled fixture smoke \u2014 not full E2E; GO withheld until a full live hatch runs. Human review is a real pause at the named route; persist reviewer principal, bundleSha, frame + manifest hashes, timestamp, decision.\n\n## Falsifiable matrix (real workerd bindings)\n- [ ] transparent \u2192 quarantine; 1024\u00b2 scales / >1024 rejects; collage(>4)/2nd-subject(>30%) rejected\n- [ ] JPEG/interlaced/malformed/oversized rejected; missing reference \u2192 quarantine; exhausted attempts \u2192 retry not ack\n- [ ] stale/corrupt cached frame \u2192 re-validation rejects; modified master/manifest bytes \u2192 preflight fails\n- [ ] concurrent publish \u2192 single pointer winner, loser conflict, no mixed state\n- [ ] duplicate pose delivery + concurrent workers \u2192 converge to one accepted, spend capped; send-before-mark crash \u2192 idempotent convergence\n- [ ] enqueue + drainer failure \u2192 outbox recovery; JWKS rotation recovers\n- [ ] forged identity hash ignored; reused OAuth secret rejected; bad queue/manifest JSON quarantined; SHA-256 vectors match\n\n## Success Criteria\n- [ ] Matrix green on real bindings; full live hatch (reference + 16 poses) reaches ASSET_READY only after real review at the named route; digests agree; ceremony evidence persisted; no mock presented as provider E2E; fresh Kongming GO.\n\n## Risk\nNo staging/quota (caught in P1) \u2192 CI matrix is the floor; live hatch is mandatory \u2014 no GO without it. Another NO-GO \u2192 new phase items; never weaken tests or fabricate GO."}
+];
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function inline(s){return esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/(^|[^*])\*([^*]+)\*/g,'$1<em>$2</em>').replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');}
+function mdToHtml(md){const lines=md.split("\n");let out=[];let i=0;
+  while(i<lines.length){let l=lines[i];
+    if(/^```/.test(l)){let b=[];i++;while(i<lines.length&&!/^```/.test(lines[i])){b.push(esc(lines[i]));i++;}i++;out.push('<pre><code>'+b.join("\n")+'</code></pre>');continue;}
+    if(/^### /.test(l)){out.push('<h3>'+inline(l.slice(4))+'</h3>');i++;continue;}
+    if(/^## /.test(l)){out.push('<h2>'+inline(l.slice(3))+'</h2>');i++;continue;}
+    if(/^# /.test(l)){out.push('<h1>'+inline(l.slice(2))+'</h1>');i++;continue;}
+    if(/^\s*[-*] /.test(l)){let items=[];while(i<lines.length&&/^\s*[-*] /.test(lines[i])){let raw=lines[i].replace(/^\s*[-*] /,'');let done=/^\[[xX]\]/.test(raw);let cbx=/^\[[ xX]\]/.test(raw);raw=raw.replace(/^\[[ xX]\]\s*/,'');items.push({h:inline(raw),done,cbx});i++;}const any=items.some(x=>x.cbx);out.push('<ul'+(any?' class="cbx"':'')+'>'+items.map(x=>'<li'+(x.done?' class="done"':'')+'>'+x.h+'</li>').join('')+'</ul>');continue;}
+    if(/^\s*$/.test(l)){i++;continue;}
+    let b=[l];i++;while(i<lines.length&&!/^\s*$/.test(lines[i])&&!/^(#|```|\s*[-*] )/.test(lines[i])){b.push(lines[i]);i++;}out.push('<p>'+inline(b.join(' '))+'</p>');}
+  return out.join("\n");}
+const cardsEl=document.getElementById('cards');
+PHASES.forEach(p=>{const c=document.createElement('div');c.className='card';c.tabIndex=0;c.setAttribute('role','button');
+  c.innerHTML='<div class="ph">'+p.n+' &middot; '+p.eff+'</div><h3>'+esc(p.title)+'</h3><p class="obj">'+esc(p.obj)+'</p><ul>'+p.bullets.map(b=>'<li>'+esc(b)+'</li>').join('')+'</ul><div class="meta"><span class="tag p1">'+p.pri+'</span><span class="tag">deps: '+esc(p.dep)+'</span></div><span class="open">OPEN &rarr;</span>';
+  const open=()=>{document.getElementById('modal-tag').textContent=p.n+' \u2014 '+p.title;document.getElementById('modal-body').innerHTML=mdToHtml(p.md);document.getElementById('modal').showModal();};
+  c.addEventListener('click',open);c.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
+  cardsEl.appendChild(c);});
+const dots=[...document.querySelectorAll('.nav a')];const secs=dots.map(d=>document.querySelector(d.getAttribute('href')));
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){const i=secs.indexOf(e.target);dots.forEach(d=>d.classList.remove('active'));if(dots[i])dots[i].classList.add('active');}});},{rootMargin:"-45% 0px -45% 0px"});
+secs.forEach(s=>s&&io.observe(s));
+</script>
+</body>
+</html>

@@ -10,7 +10,7 @@ import { calculateGuardianMood } from '../../src/server/services/progression/moo
 import { createSessionToken, verifySessionToken, generateSignedState, verifySignedState, fetchAggregateStats, revokeAccessToken } from '../../src/server/services/auth/oauth';
 import { renderSvgToPng } from '../../src/server/services/image/resvg-renderer';
 import type { Env, PublicConfig, EarlyAccessStatus, ResolvedProfile, GuardianSummary, UserSession } from '../../src/server/types';
-import app from '../../src/server/index';
+import { app } from '../../src/server/index';
 import { getEarlyAccessStatus } from '../../src/server/services/claim/quota';
 import { getGuardianImageDataUri } from '../../src/server/routes/og';
 describe('SWR Resolver & Degraded Seed Fallback', () => {

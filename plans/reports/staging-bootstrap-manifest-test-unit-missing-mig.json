@@ -1,0 +1,61 @@
+{
+  "timestamp": "2026-08-31T09:54:36.701Z",
+  "runLabel": "test-unit-missing-mig",
+  "environment": "staging",
+  "createdCount": 0,
+  "resources": {
+    "d1": {
+      "name": "githoot_db_staging",
+      "id": "d1-id",
+      "status": "verified"
+    },
+    "r2": {
+      "name": "githoot-staging",
+      "status": "verified"
+    },
+    "kv": {
+      "name": "GITHOOT_CACHE_STAGING",
+      "id": "kv-1",
+      "status": "verified"
+    },
+    "queue": {
+      "name": "githoot-ai-queue-staging",
+      "status": "verified"
+    },
+    "dlq": {
+      "name": "githoot-ai-dlq-staging",
+      "status": "verified"
+    },
+    "pages": {
+      "name": "githoot-staging",
+      "env_config": "wrangler.toml:[env.staging]",
+      "status": "verified"
+    },
+    "worker": {
+      "name": "githoot-generation-consumer-staging",
+      "env_config": "wrangler.worker.toml:[env.staging]",
+      "status": "verified"
+    }
+  },
+  "applied_migrations": [
+    "0001_initial.sql"
+  ],
+  "credentials": {
+    "cloudflare_auth": "verified",
+    "GEMINI_API_KEY": "verified",
+    "AUTH_SECRET": "verified",
+    "ADMIN_REVIEW_SECRET": "verified",
+    "GITHUB_TOKENS": "verified"
+  },
+  "gemini_canary": {
+    "endpoint": "HTTP 200 OK",
+    "configured_model": "nano-banana-pro-preview",
+    "available_models_count": 1,
+    "canary_status": "verified",
+    "status": "verified"
+  },
+  "ready": false,
+  "failures": [
+    "Migration mismatch on githoot_db_staging: expected [0001_initial.sql, 0002_hatch_pipeline_v2.sql], got [0001_initial.sql]"
+  ]
+}

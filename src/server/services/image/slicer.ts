@@ -49,7 +49,7 @@ export function findCharacterBoundingBox(
   }
 
   if (!found) {
-    return { minX: 0, minY: 0, maxX: width - 1, maxY: height - 1, width, height };
+    return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
   }
 
   return {
@@ -127,108 +127,3 @@ export function cropRgbaRegion(
   return output;
 }
 
-/**
- * Real Gemini Image Processor:
- * 1. Decodes real PNG bytes from Gemini Nano Banana 2.
- * 2. Strips Chroma Green & Green De-Spill on actual pixels.
- * 3. Crops Cell [0,0] for Hero Portrait & Cells [1,0..3,1] for 7 Poses.
- * 4. Centers bounding boxes and composites into transparent PNGs.
- * 5. Stores assets in Cloudflare R2 bucket.
- */
-export async function processAndUploadGuardianAssets(
-  guardianId: string,
-  base64ImageData: string,
-  env: Env
-): Promise<SlicedAssetsResult> {
-  const binaryData = Uint8Array.from(atob(base64ImageData), c => c.charCodeAt(0));
-  const cdnHost = env.CDN_DOMAIN || 'cdn.githoot.com';
-
-  const heroKey = `guardians/${guardianId}/hero.png`;
-  const spritesheetKey = `guardians/${guardianId}/spritesheet.png`;
-
-  let decodedImage: DecodedImage;
-
-  try {
-    // Attempt real PNG decode
-    decodedImage = await decodePngToRgba(binaryData);
-  } catch (decodeErr) {
-    console.warn(`[Slicer] PNG decode failed, creating fallback RGBA buffer:`, decodeErr);
-    // Fallback: Initialize 1024x512 matrix if binary format was raw/JPEG
-    decodedImage = {
-      width: 1024,
-      height: 512,
-      data: new Uint8Array(1024 * 512 * 4)
-    };
-  }
-
-  // 1. Run Chroma Removal & Green De-Spill on decoded image
-  const cleanedFullRgba = removeChromaGreen(decodedImage.data, decodedImage.width, decodedImage.height);
-
-  // 2. Crop Cell [0,0] as Hero Portrait (Top-Left 1/4 width, 1/2 height)
-  const cellW = Math.floor(decodedImage.width / 4);
-  const cellH = Math.floor(decodedImage.height / 2);
-
-  const heroCellRgba = cropRgbaRegion(cleanedFullRgba, decodedImage.width, 0, 0, cellW, cellH);
-  const centeredHeroRgba = centerCharacterPose(heroCellRgba, cellW, cellH, 512, 512);
-  const heroPngBytes = encodeRgbaToPng(centeredHeroRgba, 512, 512);
-
-  // 3. Crop and Composite 7 Poses into 1024x512 Spritesheet
-  const sheetWidth = 1024;
-  const sheetHeight = 512;
-  const sheetRgba = new Uint8Array(sheetWidth * sheetHeight * 4);
-
-  for (let cell = 0; cell < 8; cell++) {
-    const col = cell % 4;
-    const row = Math.floor(cell / 4);
-
-    const cropX = col * cellW;
-    const cropY = row * cellH;
-
-    const cellRgba = cropRgbaRegion(cleanedFullRgba, decodedImage.width, cropX, cropY, cellW, cellH);
-    const centeredPose = centerCharacterPose(cellRgba, cellW, cellH, 256, 256);
-
-    // Blit onto sheet
-    const startX = col * 256;
-    const startY = row * 256;
-
-    for (let y = 0; y < 256; y++) {
-      for (let x = 0; x < 256; x++) {
-        const srcIdx = (y * 256 + x) * 4;
-        const dstIdx = ((startY + y) * sheetWidth + (startX + x)) * 4;
-
-        sheetRgba[dstIdx] = centeredPose[srcIdx] ?? 0;
-        sheetRgba[dstIdx + 1] = centeredPose[srcIdx + 1] ?? 0;
-        sheetRgba[dstIdx + 2] = centeredPose[srcIdx + 2] ?? 0;
-        sheetRgba[dstIdx + 3] = centeredPose[srcIdx + 3] ?? 0;
-      }
-    }
-  }
-
-  const sheetPngBytes = encodeRgbaToPng(sheetRgba, sheetWidth, sheetHeight);
-
-  // 4. Upload Real Processed PNGs to Cloudflare R2
-  if (env.ASSETS_BUCKET) {
-    try {
-      await env.ASSETS_BUCKET.put(heroKey, heroPngBytes, {
-        httpMetadata: {
-          contentType: 'image/png',
-          cacheControl: 'public, max-age=31536000, immutable'
-        }
-      });
-
-      await env.ASSETS_BUCKET.put(spritesheetKey, sheetPngBytes, {
-        httpMetadata: {
-          contentType: 'image/png',
-          cacheControl: 'public, max-age=31536000, immutable'
-        }
-      });
-    } catch (err) {
-      console.warn(`[Slicer] R2 upload failed for guardian ${guardianId}:`, err);
-    }
-  }
-
-  return {
-    heroImageUrl: `https://${cdnHost}/${heroKey}`,
-    spritesheetUrl: `https://${cdnHost}/${spritesheetKey}`
-  };
-}

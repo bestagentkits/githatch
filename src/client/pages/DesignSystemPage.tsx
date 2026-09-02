@@ -112,9 +112,9 @@ export const DesignSystemPage: React.FC = () => {
                       fontFamily: 'inherit'
                     }}
                   >
-                    <img src={p.hero_image_url} alt={p.name} style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '4px' }} />
+                    <img src={p.hero_image_url || ''} alt={p.name} style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: '4px' }} />
                     <div style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", marginTop: '4px', color: '#8b9bb4' }}>
-                      {p.name.split(' ')[1]}
+                      {p.name?.split(' ')?.[1] || p.name}
                     </div>
                   </button>
                 ))}

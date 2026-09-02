@@ -9,8 +9,10 @@ import { resolveGitHubProfile, UserNotFoundError } from './services/github/resol
 import { authRouter } from './routes/auth';
 import { badgeRouter } from './routes/badge';
 import { ogRouter } from './routes/og';
+import { handleQueueBatch, type GenerationQueueMessage } from './queue/generation-worker';
+import { processProfileRevalidation } from './queue/sync-worker';
 
-const app = new Hono<{ Bindings: Env }>();
+export const app = new Hono<{ Bindings: Env }>();
 
 // Enable CORS
 app.use('*', cors({
@@ -161,4 +163,16 @@ app.all('*', async (c) => {
   return c.text('Not found', 404);
 });
 
-export default app;
+// Export both fetch and queue consumer handlers for Cloudflare Workers / Pages
+export default {
+  fetch: app.fetch,
+  async queue(batch: MessageBatch<GenerationQueueMessage>, env: Env): Promise<void> {
+    return handleQueueBatch(batch, env);
+  },
+  async scheduled(_controller: unknown, env: Env, _ctx: unknown): Promise<void> {
+    const { drainOutbox } = await import('./queue/outbox');
+    const { reconcileAbandonedReservations } = await import('./services/billing/budget-guard');
+    await drainOutbox(env);
+    await reconcileAbandonedReservations(env);
+  }
+};

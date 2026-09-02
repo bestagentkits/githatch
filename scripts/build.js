@@ -5,12 +5,14 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
-
+import { recordBundleProvenance } from './bundle-provenance.mjs';
 const distDir = path.join(process.cwd(), 'dist');
 if (fs.existsSync(distDir)) {
   fs.rmSync(distDir, { recursive: true, force: true });
 }
+const distWorkerDir = path.join(process.cwd(), 'dist-worker');
 fs.mkdirSync(distDir, { recursive: true });
+fs.mkdirSync(distWorkerDir, { recursive: true });
 
 // 1. Build React Client Bundle with Vite
 console.log('► 1. Building React Client Bundle with Vite...');
@@ -47,23 +49,37 @@ if (fs.existsSync(srcAssets)) {
   console.log('✓ Copied filtered production assets to dist/assets');
 }
 
-// 4. Copy WebAssembly module for Cloudflare Pages static linking
-const srcWasm = path.join(process.cwd(), 'src', 'server', 'services', 'image', 'index_bg.wasm');
-const destWasm = path.join(distDir, 'index_bg.wasm');
-if (fs.existsSync(srcWasm)) {
-  fs.copyFileSync(srcWasm, destWasm);
-  console.log('✓ Copied index_bg.wasm to dist/index_bg.wasm for Cloudflare WASM module binding');
-}
-
-// 5. Bundle Cloudflare Pages Edge Worker
-console.log('► 2. Bundling Edge Worker with esbuild...');
+// 4. Bundle Cloudflare Pages Edge Worker (Fetch/Producer only)
+console.log('► 2. Bundling Cloudflare Pages Worker with esbuild...');
 try {
-  execSync('npx esbuild src/server/index.ts --bundle --format=esm --platform=neutral --outfile=dist/_worker.js --external:cloudflare:* --external:./index_bg.wasm --external:*.wasm', {
+  execSync('npx esbuild src/server/index.ts --bundle --format=esm --platform=neutral --outfile=dist/_worker.js --loader:.wasm=binary --external:cloudflare:* --external:node:*', {
     stdio: 'inherit'
   });
-  console.log('✓ Edge Worker compiled to dist/_worker.js');
+  console.log('✓ Pages Worker compiled to dist/_worker.js');
 } catch (err) {
-  console.error('Esbuild failed:', err.message);
+  console.error('Esbuild Pages failed:', err.message);
+  process.exit(1);
+}
+
+// 5. Bundle Dedicated Queue Consumer Worker
+console.log('► 3. Bundling Dedicated Queue Consumer Worker with esbuild...');
+try {
+  execSync('npx esbuild src/worker/queue-consumer.ts --bundle --format=esm --platform=neutral --outfile=dist-worker/index.js --loader:.wasm=binary --external:cloudflare:* --external:node:*', {
+    stdio: 'inherit'
+  });
+  console.log('✓ Queue Consumer Worker compiled to dist-worker/index.js');
+} catch (err) {
+  console.error('Esbuild Consumer failed:', err.message);
+  process.exit(1);
+}
+
+// 6. Compute & Record Authoritative Single-Source Bundle Provenance
+console.log('► 4. Recording Single-Source Bundle Provenance...');
+try {
+  recordBundleProvenance('dist-worker/index.js', 'dist-worker/provenance.json');
+  console.log('✓ Recorded dist-worker/provenance.json');
+} catch (err) {
+  console.error('Provenance recording failed:', err.message);
   process.exit(1);
 }
 

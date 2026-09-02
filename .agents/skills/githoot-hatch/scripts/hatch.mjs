@@ -82,7 +82,7 @@ async function renderPose(promptText, key, modelId, ref) {
  * This is the only place a fresh frame may be accepted.
  */
 async function acceptRawRender(buf) {
-  const rawSha256 = sha256(buf.toString('base64'));
+  const rawSha256 = await sha256(buf.toString('base64'));
   const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   removeChroma(data, info.width, info.height);
   const verdict = validateFrame(data, info.width, info.height, { stage: 'raw' });
@@ -122,9 +122,8 @@ async function main() {
   const job = loadJob(process.argv);
 
   // ---- deterministic phases (no spend, no network) ----
-  const spec = compileIdentitySpec({ githubUserId: job.githubUserId, telemetry: job.telemetry, pin: job.identityPin });
-  const prompts = compileAllPosePrompts(spec);
-
+  const spec = await compileIdentitySpec({ githubUserId: job.githubUserId, telemetry: job.telemetry, pin: job.identityPin });
+  const prompts = await compileAllPosePrompts(spec);
   if (cmd === 'compile') {
     console.log(canonicalJson({
       versions: VERSIONS,
@@ -154,7 +153,7 @@ async function main() {
       die(EXIT.referenceMissing, `BLOCKED: no reference candidate for ${job.guardianId}. Run bootstrap first.`);
     }
     const cand = JSON.parse(fs.readFileSync(candJson, 'utf8'));
-    const actual = sha256(fs.readFileSync(candPng).toString('base64'));
+    const actual = await sha256(fs.readFileSync(candPng).toString('base64'));
     if (actual !== cand.referenceSha256) {
       die(EXIT.gateFailed, `BLOCKED: candidate bytes changed since bootstrap (recorded ${cand.referenceSha256.slice(0, 12)}, actual ${actual.slice(0, 12)}).`);
     }
@@ -165,8 +164,8 @@ async function main() {
       die(EXIT.gateFailed, 'BLOCKED: the identity spec changed since this candidate was minted. Re-bootstrap before approving.');
     }
     const finalPng = path.join(job._outAbs, `${job.guardianId}-reference.png`);
-    if (fs.existsSync(finalPng) && !process.argv.includes('--force')) {
-      die(EXIT.usage, `BLOCKED: canonical reference already exists: ${finalPng}. A Guardian reference is immutable.`);
+    if (fs.existsSync(finalPng)) {
+      die(EXIT.usage, `BLOCKED: canonical reference already exists: ${finalPng}. A Guardian reference is immutable and cannot be re-approved.`);
     }
     fs.copyFileSync(candPng, finalPng);
     fs.writeFileSync(path.join(job._outAbs, `${job.guardianId}-reference.json`), JSON.stringify({
@@ -178,6 +177,10 @@ async function main() {
         reviewer,
         boundToSha256: actual,
         boundToIdentityHash: spec.identityHash,
+        boundToPromptHash: cand.promptHash,
+        boundToRawSha256: cand.rawSha256,
+        boundToModelId: cand.modelId,
+        boundToVersions: cand.versions,
         covers: ['species', 'anatomy/build', 'silhouette', 'palette', 'crest', 'style', 'subject count'],
         approvedBy: 'independent reviewer (not the generating model)'
       }
@@ -211,18 +214,20 @@ async function main() {
   if (cmd === 'bootstrap') {
     fs.mkdirSync(job._outAbs, { recursive: true });
     const canonical = path.join(job._outAbs, `${job.guardianId}-reference.png`);
-    if (fs.existsSync(canonical) && !process.argv.includes('--force')) {
+    if (fs.existsSync(canonical)) {
       die(EXIT.usage,
         `BLOCKED: an approved canonical reference already exists: ${canonical}\n` +
-        'A Guardian reference is immutable. Re-bootstrapping would change identity.');
+        'A Guardian reference is immutable; 1 GitHub ID = 1 Guardian DNA. Re-bootstrapping\n' +
+        'would be a free identity reroll, so this path has no override flag.');
     }
     const outPath = path.join(job._outAbs, `${job.guardianId}-reference-candidate.png`);
-    if (fs.existsSync(outPath) && !process.argv.includes('--force')) {
+    if (fs.existsSync(outPath)) {
       die(EXIT.usage,
-        `BLOCKED: reference already exists: ${outPath}\n` +
-        'A Guardian reference is immutable. Re-minting would change identity; pass --force only for a deliberate, recorded re-bootstrap.');
+        `BLOCKED: a reference candidate already exists: ${outPath}\n` +
+        'Approve or delete it deliberately. Re-minting is an identity reroll and has no\n' +
+        'flag on this path; a migration needs a separately authorized tool.');
     }
-    const refPrompt = compileReferencePrompt(spec);
+    const refPrompt = await compileReferencePrompt(spec);
     let accepted = null, lastErr = '';
     for (let attempt = 1; attempt <= GATES.maxAttemptsPerPose && !accepted; attempt++) {
       let raw;
@@ -233,7 +238,7 @@ async function main() {
     }
     if (!accepted) die(EXIT.gateFailed, `BLOCKED: reference failed raw acceptance after ${GATES.maxAttemptsPerPose} attempts (${lastErr})`);
     fs.writeFileSync(outPath, accepted.frame);
-    const referenceSha256 = sha256(accepted.frame.toString('base64'));
+    const referenceSha256 = await sha256(accepted.frame.toString('base64'));
     fs.writeFileSync(path.join(job._outAbs, `${job.guardianId}-reference-candidate.json`), JSON.stringify({
       guardianId: job.guardianId,
       referencePath: path.relative(process.cwd(), outPath).replaceAll('\\', '/'),
@@ -273,20 +278,30 @@ async function main() {
       if (meta.state && meta.state !== 'APPROVED') {
         die(EXIT.referenceMissing, `BLOCKED: reference state is "${meta.state}", not APPROVED. Run approve-reference.`);
       }
+      const v = meta.semanticIdentityVerdict;
+      if (!v || v.verdict !== 'pass') {
+        die(EXIT.referenceMissing, 'BLOCKED: approved reference carries no passing semantic identity verdict.');
+      }
+      if (v.boundToIdentityHash && v.boundToIdentityHash !== spec.identityHash) {
+        die(EXIT.referenceMissing,
+          'BLOCKED: the identity spec changed since this reference was approved.\n' +
+          'The verdict is bound to the reviewed identity, so it no longer covers this spec.');
+      }
+      if (v.boundToSha256 && v.boundToSha256 !== (await sha256(fs.readFileSync(refAbs).toString('base64')))) {
+        die(EXIT.referenceMissing, 'BLOCKED: reference bytes changed since approval; the verdict no longer binds.');
+      }
     }
   }
   const refBuf = fs.readFileSync(refAbs);
-  const referenceSha256 = sha256(refBuf.toString('base64'));
+  const referenceSha256 = await sha256(refBuf.toString('base64'));
   const ref = {
     mime: refAbs.endsWith('.png') ? 'image/png' : 'image/jpeg',
     b64: refBuf.toString('base64')
   };
-
-  const fingerprint = requestFingerprint({ spec, referenceSha256, modelId });
+  const fingerprint = await requestFingerprint({ spec, referenceSha256, modelId });
   const frameDir = path.join(job._outAbs, `${job.guardianId}-landing${POSE_SET.length}-frames`);
   const rawDir = path.join(frameDir, 'raw');
   fs.mkdirSync(rawDir, { recursive: true });
-
   const resume = process.argv.includes('--resume');
   const frameRecords = [];
 
@@ -337,7 +352,7 @@ async function main() {
       referenceSha256,
       modelId,
       rawSha256: accepted.rawSha256,
-      frameSha256: sha256(accepted.frame.toString('base64')),
+      frameSha256: await sha256(accepted.frame.toString('base64')),
       rawGate: accepted.metrics,
       processingPolicyVersion: VERSIONS.processingPolicy,
       poseSetVersion: VERSIONS.poseSet
@@ -367,8 +382,8 @@ async function main() {
     fs.writeFileSync(`${base}-${name}.png`, buf);
     const webp = await sharp(buf).webp({ quality: 90, alphaQuality: 100 }).toBuffer();
     fs.writeFileSync(`${base}-${name}.webp`, webp);
-    artifacts[`${name}Png`] = { path: `${base}-${name}.png`, sha256: sha256(buf.toString('base64')) };
-    artifacts[`${name}Webp`] = { path: `${base}-${name}.webp`, sha256: sha256(webp.toString('base64')) };
+    artifacts[`${name}Png`] = { path: `${base}-${name}.png`, sha256: await sha256(buf.toString('base64')) };
+    artifacts[`${name}Webp`] = { path: `${base}-${name}.webp`, sha256: await sha256(webp.toString('base64')) };
   }
 
   const manifest = {

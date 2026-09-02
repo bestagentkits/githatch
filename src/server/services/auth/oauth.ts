@@ -60,6 +60,12 @@ export async function generateSignedState(claimUsername: string, secret: string,
 
   return `${b64Payload}.${sigHex}`;
 }
+export async function generateOAuthLoginUrl(claimUsername: string, env: Env, secret: string): Promise<string> {
+  const clientId = env.GITHUB_CLIENT_ID || 'dummy-client-id';
+  const state = await generateSignedState(claimUsername, secret);
+  return `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=read:user&state=${encodeURIComponent(state)}`;
+}
+
 
 export async function verifySignedState(stateStr: string, secret: string): Promise<OAuthStatePayload | null> {
   try {

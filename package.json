@@ -8,21 +8,28 @@
     "dev": "wrangler pages dev dist --d1=githoot_db --kv=GITHOOT_CACHE --r2=githoot --port=8788",
     "build": "node scripts/build.js",
     "typecheck": "tsc --noEmit",
-    "test": "vite-node scripts/run-autonomous-qa.ts",
+    "test": "vitest run tests/unit && vitest run tests/integration/harness.smoke.test.ts --config vitest.workers.config.ts && node --test .agents/skills/githoot-hatch/scripts/tests/determinism.test.mjs",
     "landing:gen": "node scripts/gen-landing16.mjs neonbyte",
     "landing:build": "node scripts/build-hatch-mockup-html.js",
     "landing:verify": "node scripts/verify-landing16.mjs",
+    "test:routes": "node scripts/verify-real-routes.mjs",
     "deploy": "wrangler pages deploy dist --project-name=githoot",
     "d1:migrate:local": "wrangler d1 migrations apply githoot_db --local",
-    "d1:migrate:prod": "wrangler d1 migrations apply githoot_db_prod --remote"
+    "d1:migrate:prod": "wrangler d1 migrations apply githoot_db --remote",
+    "d1:audit": "node scripts/reconcile-d1-schema.mjs"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.4.3",
+    "@jsquash/jpeg": "^1.6.0",
+    "@jsquash/webp": "^1.5.0",
     "@resvg/resvg-wasm": "^2.6.2",
     "hono": "^4.7.2",
+    "jpeg-js": "^0.4.4",
+    "wasm-feature-detect": "^1.9.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.2",
     "@types/node": "^22.13.9",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
@@ -35,7 +42,7 @@
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^3.0.7",
+    "vitest": "^4.1.11",
     "wrangler": "^4.49.1"
   }
 }
