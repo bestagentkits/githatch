@@ -9,6 +9,7 @@ import { resolveGitHubProfile, UserNotFoundError } from './services/github/resol
 import { authRouter } from './routes/auth';
 import { badgeRouter } from './routes/badge';
 import { ogRouter } from './routes/og';
+import { galleryRouter } from './routes/gallery';
 import { handleQueueBatch, type GenerationQueueMessage } from './queue/generation-worker';
 import { processProfileRevalidation } from './queue/sync-worker';
 
@@ -26,6 +27,7 @@ app.route('/auth', authRouter);
 app.route('/api/auth', authRouter);
 app.route('/badge', badgeRouter);
 app.route('/og', ogRouter);
+app.route('/api/gallery', galleryRouter);
 
 // Healthcheck
 app.get('/health', (c) => {
@@ -108,7 +110,7 @@ app.all('*', async (c) => {
   if (c.env.ASSETS) {
     const url = new URL(c.req.url);
     const cleanUser = url.pathname.replace(/^\//, '').split('/')[0];
-    const isProfile = cleanUser && !url.pathname.includes('.') && cleanUser !== 'explore' && cleanUser !== 'design' && cleanUser !== 'docs' && cleanUser !== 'api' && cleanUser !== 'auth' && cleanUser !== 'badge' && cleanUser !== 'og';
+    const isProfile = cleanUser && !url.pathname.includes('.') && cleanUser !== 'explore' && cleanUser !== 'gallery' && cleanUser !== 'design' && cleanUser !== 'docs' && cleanUser !== 'api' && cleanUser !== 'auth' && cleanUser !== 'badge' && cleanUser !== 'og';
 
     if (isProfile) {
       const indexReq = new Request(new URL('/', c.req.url).toString(), c.req.raw);

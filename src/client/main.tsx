@@ -11,6 +11,7 @@ import type { EarlyAccessStatus, GuardianSummary, PublicConfig, ResolvedProfile 
 import { track } from './lib/analytics';
 import { HomePage } from './pages/HomePage';
 import { ExplorePage } from './pages/ExplorePage';
+import { GalleryPage } from './pages/GalleryPage';
 import { DesignSystemPage } from './pages/DesignSystemPage';
 import { DocsPage } from './pages/DocsPage';
 import { PublicProfilePage } from './pages/PublicProfilePage';
@@ -29,6 +30,9 @@ function parsePath(pathStr: string): RouteState {
   }
   if (path === '/explore') {
     return { route: '/explore', profileUsername: null };
+  }
+  if (path === '/gallery') {
+    return { route: '/gallery', profileUsername: null };
   }
   if (path === '/design') {
     return { route: '/design', profileUsername: null };
@@ -196,6 +200,8 @@ function App() {
         );
       case '/explore':
         return <ExplorePage />;
+      case '/gallery':
+        return <GalleryPage onRouteChange={handleRouteChange} />;
       case '/design':
         return <DesignSystemPage />;
       case '/docs':

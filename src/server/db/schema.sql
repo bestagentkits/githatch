@@ -281,3 +281,10 @@ CREATE TABLE IF NOT EXISTS guardian_review_records (
 
 CREATE INDEX IF NOT EXISTS idx_review_records_job ON guardian_review_records(job_id);
 CREATE INDEX IF NOT EXISTS idx_review_records_bundle ON guardian_review_records(bundle_sha);
+
+-- 17. Gallery of Guardians Discovery Indexes
+CREATE INDEX IF NOT EXISTS idx_gallery_publication_time ON guardian_publication(state, published_at, guardian_id);
+CREATE INDEX IF NOT EXISTS idx_gallery_guardian_element_rarity ON guardians(element, rarity_tier, id);
+CREATE INDEX IF NOT EXISTS idx_gallery_guardian_rarity_element ON guardians(rarity_tier, element, id);
+CREATE INDEX IF NOT EXISTS idx_gallery_guardian_name_nocase ON guardians(name COLLATE NOCASE, id);
+CREATE INDEX IF NOT EXISTS idx_gallery_login_nocase ON github_accounts(login COLLATE NOCASE, github_user_id);
