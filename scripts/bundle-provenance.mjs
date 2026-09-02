@@ -118,9 +118,18 @@ export function verifyBundleProvenance(
 export function verifyDeployedWorker(
   configPath = 'wrangler.worker.toml',
   envName = 'production',
+  expectedVersionId = null,
   customRunner = null
 ) {
-  const runner = customRunner || ((cmd) => {
+  // Allow passing customRunner as 3rd arg if expectedVersionId is a function
+  let expected = expectedVersionId;
+  let runnerFn = customRunner;
+  if (typeof expectedVersionId === 'function') {
+    runnerFn = expectedVersionId;
+    expected = null;
+  }
+
+  const runner = runnerFn || ((cmd) => {
     try {
       const out = execSync(`npx wrangler ${cmd}`, { encoding: 'utf8', env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
       return { ok: true, output: out };
@@ -136,16 +145,40 @@ export function verifyDeployedWorker(
     return { verified: false, error: `Failed to query deployments from Cloudflare: ${res.output}` };
   }
 
-  // Parse Version ID from wrangler deployments list output
   const output = res.output;
-  const versionMatch = output.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i) ||
-                       output.match(/Version\(s\):\s*\(\d+%\)\s*([a-f0-9-]+)/i);
+  // Parse all Version IDs from wrangler deployments list output (newest is at the end)
+  const versionRegex = /Version\(s\):\s*\(\d+%\)\s*([a-f0-9-]{36})/gi;
+  const allMatches = [];
+  let match;
+  while ((match = versionRegex.exec(output)) !== null) {
+    allMatches.push(match[1]);
+  }
 
-  if (!versionMatch) {
+  // Fallback if Version(s) format differs: scan all UUIDs
+  if (allMatches.length === 0) {
+    const uuidRegex = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+    while ((match = uuidRegex.exec(output)) !== null) {
+      allMatches.push(match[1]);
+    }
+  }
+
+  if (allMatches.length === 0) {
     return { verified: false, error: `Could not parse active deployed Version ID from deployments output: ${output}` };
   }
 
-  const versionId = versionMatch[1];
+  // Active/latest version is the last deployment in the chronological list
+  const versionId = allMatches[allMatches.length - 1];
+
+  if (expected && expected.trim() !== '') {
+    if (versionId !== expected.trim()) {
+      return {
+        verified: false,
+        versionId,
+        error: `PROVENANCE_VERSION_MISMATCH: Live active Version ID (${versionId}) does not match expected deployed Version ID (${expected.trim()})`
+      };
+    }
+  }
+
   console.log(`[Provenance] Verified live deployed Worker on environment "${envName}" (Version ID: ${versionId})`);
   return { verified: true, versionId };
 }
@@ -165,7 +198,8 @@ if (process.argv[1] && process.argv[1].endsWith('bundle-provenance.mjs')) {
   } else if (action === 'verify-deployed') {
     const configPath = process.argv[3] || 'wrangler.worker.toml';
     const envName = process.argv[4] || 'production';
-    const res = verifyDeployedWorker(configPath, envName);
+    const expectedVersion = process.argv[5] || null;
+    const res = verifyDeployedWorker(configPath, envName, expectedVersion);
     if (!res.verified) {
       console.error('[Provenance] Live deploy verification failed:', res.error);
       process.exit(1);

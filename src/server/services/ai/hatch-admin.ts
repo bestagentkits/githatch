@@ -243,6 +243,15 @@ export async function approveGuardianPosesAndPublish({
   } catch (projErr) {
     console.warn(`[HatchAdmin] Post-CAS projection failed (non-fatal, pointer row is authoritative):`, projErr);
   }
+  if (env.CACHE_KV) {
+    try {
+      const ghAccount = await env.DB.prepare('SELECT login FROM github_accounts WHERE user_id = (SELECT user_id FROM guardians WHERE id = ?1)').bind(guardianId).first<{ login: string }>();
+      if (ghAccount && ghAccount.login) {
+        await env.CACHE_KV.delete(`gh:profile:v3:${ghAccount.login.toLowerCase()}`);
+        await env.CACHE_KV.delete(`gh:profile:${ghAccount.login.toLowerCase()}`);
+      }
+    } catch {}
+  }
 
   console.log(`[HatchAdmin] Successfully published guardian ${guardianId} to ASSET_READY (manifest: ${manifestSha})`);
 

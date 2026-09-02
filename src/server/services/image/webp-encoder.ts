@@ -5,7 +5,7 @@
 import type { DecodedImage } from './png-codec';
 import encode, { init as initEncode } from '@jsquash/webp/encode.js';
 import decode, { init as initDecode } from '@jsquash/webp/decode.js';
-import encWasm from '@jsquash/webp/codec/enc/webp_enc_simd.wasm';
+import encWasm from '@jsquash/webp/codec/enc/webp_enc.wasm';
 import decWasm from '@jsquash/webp/codec/dec/webp_dec.wasm';
 
 let encoderReady: Promise<void> | null = null;
@@ -22,13 +22,13 @@ async function normalizeWasmModule(imported: unknown): Promise<WebAssembly.Modul
   if (imported instanceof Uint8Array) {
     const copy = new Uint8Array(imported.byteLength);
     copy.set(imported);
-    return WebAssembly.compile(copy.buffer);
+    return new WebAssembly.Module(copy.buffer);
   }
   if (imported instanceof ArrayBuffer) {
-    return WebAssembly.compile(imported);
+    return new WebAssembly.Module(imported);
   }
   if (imported && typeof imported === 'object' && 'default' in imported) {
-    const defaultExport = imported.default;
+    const defaultExport = (imported as { default: unknown }).default;
     return normalizeWasmModule(defaultExport);
   }
   throw new Error('Unrecognized WASM import format for WebP codec');

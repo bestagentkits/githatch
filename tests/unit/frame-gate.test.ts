@@ -75,13 +75,40 @@ describe('Phase 3: Fail-Closed Image Acceptance Gate Invariants', () => {
     }
   });
 
-  it('rejects non-PNG buffer (e.g. JPEG magic bytes)', async () => {
-    const jpegBuffer = createJpegBuffer();
-    const result = await validateAndNormalizeFrame(jpegBuffer);
+  it('rejects unrecognized binary format (neither PNG nor JPEG)', async () => {
+    const unknownBuffer = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, ...new Array(50).fill(0)]); // GIF89a
+    const result = await validateAndNormalizeFrame(unknownBuffer);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.reasons.some(r => r.includes('valid PNG magic signature'))).toBe(true);
+      expect(result.reasons.some(r => r.includes('does not match supported PNG or JPEG'))).toBe(true);
+    }
+  });
+
+  it('rejects JPEG header dimension bomb (>1024px) before decoding', async () => {
+    // Construct a synthetic JPEG with SOF0 marker specifying 2048x2048
+    const bombJpeg = new Uint8Array([
+      0xFF, 0xD8, // SOI
+      0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x60, 0x00, 0x60, 0x00, 0x00, // APP0
+      0xFF, 0xC0, 0x00, 0x11, 0x08, 0x08, 0x00, 0x08, 0x00, 0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, // SOF0: 2048x2048 (0x0800 x 0x0800)
+      ...new Array(60).fill(0),
+      0xFF, 0xD9 // EOI
+    ]);
+
+    const result = await validateAndNormalizeFrame(bombJpeg);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reasons.some(r => r.includes('exceed max allowed bounds'))).toBe(true);
+    }
+  });
+
+  it('rejects MIME mismatch when claimedMime disagrees with binary signature', async () => {
+    const validPng = createValidCenteredSubjectPng(256, 256);
+    const result = await validateAndNormalizeFrame(validPng, { claimedMime: 'image/jpeg' });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reasons.some(r => r.includes('MIME mismatch'))).toBe(true);
     }
   });
   it('rejects truncated PNG buffer', async () => {
@@ -112,7 +139,7 @@ describe('Phase 3: Fail-Closed Image Acceptance Gate Invariants', () => {
   it('rejects PNG with corrupted CRC-32 checksum', async () => {
     const validPng = createValidCenteredSubjectPng(256, 256);
     const corrupted = new Uint8Array(validPng);
-    corrupted[16] = corrupted[16]! ^ 0xff; // Corrupt data without updating CRC
+    corrupted[corrupted.length - 20] = corrupted[corrupted.length - 20]! ^ 0xff; // Corrupt IDAT data without updating CRC
 
     const result = await validateAndNormalizeFrame(corrupted);
     expect(result.ok).toBe(false);

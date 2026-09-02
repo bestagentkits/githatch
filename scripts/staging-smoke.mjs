@@ -147,25 +147,24 @@ export async function submitStagingDecision(jobId, options = {}) {
   const res = await fetch(reviewUrl, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
       Authorization: `Bearer ${adminSecret}`,
-      Accept: 'application/json'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       decision,
+      reviewer,
       bundleSha,
       notes
     })
   });
 
   const responseJson = await res.json();
+  if (!res.ok) {
+    throw new Error(`Review decision failed (HTTP ${res.status}): ${JSON.stringify(responseJson)}`);
+  }
+
   const reportsDir = getReportsDir();
   const evidencePath = path.join(reportsDir, 'phase-08-e2e-evidence.json');
-
-  if (!res.ok) {
-    console.error(`[StagingDecision] ❌ Decision submission failed (HTTP ${res.status}):`, responseJson);
-    throw new Error(`Decision submission failed: ${responseJson?.error || JSON.stringify(responseJson)}`);
-  }
 
   const evidence = {
     timestamp: Date.now(),

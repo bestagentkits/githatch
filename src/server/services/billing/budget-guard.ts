@@ -207,42 +207,52 @@ export async function reserveJobAndDailySpend(
     // Statement 2: Increment job counter ONLY IF statement 1 succeeded
     // Statement 3: Increment daily ledger ONLY IF statement 1 succeeded
     const batchResults = await env.DB.batch([
-      // 1. Conditional reservation row insert
+      // 1. Conditional reservation row insert / reactivation (sets id = resId on both insert and reactivation)
       env.DB.prepare(`
         INSERT INTO guardian_budget_reservations (
           id, job_id, pose_id, attempt_number, day, amount_cents, state, created_at, updated_at
         )
         SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'RESERVED', ?7, ?7
-        WHERE NOT EXISTS (
-          SELECT 1 FROM guardian_budget_reservations
-          WHERE job_id = ?2 AND pose_id = ?3 AND attempt_number = ?4
-        )
-        AND (
-          SELECT COALESCE(reserved_cents + spent_cents, 0) FROM guardian_hatch_jobs WHERE id = ?2
+        WHERE (
+          SELECT (reserved_cents + spent_cents) FROM guardian_hatch_jobs WHERE id = ?2
         ) + ?6 <= ?8
-        AND (
-          SELECT COALESCE(reserved_cents + settled_cents, 0) FROM ai_budget_ledger WHERE day = ?5
-        ) + ?6 <= ?9;
+        AND COALESCE((
+          SELECT (reserved_cents + settled_cents) FROM ai_budget_ledger WHERE day = ?5
+        ), 0) + ?6 <= ?9
+        ON CONFLICT(job_id, pose_id, attempt_number) DO UPDATE SET
+          id = ?1,
+          state = 'RESERVED',
+          day = ?5,
+          amount_cents = ?6,
+          settlement_token = NULL,
+          updated_at = ?7
+        WHERE state IN ('RELEASED', 'TIMED_OUT')
+          AND (
+            SELECT (reserved_cents + spent_cents) FROM guardian_hatch_jobs WHERE id = ?2
+          ) + ?6 <= ?8
+          AND COALESCE((
+            SELECT (reserved_cents + settled_cents) FROM ai_budget_ledger WHERE day = ?5
+          ), 0) + ?6 <= ?9;
       `).bind(resId, jobId, poseId, attemptNumber, today, costCents, now, DEFAULT_JOB_CAP_CENTS, DEFAULT_DAILY_CAP_CENTS),
 
-      // 2. Increment Job spend counters
+      // 2. Increment Job spend counters ONLY IF statement 1 stamped this exact resId
       env.DB.prepare(`
         UPDATE guardian_hatch_jobs
         SET reserved_cents = reserved_cents + ?1, updated_at = ?2
         WHERE id = ?3
           AND EXISTS (
             SELECT 1 FROM guardian_budget_reservations
-            WHERE id = ?4 AND state = 'RESERVED' AND created_at = ?2
+            WHERE id = ?4 AND state = 'RESERVED'
           );
       `).bind(costCents, now, jobId, resId),
 
-      // 3. Increment Daily Budget Ledger
+      // 3. Increment Daily Budget Ledger ONLY IF statement 1 stamped this exact resId
       env.DB.prepare(`
         INSERT INTO ai_budget_ledger (day, reserved_cents, settled_cents, cap_cents, total_calls, updated_at)
         SELECT ?1, ?2, 0, ?3, 1, unixepoch()
         WHERE EXISTS (
           SELECT 1 FROM guardian_budget_reservations
-          WHERE id = ?4 AND state = 'RESERVED' AND created_at = ?5
+          WHERE id = ?4 AND state = 'RESERVED'
         )
         ON CONFLICT(day) DO UPDATE SET
           reserved_cents = reserved_cents + ?2,
@@ -250,13 +260,22 @@ export async function reserveJobAndDailySpend(
           updated_at = unixepoch()
         WHERE EXISTS (
           SELECT 1 FROM guardian_budget_reservations
-          WHERE id = ?4 AND state = 'RESERVED' AND created_at = ?5
+          WHERE id = ?4 AND state = 'RESERVED'
         );
-      `).bind(today, costCents, DEFAULT_DAILY_CAP_CENTS, resId, now)
+      `).bind(today, costCents, DEFAULT_DAILY_CAP_CENTS, resId)
     ]);
-
     const resInserted = Number(batchResults[0]?.meta?.changes ?? (batchResults[0] as unknown as { changes?: number })?.changes ?? 0);
     if (resInserted === 0) {
+      // Re-check: did a concurrent call reserve this exact attempt in the race?
+      const recheck = await env.DB.prepare(`
+        SELECT state FROM guardian_budget_reservations
+        WHERE job_id = ?1 AND pose_id = ?2 AND attempt_number = ?3;
+      `).bind(jobId, poseId, attemptNumber).first<{ state: string }>();
+
+      if (recheck && (recheck.state === 'RESERVED' || recheck.state === 'COMMITTED')) {
+        return { ok: true };
+      }
+
       // Check which cap was exceeded for informative error
       const jobCheck = await env.DB.prepare('SELECT (reserved_cents + spent_cents) as total FROM guardian_hatch_jobs WHERE id = ?1').bind(jobId).first<{ total: number }>();
       if ((jobCheck?.total || 0) + costCents > DEFAULT_JOB_CAP_CENTS) {
@@ -264,7 +283,6 @@ export async function reserveJobAndDailySpend(
       }
       return { ok: false, reason: 'DAILY_BUDGET_CAP_EXCEEDED: Exceeds daily spend limit' };
     }
-
     return { ok: true };
   } catch (err) {
     console.error('[BudgetGuard] Job & Daily reservation failed:', err);
@@ -282,59 +300,90 @@ export async function settleJobAndDailySpend(
   attemptNumber: number,
   success: boolean,
   costCents = WORST_CASE_COST_PER_IMAGE_CENTS
-): Promise<void> {
-  if (!env.DB) return;
+): Promise<{ settled: boolean }> {
+  if (!env.DB) return { settled: false };
 
   const now = Date.now();
   const today = getTodayDateString();
+  const targetState = success ? 'COMMITTED' : 'RELEASED';
+  const settlementToken = `settle:${jobId}:${poseId}:${attemptNumber}:${crypto.randomUUID()}`;
 
   try {
     if (success) {
-      await env.DB.batch([
+      const batchRes = await env.DB.batch([
+        // Statement 1: Transition state and stamp unique settlement token ONLY IF currently RESERVED
         env.DB.prepare(`
           UPDATE guardian_budget_reservations
-          SET state = 'COMMITTED', updated_at = ?1
-          WHERE job_id = ?2 AND pose_id = ?3 AND attempt_number = ?4 AND state = 'RESERVED';
-        `).bind(now, jobId, poseId, attemptNumber),
+          SET state = ?1, settlement_token = ?2, updated_at = ?3
+          WHERE job_id = ?4 AND pose_id = ?5 AND attempt_number = ?6 AND state = 'RESERVED';
+        `).bind(targetState, settlementToken, now, jobId, poseId, attemptNumber),
 
+        // Statement 2: Update Job counters ONLY IF Statement 1 stamped the unique settlement token
         env.DB.prepare(`
           UPDATE guardian_hatch_jobs
           SET reserved_cents = MAX(0, reserved_cents - ?1), spent_cents = spent_cents + ?1, updated_at = ?2
-          WHERE id = ?3;
-        `).bind(costCents, now, jobId),
+          WHERE id = ?3
+            AND EXISTS (
+              SELECT 1 FROM guardian_budget_reservations
+              WHERE settlement_token = ?4
+            );
+        `).bind(costCents, now, jobId, settlementToken),
 
+        // Statement 3: Update Daily Budget Ledger ONLY IF Statement 1 stamped the unique settlement token
         env.DB.prepare(`
           UPDATE ai_budget_ledger
           SET reserved_cents = MAX(0, reserved_cents - ?1),
               settled_cents = settled_cents + ?1,
               updated_at = unixepoch()
-          WHERE day = ?2;
-        `).bind(costCents, today)
+          WHERE day = ?2
+            AND EXISTS (
+              SELECT 1 FROM guardian_budget_reservations
+              WHERE settlement_token = ?3
+            );
+        `).bind(costCents, today, settlementToken)
       ]);
+
+      const transitioned = Number(batchRes[0]?.meta?.changes ?? (batchRes[0] as unknown as { changes?: number })?.changes ?? 0);
+      return { settled: transitioned > 0 };
     } else {
-      await env.DB.batch([
+      const batchRes = await env.DB.batch([
+        // Statement 1: Transition state and stamp unique settlement token ONLY IF currently RESERVED
         env.DB.prepare(`
           UPDATE guardian_budget_reservations
-          SET state = 'RELEASED', updated_at = ?1
-          WHERE job_id = ?2 AND pose_id = ?3 AND attempt_number = ?4 AND state = 'RESERVED';
-        `).bind(now, jobId, poseId, attemptNumber),
+          SET state = ?1, settlement_token = ?2, updated_at = ?3
+          WHERE job_id = ?4 AND pose_id = ?5 AND attempt_number = ?6 AND state = 'RESERVED';
+        `).bind(targetState, settlementToken, now, jobId, poseId, attemptNumber),
 
+        // Statement 2: Decrement Job held reservation ONLY IF Statement 1 stamped the unique settlement token
         env.DB.prepare(`
           UPDATE guardian_hatch_jobs
           SET reserved_cents = MAX(0, reserved_cents - ?1), updated_at = ?2
-          WHERE id = ?3;
-        `).bind(costCents, now, jobId),
+          WHERE id = ?3
+            AND EXISTS (
+              SELECT 1 FROM guardian_budget_reservations
+              WHERE settlement_token = ?4
+            );
+        `).bind(costCents, now, jobId, settlementToken),
 
+        // Statement 3: Decrement Daily Budget held reservation ONLY IF Statement 1 stamped the unique settlement token
         env.DB.prepare(`
           UPDATE ai_budget_ledger
           SET reserved_cents = MAX(0, reserved_cents - ?1),
               updated_at = unixepoch()
-          WHERE day = ?2;
-        `).bind(costCents, today)
+          WHERE day = ?2
+            AND EXISTS (
+              SELECT 1 FROM guardian_budget_reservations
+              WHERE settlement_token = ?3
+            );
+        `).bind(costCents, today, settlementToken)
       ]);
+
+      const transitioned = Number(batchRes[0]?.meta?.changes ?? (batchRes[0] as unknown as { changes?: number })?.changes ?? 0);
+      return { settled: transitioned > 0 };
     }
   } catch (err) {
     console.error('[BudgetGuard] Failed to settle job spend:', err);
+    return { settled: false };
   }
 }
 

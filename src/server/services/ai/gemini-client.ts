@@ -1,5 +1,6 @@
 // ============================================================================
 // GitHoot Gemini Nano Banana 2 API Client (src/server/services/ai/gemini-client.ts)
+// Single-Outbound-Fetch Architecture with Strict 1:1 Budget Accounting
 // ============================================================================
 
 import type { Env } from '../../types';
@@ -13,6 +14,12 @@ export interface GeminiImageResponse {
   error?: string;
 }
 
+export interface JobReservationToken {
+  jobId: string;
+  poseId: string;
+  attemptNumber: number;
+}
+
 export interface GeneratePoseOptions {
   prompt: string;
   referenceImage?: {
@@ -20,8 +27,17 @@ export interface GeneratePoseOptions {
     b64: string;
   } | null;
   modelOverride?: string;
+  /**
+   * When provided, indicates caller holds an atomic job-aware reservation
+   * (via reserveJobAndDailySpend) so gemini-client skips standalone reservation.
+   */
+  reservation?: JobReservationToken;
 }
 
+/**
+ * Performs exactly ONE outbound HTTP fetch to Google Gemini Nano Banana 2 API.
+ * Guarantees strict 1:1 parity between outbound network requests and budget accounting.
+ */
 export async function generatePoseWithGemini(
   options: GeneratePoseOptions,
   env: Env
@@ -59,86 +75,84 @@ export async function generatePoseWithGemini(
   const body = {
     contents: [{ parts }],
     generationConfig: {
-      responseModalities: ['TEXT', 'IMAGE']
+      responseModalities: ['TEXT', 'IMAGE'],
+      imageConfig: {
+        aspectRatio: '1:1'
+      }
     }
   };
+  const hasJobReservation = Boolean(options.reservation);
 
-  let lastError = '';
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    // 1. Atomic reservation per outbound attempt (25 cents worst-case)
-    const reservation = await reserveAiSpend(env, WORST_CASE_COST_PER_IMAGE_CENTS);
-    if (!reservation.ok) {
+  // 1. If caller does not manage a job-level reservation, make standalone reservation
+  if (!hasJobReservation) {
+    const reservationRes = await reserveAiSpend(env, WORST_CASE_COST_PER_IMAGE_CENTS);
+    if (!reservationRes.ok) {
       return {
         success: false,
-        error: reservation.reason || 'DAILY_BUDGET_CAP_EXCEEDED'
+        error: reservationRes.reason || 'DAILY_BUDGET_CAP_EXCEEDED'
       };
-    }
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        const safeError = errorText.slice(0, 200).replaceAll(apiKey, '[REDACTED]');
-        throw new Error(`HTTP ${res.status}: ${safeError}`);
-      }
-
-      const data = (await res.json()) as {
-        candidates?: Array<{
-          content?: {
-            parts?: Array<{
-              inlineData?: {
-                mimeType: string;
-                data: string;
-              };
-            }>;
-          };
-        }>;
-      };
-
-      const candidateParts = data?.candidates?.[0]?.content?.parts || [];
-      const imagePart = candidateParts.find(p => p.inlineData?.data)?.inlineData;
-
-      if (imagePart && imagePart.data) {
-        return {
-          success: true,
-          base64Data: imagePart.data,
-          mimeType: imagePart.mimeType || 'image/png'
-        };
-      }
-
-      throw new Error('No image inlineData found in Gemini response parts.');
-    } catch (err: unknown) {
-      lastError = err instanceof Error ? err.message : String(err);
-      console.warn(`[GeminiClient] Attempt ${attempt} failed:`, lastError);
-      if (attempt < 2) {
-        const { promise, resolve } = Promise.withResolvers<void>();
-        setTimeout(resolve, 1000);
-        await promise;
-      }
-    } finally {
-      // Settle attempt: books 25 cents per attempt to enforce strict 80 total outbound calls/day cap
-      await settleAiSpend(env, WORST_CASE_COST_PER_IMAGE_CENTS, WORST_CASE_COST_PER_IMAGE_CENTS);
     }
   }
 
-  return {
-    success: false,
-    error: lastError
-  };
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 50000);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      const safeError = errorText.slice(0, 200).replaceAll(apiKey, '[REDACTED]');
+      throw new Error(`HTTP ${res.status}: ${safeError}`);
+    }
+
+    const data = (await res.json()) as {
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{
+            inlineData?: {
+              mimeType: string;
+              data: string;
+            };
+          }>;
+        };
+      }>;
+    };
+
+    const candidateParts = data?.candidates?.[0]?.content?.parts || [];
+    const imagePart = candidateParts.find(p => p.inlineData?.data)?.inlineData;
+
+    if (imagePart && imagePart.data) {
+      return {
+        success: true,
+        base64Data: imagePart.data,
+        mimeType: imagePart.mimeType || 'image/png'
+      };
+    }
+
+    throw new Error('No image inlineData found in Gemini response parts.');
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.warn('[GeminiClient] Outbound Gemini fetch failed:', errMsg);
+    return {
+      success: false,
+      error: errMsg
+    };
+  } finally {
+    // Settle standalone reservation if client was the reservation owner
+    if (!hasJobReservation) {
+      await settleAiSpend(env, WORST_CASE_COST_PER_IMAGE_CENTS, WORST_CASE_COST_PER_IMAGE_CENTS);
+    }
+  }
 }
 
 // Backward compatibility wrapper

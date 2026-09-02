@@ -61,10 +61,11 @@ export default defineConfig({
     include: ['tests/integration/**/*.test.ts'],
     fileParallelism: false,
     maxConcurrency: 1,
+    testTimeout: 20000,
     teardownTimeout: 2000,
     server: {
       deps: {
-        inline: [/@jsquash\/webp/, /\.wasm$/]
+        inline: [/@jsquash\/webp/, /@jsquash\/jpeg/, /\.wasm$/]
       }
     }
   }

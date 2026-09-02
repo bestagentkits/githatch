@@ -225,10 +225,13 @@ CREATE TABLE IF NOT EXISTS guardian_budget_reservations (
     day TEXT NOT NULL,
     amount_cents INTEGER NOT NULL DEFAULT 25,
     state TEXT DEFAULT 'RESERVED',
+    settlement_token TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     UNIQUE(job_id, pose_id, attempt_number)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_res_settle_token ON guardian_budget_reservations(settlement_token);
 
 CREATE INDEX IF NOT EXISTS idx_budget_res_job ON guardian_budget_reservations(job_id);
 CREATE INDEX IF NOT EXISTS idx_budget_res_day ON guardian_budget_reservations(day, state);

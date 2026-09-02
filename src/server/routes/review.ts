@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import type { Env, HatchJobRecord, HatchFrameRecord } from '../types';
 import { verifyReviewerAuthorization } from '../services/auth/admin-auth';
 import { approveGuardianPosesAndPublish } from '../services/ai/hatch-admin';
+import { fetchRawObjectFromR2 } from '../services/ai/reference-manager';
 import { canonicalJson } from '../services/dna/compiler';
 import { sha256Hex } from '../services/crypto/web-crypto';
 
@@ -54,7 +55,7 @@ export interface ReviewBundleAssembly {
 /**
  * Builds the canonical review bundle payload from D1 and R2 state.
  */
-async function assembleReviewBundle(
+export async function assembleReviewBundle(
   jobId: string,
   env: Env
 ): Promise<ReviewBundleAssembly> {
@@ -115,12 +116,11 @@ async function assembleReviewBundle(
 
   // 2. Verify all 16 Raw & Normalized Frame Objects on R2
   for (const f of frames) {
-    const rawKey = `guardians/${guardian.id}/raw/${f.raw_sha256}.png`;
-    const rawObj = await env.ASSETS_BUCKET.get(rawKey);
-    if (!rawObj) {
-      throw new Error(`Raw frame image missing from R2: ${rawKey}`);
+    const rawResult = await fetchRawObjectFromR2(env.ASSETS_BUCKET, guardian.id, f.raw_sha256);
+    if (!rawResult) {
+      throw new Error(`Raw frame image missing from R2 for frame f${f.pose_id} (SHA: ${f.raw_sha256})`);
     }
-    const rawBuf = new Uint8Array(await rawObj.arrayBuffer());
+    const rawBuf = new Uint8Array(await rawResult.object.arrayBuffer());
     const actualRawSha = await sha256Hex(rawBuf);
     if (actualRawSha !== f.raw_sha256) {
       throw new Error(`Raw frame ${f.pose_id} SHA mismatch: expected ${f.raw_sha256}, got ${actualRawSha}`);
@@ -361,5 +361,36 @@ reviewRouter.post('/:jobId', async (c) => {
     });
   } catch (err) {
     return c.json({ error: (err as Error).message }, 400);
+  }
+});
+reviewRouter.post('/:jobId/composite', async (c) => {
+  const jobId = c.req.param('jobId');
+  try {
+    await verifyReviewerAuthorization(c.req.raw.headers, c.env);
+  } catch (authErr) {
+    return c.json({ error: (authErr as Error).message }, 401);
+  }
+
+  const job = await c.env.DB.prepare('SELECT * FROM guardian_hatch_jobs WHERE id = ?1').bind(jobId).first<HatchJobRecord>();
+  if (!job) {
+    return c.json({ error: `Job ${jobId} not found` }, 404);
+  }
+
+  const { handleHatchComposite } = await import('../queue/generation-worker');
+  const dummyMsg: Message<unknown> = {
+    id: `comp-admin-${Date.now()}`,
+    timestamp: new Date(),
+    attempts: 1,
+    body: { v: 1, type: 'HATCH_COMPOSITE', jobId, guardianId: job.guardian_id },
+    ack: () => {},
+    retry: () => {}
+  };
+
+  try {
+    await handleHatchComposite({ v: 1, type: 'HATCH_COMPOSITE', jobId, guardianId: job.guardian_id }, c.env, dummyMsg);
+    const updatedJob = await c.env.DB.prepare('SELECT state, frames_completed, manifest_url FROM guardian_hatch_jobs WHERE id = ?1').bind(jobId).first();
+    return c.json({ success: true, job: updatedJob });
+  } catch (err: unknown) {
+    return c.json({ success: false, error: (err as Error).message }, 500);
   }
 });

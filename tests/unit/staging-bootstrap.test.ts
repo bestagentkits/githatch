@@ -4,6 +4,7 @@
 // ============================================================================
 
 import { describe, it, expect, vi } from 'vitest';
+import fs from 'fs';
 import { GATES } from '../../src/server/services/dna/contracts';
 // @ts-ignore
 import { verifyOrProvisionStaging } from '../../scripts/staging-bootstrap.mjs';
@@ -746,10 +747,10 @@ describe('Staging Bootstrap & Prerequisite Contracts', () => {
         if (cmd.includes('ai_budget_ledger')) {
           return { ok: true, output: JSON.stringify([{ meta: { changes: 1 } }]) };
         }
-        const mFiles = ['0001_initial.sql', '0002_hatch_pipeline_v2.sql', '0003_ai_budget_ledger.sql', '0004_pose_leases_outbox.sql', '0005_publication_pointer.sql', '0006_review_records.sql', '0007_github_aggregate_stats.sql'];
+        const mFiles = fs.readdirSync('src/server/db/migrations').filter((f: string) => f.endsWith('.sql')).sort();
         return {
           ok: true,
-          output: JSON.stringify([{ results: mFiles.map(name => ({ name })) }])
+          output: JSON.stringify([{ results: mFiles.map((name: string) => ({ name })) }])
         };
       }
       if (cmd.includes('r2 bucket info githoot-staging')) {
@@ -809,7 +810,7 @@ describe('Staging Bootstrap & Prerequisite Contracts', () => {
       }
       if (cmd.includes('deploy dist-worker/index.js')) {
         workerCreated = true;
-        return { ok: true, output: 'Deployed worker' };
+        return { ok: true, output: 'Current Version ID: 4cd17a33-a917-4529-901b-cc471f71061a\nDeployed worker' };
       }
       return { ok: true, output: 'ok' };
     };

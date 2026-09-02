@@ -46,8 +46,14 @@ export async function deployToStaging() {
 
   // 3. Deploy dedicated Queue Consumer Worker to staging
   console.log('3. Deploying Dedicated Queue Consumer Worker to staging...');
-  execSync(`npx wrangler deploy dist-worker/index.js --no-bundle --config wrangler.worker.toml --env staging ${envArg}`, { stdio: 'inherit' });
-
+  const deployWorkerOut = execSync(`npx wrangler deploy dist-worker/index.js --no-bundle --config wrangler.worker.toml --env staging ${envArg}`, { encoding: 'utf8' });
+  console.log(deployWorkerOut);
+  const versionMatch = deployWorkerOut.match(/Current Version ID:\s*([a-f0-9-]{36})/i);
+  if (!versionMatch || !versionMatch[1]) {
+    throw new Error(`FAIL_CLOSED: Could not parse "Current Version ID" from wrangler deploy output:\n${deployWorkerOut}`);
+  }
+  const capturedVersionId = versionMatch[1];
+  console.log(`[StagingDeploy] Captured authoritative deployed Version ID: ${capturedVersionId}`);
   // 4. Deploy Pages application with staging bindings
   console.log('4. Deploying Pages Frontend to githoot-staging with staging configuration...');
   const wranglerProdBackup = path.resolve(process.cwd(), 'wrangler.prod.tmp.toml');
@@ -66,9 +72,9 @@ export async function deployToStaging() {
   }
 
   // 5. Verify live deployed Worker provenance
-  console.log('5. Asserting deployed worker provenance on staging...');
-  execSync(`node scripts/bundle-provenance.mjs verify-deployed wrangler.worker.toml staging`, { stdio: 'inherit' });
-
+  // 5. Verify live deployed Worker provenance (matching exact captured version ID)
+  console.log(`5. Asserting deployed worker provenance on staging (expecting: ${capturedVersionId})...`);
+  execSync(`node scripts/bundle-provenance.mjs verify-deployed wrangler.worker.toml staging ${capturedVersionId}`, { stdio: 'inherit' });
   console.log('✓ [StagingDeploy] Staging deployment and provenance verification complete!\n');
 }
 

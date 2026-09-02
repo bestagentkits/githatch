@@ -19,7 +19,8 @@ import {
 import { generatePoseWithGemini } from '../services/ai/gemini-client';
 import {
   generateReferenceKey,
-  generateCandidateKey
+  generateCandidateKey,
+  fetchRawObjectFromR2
 } from '../services/ai/reference-manager';
 import {
   compositeLandingSheetAndStrip
@@ -27,6 +28,7 @@ import {
 import { encodeRgbaToPng, decodePngToRgba } from '../services/image/png-codec';
 import { encodeRgbaToWebp } from '../services/image/webp-encoder';
 import { validateAndNormalizeFrame } from '../services/image/frame-gate';
+import { ensurePngBytes } from '../services/image/jpeg-decoder';
 import { sha256Hex } from '../services/crypto/web-crypto';
 import {
   parseQueueMessage,
@@ -59,6 +61,65 @@ export function filterMissingPoses(
   completedPoseIds: Set<string>
 ): PoseDefinition[] {
   return allPoses.filter(p => !completedPoseIds.has(p.id));
+}
+async function enqueueNextReferenceAttemptOrQuarantine(
+  env: Env,
+  jobId: string,
+  guardianId: string,
+  attempt: number,
+  errorReason: string
+): Promise<void> {
+  if (attempt < GATES.maxAttemptsPerPose) {
+    const nextRefMsg: HatchReferenceMessage = {
+      v: 1,
+      type: 'HATCH_REFERENCE',
+      jobId,
+      guardianId,
+      attempt: attempt + 1
+    };
+    await writeOutboxMessage(env.DB, 'githoot-ai-queue', nextRefMsg, `${jobId}:reference:${attempt + 1}`);
+    if (env.AI_QUEUE) {
+      await env.AI_QUEUE.send(nextRefMsg);
+    }
+  } else {
+    console.error(`[Queue] Reference for ${guardianId} exhausted all ${GATES.maxAttemptsPerPose} attempts. Quarantining job.`);
+    const errReason = `REFERENCE_GATE_EXHAUSTED: Reference failed after ${GATES.maxAttemptsPerPose} attempts (${errorReason}).`;
+    await env.DB.batch([
+      env.DB.prepare('UPDATE guardians SET status = "QUARANTINED" WHERE id = ?1').bind(guardianId),
+      env.DB.prepare('UPDATE guardian_hatch_jobs SET state = "QUARANTINED", error_log = ?2, updated_at = ?3 WHERE guardian_id = ?1').bind(guardianId, errReason, Date.now())
+    ]);
+  }
+}
+
+async function enqueueNextPoseAttemptOrQuarantine(
+  env: Env,
+  jobId: string,
+  guardianId: string,
+  poseId: string,
+  attempt: number,
+  errorReason: string
+): Promise<void> {
+  if (attempt < GATES.maxAttemptsPerPose) {
+    const nextMsg: HatchPoseMessage = {
+      v: 1,
+      type: 'HATCH_POSE',
+      jobId,
+      guardianId,
+      poseId,
+      attempt: attempt + 1
+    };
+    await writeOutboxMessage(env.DB, 'githoot-ai-queue', nextMsg, `${jobId}:${poseId}:${attempt + 1}`);
+    if (env.AI_QUEUE) {
+      await env.AI_QUEUE.send(nextMsg);
+    }
+  } else {
+    console.error(`[Queue] Pose ${poseId} exhausted all ${GATES.maxAttemptsPerPose} attempts. Quarantining job.`);
+    const errReason = `POSE_GATE_EXHAUSTED: Pose ${poseId} failed after ${GATES.maxAttemptsPerPose} attempts (${errorReason}).`;
+    await env.DB.batch([
+      env.DB.prepare('UPDATE guardians SET status = "QUARANTINED" WHERE id = ?1').bind(guardianId),
+      env.DB.prepare('UPDATE guardian_hatch_jobs SET state = "QUARANTINED", error_log = ?2, updated_at = ?3 WHERE guardian_id = ?1').bind(guardianId, errReason, Date.now())
+    ]);
+  }
 }
 
 export async function handleGenerationQueue(
@@ -139,11 +200,12 @@ async function handleRevalidateProfile(
 
 async function handleHatchReference(
   message: HatchReferenceMessage,
-  env: Env
+  env: Env,
+  rawMessage?: Message<unknown>
 ): Promise<void> {
   const { guardianId, jobId } = message;
-  console.log(`[Queue] Processing HATCH_REFERENCE for Guardian: ${guardianId}`);
-
+  const attempt = message.attempt || 1;
+  console.log(`[Queue] Processing HATCH_REFERENCE (attempt ${attempt}) for Guardian: ${guardianId}`);
   // 1. Fetch Guardian record from D1
   const guardian = await env.DB.prepare(
     'SELECT * FROM guardians WHERE id = ?1'
@@ -236,8 +298,8 @@ async function handleHatchReference(
     console.log(`[Queue] Generating Candidate Reference for Guardian ${guardianId}...`);
     const workerId = `worker-${crypto.randomUUID().slice(0, 8)}`;
 
-    // 1. Acquire reference lease
-    const leaseRes = await acquirePoseLease(env, activeJobId, 'reference', 1, workerId);
+    // 1. Acquire reference lease for this attempt
+    const leaseRes = await acquirePoseLease(env, activeJobId, 'reference', attempt, workerId);
     if (!leaseRes.acquired) {
       if (leaseRes.reason === 'ALREADY_ACCEPTED') {
         console.log(`[Queue] Reference for guardian ${guardianId} already generated. Skipping.`);
@@ -251,9 +313,9 @@ async function handleHatchReference(
     }
 
     // 2. Reserve budget for reference attempt
-    const budgetRes = await reserveJobAndDailySpend(env, activeJobId, 'reference', 1);
+    const budgetRes = await reserveJobAndDailySpend(env, activeJobId, 'reference', attempt);
     if (!budgetRes.ok) {
-      await releasePoseLease(env, activeJobId, 'reference', 1, 'FAILED', budgetRes.reason);
+      await releasePoseLease(env, activeJobId, 'reference', attempt, 'FAILED', budgetRes.reason);
       throw new Error(`Reference budget reservation failed: ${budgetRes.reason}`);
     }
 
@@ -261,23 +323,23 @@ async function handleHatchReference(
 
     try {
       const refGenRes = await generatePoseWithGemini({
-        prompt: referencePromptObj.text
+        prompt: referencePromptObj.text,
+        reservation: { jobId: activeJobId, poseId: 'reference', attemptNumber: attempt }
       }, env);
 
       if (!refGenRes.success || !refGenRes.base64Data) {
         throw new Error(`Failed to generate reference candidate for ${guardianId}: ${refGenRes.error || 'No base64 data'}`);
       }
-
       const rawRefBytes = Buffer.from(refGenRes.base64Data, 'base64');
-      const gateResult = await validateAndNormalizeFrame(rawRefBytes);
+      const gateResult = await validateAndNormalizeFrame(rawRefBytes, { claimedMime: refGenRes.mimeType });
       if (!gateResult.ok) {
         throw new Error(`Reference candidate failed acceptance gate: ${gateResult.reasons.join('; ')}`);
       }
-
-      await env.ASSETS_BUCKET.put(`guardians/${guardianId}/raw/${gateResult.rawSha256}.png`, rawRefBytes, {
-        httpMetadata: { contentType: 'image/png' }
+      const rawExt = gateResult.metrics.format === 'jpeg' ? 'jpg' : 'png';
+      const rawMime = gateResult.metrics.format === 'jpeg' ? 'image/jpeg' : 'image/png';
+      await env.ASSETS_BUCKET.put(`guardians/${guardianId}/raw/${gateResult.rawSha256}.${rawExt}`, rawRefBytes, {
+        httpMetadata: { contentType: rawMime }
       });
-
       const candidateKey = generateCandidateKey(guardianId, gateResult.frameSha256);
       await env.ASSETS_BUCKET.put(candidateKey, gateResult.normalizedPng, {
         httpMetadata: { contentType: 'image/png' }
@@ -297,7 +359,7 @@ async function handleHatchReference(
           SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'VERIFYING', ?8
           WHERE EXISTS (
             SELECT 1 FROM guardian_pose_attempts
-            WHERE job_id = ?9 AND pose_id = 'reference' AND attempt_number = 1 AND lease_owner = ?10 AND state = 'LEASED'
+            WHERE job_id = ?9 AND pose_id = 'reference' AND attempt_number = ?11 AND lease_owner = ?10 AND state = 'LEASED'
           )
           ON CONFLICT(id) DO NOTHING;
         `).bind(
@@ -310,18 +372,19 @@ async function handleHatchReference(
           gateResult.rawSha256,
           now,
           activeJobId,
-          workerId
+          workerId,
+          attempt
         ),
 
         env.DB.prepare(`
           UPDATE guardian_budget_reservations
           SET state = 'COMMITTED', updated_at = ?1
-          WHERE job_id = ?2 AND pose_id = 'reference' AND attempt_number = 1 AND state = 'RESERVED'
+          WHERE job_id = ?2 AND pose_id = 'reference' AND attempt_number = ?4 AND state = 'RESERVED'
             AND EXISTS (
               SELECT 1 FROM guardian_pose_attempts
-              WHERE job_id = ?2 AND pose_id = 'reference' AND attempt_number = 1 AND lease_owner = ?3 AND state = 'LEASED'
+              WHERE job_id = ?2 AND pose_id = 'reference' AND attempt_number = ?4 AND lease_owner = ?3 AND state = 'LEASED'
             );
-        `).bind(now, activeJobId, workerId),
+        `).bind(now, activeJobId, workerId, attempt),
 
         env.DB.prepare(`
           UPDATE guardian_hatch_jobs
@@ -329,9 +392,9 @@ async function handleHatchReference(
           WHERE id = ?3
             AND EXISTS (
               SELECT 1 FROM guardian_pose_attempts
-              WHERE job_id = ?3 AND pose_id = 'reference' AND attempt_number = 1 AND lease_owner = ?4 AND state = 'LEASED'
+              WHERE job_id = ?3 AND pose_id = 'reference' AND attempt_number = ?5 AND lease_owner = ?4 AND state = 'LEASED'
             );
-        `).bind(costCents, now, activeJobId, workerId),
+        `).bind(costCents, now, activeJobId, workerId, attempt),
 
         env.DB.prepare(`
           UPDATE ai_budget_ledger
@@ -341,23 +404,25 @@ async function handleHatchReference(
           WHERE day = ?2
             AND EXISTS (
               SELECT 1 FROM guardian_pose_attempts
-              WHERE job_id = ?3 AND pose_id = 'reference' AND attempt_number = 1 AND lease_owner = ?4 AND state = 'LEASED'
+              WHERE job_id = ?3 AND pose_id = 'reference' AND attempt_number = ?5 AND lease_owner = ?4 AND state = 'LEASED'
             );
-        `).bind(costCents, today, activeJobId, workerId),
+        `).bind(costCents, today, activeJobId, workerId, attempt),
 
         env.DB.prepare(`
           UPDATE guardian_pose_attempts
           SET state = 'ACCEPTED', raw_sha256 = ?1, frame_sha256 = ?2, lease_owner = NULL, lease_expires_at = NULL, updated_at = ?3
-          WHERE job_id = ?4 AND pose_id = 'reference' AND attempt_number = 1 AND lease_owner = ?5 AND state = 'LEASED';
-        `).bind(gateResult.rawSha256, gateResult.frameSha256, now, activeJobId, workerId)
+          WHERE job_id = ?4 AND pose_id = 'reference' AND attempt_number = ?6 AND lease_owner = ?5 AND state = 'LEASED';
+        `).bind(gateResult.rawSha256, gateResult.frameSha256, now, activeJobId, workerId, attempt)
       ]);
 
       console.log(`[Queue] Staged reference candidate ${candidateId} (${gateResult.frameSha256}) in VERIFYING.`);
     } catch (refErr) {
-      console.error(`[Queue] Reference generation error:`, refErr);
-      await releasePoseLease(env, activeJobId, 'reference', 1, 'FAILED', (refErr as Error).message);
-      await settleJobAndDailySpend(env, activeJobId, 'reference', 1, false);
-      throw refErr;
+      const errMsg = (refErr as Error).message;
+      console.error(`[Queue] Reference generation error (attempt ${attempt}):`, refErr);
+      await releasePoseLease(env, activeJobId, 'reference', attempt, 'FAILED', errMsg);
+      // Outbound attempt was made: commit 25c charge to ledger
+      await settleJobAndDailySpend(env, activeJobId, 'reference', attempt, true);
+      await enqueueNextReferenceAttemptOrQuarantine(env, activeJobId, guardianId, attempt, errMsg);
     }
   }
 }
@@ -423,8 +488,7 @@ async function handleHatchPose(
   const refKey = generateReferenceKey(referenceSha);
   const refObj = await env.ASSETS_BUCKET.get(refKey);
   if (!refObj) {
-    console.error(`[Queue] Reference hero image missing from R2: ${refKey}. Quarantining job.`);
-    await releasePoseLease(env, jobId, poseId, attempt, 'FAILED', 'Missing canonical reference in R2');
+    console.error(`[Queue] Canonical reference image missing from R2: ${refKey}. Quarantining job.`);
     const errReason = `MISSING_CANONICAL_REFERENCE: Canonical reference image missing from R2 (${refKey}).`;
     await env.DB.batch([
       env.DB.prepare('UPDATE guardians SET status = "QUARANTINED" WHERE id = ?1').bind(guardianId),
@@ -434,7 +498,6 @@ async function handleHatchPose(
     return;
   }
   const refBytes = new Uint8Array(await refObj.arrayBuffer());
-
   // 3. Atomically Reserve Budget (Per-Job & Per-Day Cap Enforcement)
   const budgetRes = await reserveJobAndDailySpend(env, jobId, poseId, attempt);
   if (!budgetRes.ok) {
@@ -458,52 +521,33 @@ async function handleHatchPose(
   try {
     const poseRes = await generatePoseWithGemini({
       prompt: promptObj.text,
-      referenceImage: { mime: 'image/png', b64: Buffer.from(refBytes).toString('base64') }
+      referenceImage: { mime: 'image/png', b64: Buffer.from(refBytes).toString('base64') },
+      reservation: { jobId, poseId, attemptNumber: attempt }
     }, env);
 
     if (!poseRes.success || !poseRes.base64Data) {
       throw new Error(`Pose generation failed: ${poseRes.error || 'No base64 data'}`);
     }
-
     const rawFrameBytes = Buffer.from(poseRes.base64Data, 'base64');
-    const gateResult = await validateAndNormalizeFrame(rawFrameBytes);
+    const gateResult = await validateAndNormalizeFrame(rawFrameBytes, { claimedMime: poseRes.mimeType });
 
     if (!gateResult.ok) {
-      console.warn(`[Queue] Pose ${poseId} attempt ${attempt} failed image gate: ${gateResult.reasons.join('; ')}`);
-      await releasePoseLease(env, jobId, poseId, attempt, 'REJECTED', gateResult.reasons.join('; '));
-      await settleJobAndDailySpend(env, jobId, poseId, attempt, false);
-
-      if (attempt < GATES.maxAttemptsPerPose) {
-        // Enqueue next attempt
-        const nextMsg: HatchPoseMessage = {
-          v: 1,
-          type: 'HATCH_POSE',
-          jobId,
-          guardianId,
-          poseId,
-          attempt: attempt + 1
-        };
-        await writeOutboxMessage(env.DB, 'githoot-ai-queue', nextMsg, `${jobId}:${poseId}:${attempt + 1}`);
-        if (env.AI_QUEUE) {
-          await env.AI_QUEUE.send(nextMsg);
-        }
-      } else {
-        console.error(`[Queue] Pose ${poseId} exhausted all ${GATES.maxAttemptsPerPose} attempts. Quarantining job.`);
-        const errReason = `POSE_GATE_EXHAUSTED: Pose ${poseId} failed image gate after ${GATES.maxAttemptsPerPose} attempts.`;
-        await env.DB.batch([
-          env.DB.prepare('UPDATE guardians SET status = "QUARANTINED" WHERE id = ?1').bind(guardianId),
-          env.DB.prepare('UPDATE guardian_hatch_jobs SET state = "QUARANTINED", error_log = ?2, updated_at = ?3 WHERE guardian_id = ?1').bind(guardianId, errReason, Date.now())
-        ]);
-      }
+      const gateReason = gateResult.reasons.join('; ');
+      console.warn(`[Queue] Pose ${poseId} attempt ${attempt} failed image gate: ${gateReason}`);
+      await releasePoseLease(env, jobId, poseId, attempt, 'REJECTED', gateReason);
+      // Outbound attempt was made: commit 25c charge to ledger
+      await settleJobAndDailySpend(env, jobId, poseId, attempt, true);
+      await enqueueNextPoseAttemptOrQuarantine(env, jobId, guardianId, poseId, attempt, gateReason);
       rawMessage.ack();
       return;
     }
 
     // 5. Store exact raw bytes and normalized frame in R2
-    await env.ASSETS_BUCKET.put(`guardians/${guardianId}/raw/${gateResult.rawSha256}.png`, rawFrameBytes, {
-      httpMetadata: { contentType: 'image/png' }
+    const rawExt = gateResult.metrics.format === 'jpeg' ? 'jpg' : 'png';
+    const rawMime = gateResult.metrics.format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    await env.ASSETS_BUCKET.put(`guardians/${guardianId}/raw/${gateResult.rawSha256}.${rawExt}`, rawFrameBytes, {
+      httpMetadata: { contentType: rawMime }
     });
-
     const frameKey = `guardians/${guardianId}/frames/f${poseId}_${gateResult.frameSha256}.png`;
     await env.ASSETS_BUCKET.put(frameKey, gateResult.normalizedPng, {
       httpMetadata: { contentType: 'image/png' }
@@ -625,14 +669,17 @@ async function handleHatchPose(
 
     rawMessage.ack();
   } catch (poseErr) {
+    const errMsg = (poseErr as Error).message;
     console.error(`[Queue] Pose ${poseId} attempt ${attempt} execution error:`, poseErr);
-    await releasePoseLease(env, jobId, poseId, attempt, 'FAILED', (poseErr as Error).message);
-    await settleJobAndDailySpend(env, jobId, poseId, attempt, false);
-    rawMessage.retry();
+    await releasePoseLease(env, jobId, poseId, attempt, 'FAILED', errMsg);
+    // Outbound attempt was made: commit 25c charge to ledger
+    await settleJobAndDailySpend(env, jobId, poseId, attempt, true);
+    await enqueueNextPoseAttemptOrQuarantine(env, jobId, guardianId, poseId, attempt, errMsg);
+    rawMessage.ack();
   }
 }
 
-async function handleHatchComposite(
+export async function handleHatchComposite(
   message: HatchCompositeMessage,
   env: Env,
   rawMessage: Message<unknown>
@@ -682,17 +729,16 @@ async function handleHatchComposite(
       break;
     }
 
-    // 1. Fetch retained raw gate input bytes
-    const rawKey = `guardians/${guardianId}/raw/${record.raw_sha256}.png`;
-    const rawObj = await env.ASSETS_BUCKET.get(rawKey);
-    if (!rawObj) {
-      console.error(`[Queue] Retained raw bytes missing for f${poseDef.id} in R2: ${rawKey}. Invalidating frame.`);
+    // 1. Fetch retained raw gate input bytes (format-agnostic raw key resolution)
+    const rawResult = await fetchRawObjectFromR2(env.ASSETS_BUCKET, guardianId, record.raw_sha256);
+    if (!rawResult) {
+      console.error(`[Queue] Retained raw bytes missing for f${poseDef.id} in R2 (SHA: ${record.raw_sha256}). Invalidating frame.`);
       await env.DB.prepare('UPDATE guardian_hatch_frames SET state = "REJECTED" WHERE job_id = ?1 AND pose_id = ?2').bind(jobId, poseDef.id).run();
       cacheCorrupted = true;
       break;
     }
 
-    const rawBuf = new Uint8Array(await rawObj.arrayBuffer());
+    const rawBuf = new Uint8Array(await rawResult.object.arrayBuffer());
     const actualRawSha = await sha256Hex(rawBuf);
     if (actualRawSha !== record.raw_sha256) {
       console.error(`[Queue] Retained raw SHA mismatch for f${poseDef.id} (expected ${record.raw_sha256}, got ${actualRawSha}). Invalidating frame.`);
@@ -762,11 +808,20 @@ async function handleHatchComposite(
   const composited = compositeLandingSheetAndStrip(frameBuffers, FRAME.size, FRAME.cols, FRAME.rows);
 
   const sheetPngBytes = encodeRgbaToPng(composited.sheetRgba, composited.sheetWidth, composited.sheetHeight);
-  const sheetWebpBytes = await encodeRgbaToWebp(composited.sheetRgba, composited.sheetWidth, composited.sheetHeight);
+  let sheetWebpBytes: Uint8Array;
+  try {
+    sheetWebpBytes = await encodeRgbaToWebp(composited.sheetRgba, composited.sheetWidth, composited.sheetHeight);
+  } catch {
+    sheetWebpBytes = sheetPngBytes;
+  }
 
   const stripPngBytes = encodeRgbaToPng(composited.stripRgba, composited.stripWidth, composited.stripHeight);
-  const stripWebpBytes = await encodeRgbaToWebp(composited.stripRgba, composited.stripWidth, composited.stripHeight);
-
+  let stripWebpBytes: Uint8Array;
+  try {
+    stripWebpBytes = await encodeRgbaToWebp(composited.stripRgba, composited.stripWidth, composited.stripHeight);
+  } catch {
+    stripWebpBytes = stripPngBytes;
+  }
   const sheetPngSha = await sha256Hex(sheetPngBytes);
   const sheetWebpSha = await sha256Hex(sheetWebpBytes);
   const stripPngSha = await sha256Hex(stripPngBytes);
@@ -837,13 +892,13 @@ async function handleHatchComposite(
     env.DB.prepare(`
       UPDATE guardian_hatch_jobs
       SET state = 'VERIFYING', frames_completed = 16, manifest_url = ?1, updated_at = ?2
-      WHERE id = ?3
+      WHERE id = ?3 AND state IN ('PENDING', 'GENERATING', 'VERIFYING');
     `).bind(`https://${cdnHost}/${manifestKey}`, Date.now(), jobId),
 
     env.DB.prepare(`
       UPDATE guardians
       SET status = 'VERIFYING', spritesheet_url = ?1, manifest_url = ?2
-      WHERE id = ?3 AND status = 'VERIFYING'
+      WHERE id = ?3 AND status IN ('PENDING', 'GENERATING', 'VERIFYING');
     `).bind(`https://${cdnHost}/${stripPngKey}`, `https://${cdnHost}/${manifestKey}`, guardianId)
   ]);
 

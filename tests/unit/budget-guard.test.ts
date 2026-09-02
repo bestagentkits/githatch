@@ -109,7 +109,7 @@ describe('Runtime Daily AI Budget Guard Invariants', () => {
     expect(res.error).toBe('DAILY_BUDGET_CAP_EXCEEDED');
   });
 
-  it('gemini-client retries make per-attempt reservations, booking 25 cents per attempted outbound fetch', async () => {
+  it('gemini-client single outbound fetch books exactly 1 reservation and 1 settlement of 25 cents', async () => {
     let reservationCount = 0;
     let settlementCount = 0;
 
@@ -131,13 +131,9 @@ describe('Runtime Daily AI Budget Guard Invariants', () => {
       }))
     };
 
-    // Mock fetch to fail attempt 1 and succeed attempt 2
     let fetchAttempts = 0;
     globalThis.fetch = vi.fn().mockImplementation(async () => {
       fetchAttempts++;
-      if (fetchAttempts === 1) {
-        return { ok: false, status: 503, text: async () => 'Service unavailable' };
-      }
       return {
         ok: true,
         json: async () => ({
@@ -163,11 +159,64 @@ describe('Runtime Daily AI Budget Guard Invariants', () => {
 
     const res = await generatePoseWithGemini({ prompt: 'test prompt' }, env as any);
     expect(res.success).toBe(true);
-    expect(fetchAttempts).toBe(2);
-    expect(reservationCount).toBe(2); // 2 reservations
-    expect(settlementCount).toBe(2);  // 2 settlements booked (50 cents total)
+    expect(fetchAttempts).toBe(1);
+    expect(reservationCount).toBe(1); // Exactly 1 reservation
+    expect(settlementCount).toBe(1);  // Exactly 1 settlement booked (25 cents)
   });
 
+  it('gemini-client skips internal reservation when caller holds job reservation token', async () => {
+    let reservationCount = 0;
+    let settlementCount = 0;
+
+    const mockDb = {
+      prepare: vi.fn().mockImplementation((query: string) => ({
+        bind: vi.fn().mockImplementation(() => ({
+          run: vi.fn().mockImplementation(async () => {
+            if (query.includes('INSERT INTO ai_budget_ledger')) {
+              reservationCount++;
+              return { meta: { changes: 1 } };
+            }
+            if (query.includes('UPDATE ai_budget_ledger')) {
+              settlementCount++;
+              return { meta: { changes: 1 } };
+            }
+            return { meta: { changes: 1 } };
+          })
+        }))
+      }))
+    };
+
+    globalThis.fetch = vi.fn().mockImplementation(async () => ({
+      ok: true,
+      json: async () => ({
+        candidates: [{
+          content: {
+            parts: [{
+              inlineData: {
+                mimeType: 'image/png',
+                data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+              }
+            }]
+          }
+        }]
+      })
+    }));
+
+    const env = {
+      GEMINI_API_KEY: 'test-key',
+      AI_MODEL_TIER: 'nano-banana-pro-preview',
+      DB: mockDb
+    };
+
+    const res = await generatePoseWithGemini({
+      prompt: 'test prompt',
+      reservation: { jobId: 'job-1', poseId: 'reference', attemptNumber: 1 }
+    }, env as any);
+
+    expect(res.success).toBe(true);
+    expect(reservationCount).toBe(0); // 0 internal reservations (caller manages it)
+    expect(settlementCount).toBe(0);  // 0 internal settlements (caller manages it)
+  });
   it('simulates concurrent D1 reservations enforcing the 80-call hard cap exactly', async () => {
     let reservedCents = 0;
     let settledCents = 0;
@@ -291,6 +340,59 @@ describe('Runtime Daily AI Budget Guard Invariants', () => {
     const res = await reserveJobAndDailySpend(env, 'job-capped', 'hover', 1, 25);
     expect(res.ok).toBe(false);
     expect(res.reason).toContain('JOB_BUDGET_CAP_EXCEEDED');
+  });
+  it('reserveJobAndDailySpend fails closed when job does not exist in guardian_hatch_jobs', async () => {
+    const mockDb = {
+      prepare: vi.fn().mockImplementation((query: string) => ({
+        bind: vi.fn().mockImplementation(() => ({
+          first: vi.fn().mockImplementation(async () => {
+            if (query.includes('FROM guardian_budget_reservations')) return null;
+            if (query.includes('FROM guardian_hatch_jobs')) return null; // No such job!
+            return null;
+          })
+        }))
+      })),
+      batch: vi.fn().mockImplementation(async () => {
+        // Subquery returned NULL so batch insert modified 0 rows
+        return [{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }];
+      })
+    } as unknown as D1Database;
+
+    const env = { DB: mockDb } as any;
+    const res = await reserveJobAndDailySpend(env, 'nonexistent-job', 'hover', 1, 25);
+    expect(res.ok).toBe(false);
+    expect(res.reason).toContain('DAILY_BUDGET_CAP_EXCEEDED');
+  });
+
+  it('reserveJobAndDailySpend succeeds on a fresh day with no ai_budget_ledger entry', async () => {
+    let reservationInserted = false;
+    const mockDb = {
+      prepare: vi.fn().mockImplementation((query: string) => {
+        let boundArgs: any[] = [];
+        const stmt = {
+          bind: vi.fn().mockImplementation((...args: any[]) => {
+            boundArgs = args;
+            return stmt;
+          }),
+          first: vi.fn().mockImplementation(async () => {
+            if (query.includes('FROM guardian_budget_reservations')) return null;
+            if (query.includes('FROM guardian_hatch_jobs')) return { total: 0 };
+            return null; // Fresh day: no entry in ai_budget_ledger!
+          }),
+          run: vi.fn().mockImplementation(async () => ({ success: true, meta: { changes: 1 } }))
+        };
+        return stmt;
+      }),
+      batch: vi.fn().mockImplementation(async () => {
+        reservationInserted = true;
+        return [{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }];
+      })
+    } as unknown as D1Database;
+
+    const env = { DB: mockDb } as any;
+    const res = await reserveJobAndDailySpend(env, 'job-fresh-day', 'hover', 1, 25);
+    expect(res.ok).toBe(true);
+    expect(reservationInserted).toBe(true);
   });
 
   it('reconcileAbandonedReservations restores both job and daily counters', async () => {

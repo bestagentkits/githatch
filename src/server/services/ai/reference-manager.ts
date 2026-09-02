@@ -17,6 +17,26 @@ export function generateCandidateKey(guardianId: string, candidateSha256: string
   return `candidates/${guardianId}/${candidateSha256}.png`;
 }
 
+export function generateRawKey(guardianId: string, rawSha256: string, format: 'png' | 'jpeg' = 'png'): string {
+  const ext = format === 'jpeg' ? 'jpg' : 'png';
+  return `guardians/${guardianId}/raw/${rawSha256}.${ext}`;
+}
+
+export async function fetchRawObjectFromR2(
+  bucket: R2Bucket,
+  guardianId: string,
+  rawSha256: string
+): Promise<{ object: R2ObjectBody; key: string } | null> {
+  const pngKey = generateRawKey(guardianId, rawSha256, 'png');
+  const pngObj = await bucket.get(pngKey);
+  if (pngObj) return { object: pngObj, key: pngKey };
+
+  const jpgKey = generateRawKey(guardianId, rawSha256, 'jpeg');
+  const jpgObj = await bucket.get(jpgKey);
+  if (jpgObj) return { object: jpgObj, key: jpgKey };
+
+  return null;
+}
 export interface ProvenanceCheckOptions {
   candidateSha256: string;
   actualBufferSha256: string;

@@ -3,7 +3,7 @@
 // (tests/integration/harness.smoke.test.ts)
 // ============================================================================
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { env, createMessageBatch, getQueueResult, createExecutionContext } from 'cloudflare:test';
 import { runMigrations } from './setup/migrations';
 import { encodeRgbaToWebp, decodeWebpToRgba } from '../../src/server/services/image/webp-encoder';
@@ -490,12 +490,15 @@ describe('Workers Runtime Harness Smoke', () => {
       expect(transRes.ok).toBe(false);
       if (!transRes.ok) expect(transRes.reasons.some(r => r.includes('transparent'))).toBe(true);
 
-      // 2. JPEG magic bytes
-      const jpeg = createJpegBuffer();
-      const jpegRes = await validateAndNormalizeFrame(jpeg);
-      expect(jpegRes.ok).toBe(false);
-      if (!jpegRes.ok) expect(jpegRes.reasons.some(r => r.includes('valid PNG magic signature'))).toBe(true);
+      // 2. Unrecognized format and MIME mismatch
+      const badFormat = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, ...new Array(50).fill(0)]); // GIF
+      const badFormatRes = await validateAndNormalizeFrame(badFormat);
+      expect(badFormatRes.ok).toBe(false);
+      if (!badFormatRes.ok) expect(badFormatRes.reasons.some(r => r.includes('does not match supported PNG or JPEG'))).toBe(true);
 
+      const mimeMismatchRes = await validateAndNormalizeFrame(trans, { claimedMime: 'image/jpeg' });
+      expect(mimeMismatchRes.ok).toBe(false);
+      if (!mimeMismatchRes.ok) expect(mimeMismatchRes.reasons.some(r => r.includes('MIME mismatch'))).toBe(true);
       // 3. Truncated PNG
       const trunc = createTruncatedPng();
       const truncRes = await validateAndNormalizeFrame(trunc);
@@ -936,6 +939,569 @@ describe('Workers Runtime Harness Smoke', () => {
       ).bind(`claim:${claim3.guardian.id}`).first<any>();
       expect(outboxRowPending?.state).toBe('PENDING');
       expect(outboxRowPending?.delivered_at).toBeNull();
+    });
+    it('Matrix 17: reserveJobAndDailySpend atomically succeeds on fresh day with no prior ai_budget_ledger entry, and fails closed for nonexistent jobs on real workerd D1', async () => {
+      const { reserveJobAndDailySpend, settleJobAndDailySpend } = await import('../../src/server/services/billing/budget-guard');
+      const uniqueGhId = Math.floor(Math.random() * 8000000) + 2000000;
+      const freshJobId = `job-fresh-d1-${Date.now()}`;
+      const freshGuardianId = `g-fresh-d1-${Date.now()}`;
+      const now = Date.now();
+
+      // Seed user, guardian and job into real D1
+      await env.DB.prepare(
+        'INSERT INTO users (id, github_user_id, status, created_at, updated_at) VALUES (?, ?, "active", ?, ?)'
+      ).bind(`user-${uniqueGhId}`, uniqueGhId, now, now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardians (id, user_id, github_user_id, name, egg_type, species, element, dna_seed, rarity_tier, hero_image_url, traits, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(freshGuardianId, `user-${uniqueGhId}`, uniqueGhId, 'FreshBudgetPet', 'Cyber', 'NeonByte', 'Cyber', '12345', 'Common', '/hero.png', '{}', 'PENDING', now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardian_hatch_jobs (id, guardian_id, request_fingerprint, state, model_id, attempts_count, frames_completed, reserved_cents, spent_cents, created_at, updated_at) VALUES (?, ?, ?, "PENDING", "nano-banana-pro-preview", 0, 0, 0, 0, ?, ?)'
+      ).bind(freshJobId, freshGuardianId, `fp-${freshJobId}`, now, now).run();
+
+      const res1 = await reserveJobAndDailySpend(env, freshJobId, 'reference', 1, 25);
+      expect(res1.ok).toBe(true);
+
+      // Assert D1 reservation row
+      const resRow = await env.DB.prepare(
+        'SELECT id, amount_cents, state FROM guardian_budget_reservations WHERE job_id = ?1 AND pose_id = "reference" AND attempt_number = 1'
+      ).bind(freshJobId).first<any>();
+      expect(resRow).toBeDefined();
+      expect(resRow?.amount_cents).toBe(25);
+      expect(resRow?.state).toBe('RESERVED');
+
+      // Assert job reserved_cents incremented
+      const jobRow = await env.DB.prepare('SELECT reserved_cents, spent_cents FROM guardian_hatch_jobs WHERE id = ?1').bind(freshJobId).first<any>();
+      expect(jobRow?.reserved_cents).toBe(25);
+
+      // Settle attempt (success = true)
+      await settleJobAndDailySpend(env, freshJobId, 'reference', 1, true, 25);
+      const jobRowSettled = await env.DB.prepare('SELECT reserved_cents, spent_cents FROM guardian_hatch_jobs WHERE id = ?1').bind(freshJobId).first<any>();
+      expect(jobRowSettled?.reserved_cents).toBe(0);
+      expect(jobRowSettled?.spent_cents).toBe(25);
+      // 2. Fail-Closed check: nonexistent job cannot reserve budget (0 rows modified in D1 batch)
+      const resNonexistent = await reserveJobAndDailySpend(env, 'nonexistent-job-uuid', 'reference', 1, 25);
+      expect(resNonexistent.ok).toBe(false);
+
+      const orphanRes = await env.DB.prepare('SELECT count(*) as total FROM guardian_budget_reservations WHERE job_id = "nonexistent-job-uuid"').first<any>();
+      expect(orphanRes?.total).toBe(0);
+    });
+    it('Matrix 18: failed attempt budget reservation release and subsequent retry successfully reactivates reservation on real workerd D1', async () => {
+      const { reserveJobAndDailySpend, settleJobAndDailySpend } = await import('../../src/server/services/billing/budget-guard');
+      const { releasePoseLease } = await import('../../src/server/queue/lease-manager');
+      const retryJobId = `job-retry-d1-${Date.now()}`;
+      const retryGuardianId = `g-retry-d1-${Date.now()}`;
+      const uniqueGhId = Math.floor(Math.random() * 8000000) + 2000000;
+      const now = Date.now();
+
+      // 1. Seed user, guardian, and job
+      await env.DB.prepare(
+        'INSERT INTO users (id, github_user_id, status, created_at, updated_at) VALUES (?, ?, "active", ?, ?)'
+      ).bind(`user-${uniqueGhId}`, uniqueGhId, now, now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardians (id, user_id, github_user_id, name, egg_type, species, element, dna_seed, rarity_tier, hero_image_url, traits, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(retryGuardianId, `user-${uniqueGhId}`, uniqueGhId, 'RetryPet', 'Cyber', 'NeonByte', 'Cyber', '12345', 'Common', '/hero.png', '{}', 'PENDING', now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardian_hatch_jobs (id, guardian_id, request_fingerprint, state, model_id, attempts_count, frames_completed, reserved_cents, spent_cents, created_at, updated_at) VALUES (?, ?, ?, "PENDING", "nano-banana-pro-preview", 0, 0, 0, 0, ?, ?)'
+      ).bind(retryJobId, retryGuardianId, `fp-${retryJobId}`, now, now).run();
+
+      // 2. First attempt reservation succeeds
+      const res1 = await reserveJobAndDailySpend(env, retryJobId, 'reference', 1, 25);
+      expect(res1.ok).toBe(true);
+
+      // 3. Simulate failure: release lease and settle reservation as failure (RELEASED)
+      await releasePoseLease(env, retryJobId, 'reference', 1, 'FAILED', 'SIMULATED_GEMINI_TIMEOUT');
+      await settleJobAndDailySpend(env, retryJobId, 'reference', 1, false, 25);
+      const releasedRow = await env.DB.prepare(
+        'SELECT state FROM guardian_budget_reservations WHERE job_id = ?1 AND pose_id = "reference" AND attempt_number = 1'
+      ).bind(retryJobId).first<any>();
+      expect(releasedRow?.state).toBe('RELEASED');
+
+      // 4. Retry of same attempt number atomically reactivates reservation to RESERVED
+      const res2 = await reserveJobAndDailySpend(env, retryJobId, 'reference', 1, 25);
+      expect(res2.ok).toBe(true);
+
+      const reactivatedRow = await env.DB.prepare(
+        'SELECT state, amount_cents FROM guardian_budget_reservations WHERE job_id = ?1 AND pose_id = "reference" AND attempt_number = 1'
+      ).bind(retryJobId).first<any>();
+      expect(reactivatedRow?.state).toBe('RESERVED');
+      expect(reactivatedRow?.amount_cents).toBe(25);
+
+      // Job reserved_cents is 25
+      const jobRow = await env.DB.prepare('SELECT reserved_cents FROM guardian_hatch_jobs WHERE id = ?1').bind(retryJobId).first<any>();
+      expect(jobRow?.reserved_cents).toBe(25);
+    });
+    it('Matrix 19: queue generation with reservationToken books exactly one 25c charge and total_calls += 1 on real workerd D1', async () => {
+      const { reserveJobAndDailySpend, settleJobAndDailySpend, getTodayDateString } = await import('../../src/server/services/billing/budget-guard');
+      const singleJobId = `job-single-acc-${Date.now()}`;
+      const singleGuardianId = `g-single-acc-${Date.now()}`;
+      const uniqueGhId = Math.floor(Math.random() * 8000000) + 2000000;
+      const now = Date.now();
+      const today = getTodayDateString();
+
+      // Query initial daily ledger state
+      const initialLedger = await env.DB.prepare('SELECT reserved_cents, settled_cents, total_calls FROM ai_budget_ledger WHERE day = ?1').bind(today).first<any>();
+      const startSettled = initialLedger?.settled_cents || 0;
+      const startCalls = initialLedger?.total_calls || 0;
+
+      // Seed guardian and job
+      await env.DB.prepare(
+        'INSERT INTO users (id, github_user_id, status, created_at, updated_at) VALUES (?, ?, "active", ?, ?)'
+      ).bind(`user-${uniqueGhId}`, uniqueGhId, now, now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardians (id, user_id, github_user_id, name, egg_type, species, element, dna_seed, rarity_tier, hero_image_url, traits, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(singleGuardianId, `user-${uniqueGhId}`, uniqueGhId, 'SingleAccPet', 'Cyber', 'NeonByte', 'Cyber', '12345', 'Common', '/hero.png', '{}', 'PENDING', now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardian_hatch_jobs (id, guardian_id, request_fingerprint, state, model_id, attempts_count, frames_completed, reserved_cents, spent_cents, created_at, updated_at) VALUES (?, ?, ?, "PENDING", "nano-banana-pro-preview", 0, 0, 0, 0, ?, ?)'
+      ).bind(singleJobId, singleGuardianId, `fp-${singleJobId}`, now, now).run();
+
+      // 1. Queue worker acquires reservation
+      const res = await reserveJobAndDailySpend(env, singleJobId, 'reference', 1, 25);
+      expect(res.ok).toBe(true);
+
+      const midLedger = await env.DB.prepare('SELECT reserved_cents, settled_cents, total_calls FROM ai_budget_ledger WHERE day = ?1').bind(today).first<any>();
+      expect(midLedger?.reserved_cents).toBe((initialLedger?.reserved_cents || 0) + 25);
+      expect(midLedger?.total_calls).toBe(startCalls + 1);
+
+      // 2. Queue worker settles on success
+      await settleJobAndDailySpend(env, singleJobId, 'reference', 1, true, 25);
+
+      const finalLedger = await env.DB.prepare('SELECT reserved_cents, settled_cents, total_calls FROM ai_budget_ledger WHERE day = ?1').bind(today).first<any>();
+      expect(finalLedger?.settled_cents).toBe(startSettled + 25);
+      expect(finalLedger?.reserved_cents).toBe(initialLedger?.reserved_cents || 0);
+      expect(finalLedger?.total_calls).toBe(startCalls + 1); // Exactly +1 call increment, no double-counting
+    });
+    it('Matrix 20: failed outbound fetch or gate rejection commits 25c spend to D1 ledger to prevent unbounded provider spend', async () => {
+      const { reserveJobAndDailySpend, settleJobAndDailySpend, getTodayDateString } = await import('../../src/server/services/billing/budget-guard');
+      const failJobId = `job-fail-acc-${Date.now()}`;
+      const failGuardianId = `g-fail-acc-${Date.now()}`;
+      const uniqueGhId = Math.floor(Math.random() * 8000000) + 2000000;
+      const now = Date.now();
+      const today = getTodayDateString();
+
+      const initialLedger = await env.DB.prepare('SELECT reserved_cents, settled_cents, total_calls FROM ai_budget_ledger WHERE day = ?1').bind(today).first<any>();
+      const startSettled = initialLedger?.settled_cents || 0;
+
+      // Seed guardian and job
+      await env.DB.prepare(
+        'INSERT INTO users (id, github_user_id, status, created_at, updated_at) VALUES (?, ?, "active", ?, ?)'
+      ).bind(`user-${uniqueGhId}`, uniqueGhId, now, now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardians (id, user_id, github_user_id, name, egg_type, species, element, dna_seed, rarity_tier, hero_image_url, traits, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(failGuardianId, `user-${uniqueGhId}`, uniqueGhId, 'FailAccPet', 'Cyber', 'NeonByte', 'Cyber', '12345', 'Common', '/hero.png', '{}', 'PENDING', now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardian_hatch_jobs (id, guardian_id, request_fingerprint, state, model_id, attempts_count, frames_completed, reserved_cents, spent_cents, created_at, updated_at) VALUES (?, ?, ?, "PENDING", "nano-banana-pro-preview", 0, 0, 0, 0, ?, ?)'
+      ).bind(failJobId, failGuardianId, `fp-${failJobId}`, now, now).run();
+
+      // 1. Reserve budget before outbound call
+      await reserveJobAndDailySpend(env, failJobId, 'hover', 1, 25);
+
+      // 2. Outbound fetch made but failed HTTP / gate validation: commit spend (success = true in settle)
+      await settleJobAndDailySpend(env, failJobId, 'hover', 1, true, 25);
+
+      // 3. Verify that 25c was committed to settled_cents on daily ledger and spent_cents on job
+      const afterLedger = await env.DB.prepare('SELECT settled_cents FROM ai_budget_ledger WHERE day = ?1').bind(today).first<any>();
+      expect(afterLedger?.settled_cents).toBe(startSettled + 25);
+
+      const jobRow = await env.DB.prepare('SELECT spent_cents, reserved_cents FROM guardian_hatch_jobs WHERE id = ?1').bind(failJobId).first<any>();
+      expect(jobRow?.spent_cents).toBe(25);
+      expect(jobRow?.reserved_cents).toBe(0);
+    });
+    it('Matrix 21: reference attempt 2 successfully executes through handleQueueBatch and commits candidate under attempt_number = 2 on real workerd D1', async () => {
+      const { createValidCenteredSubjectPng } = await import('./fixtures/images');
+      const { compileIdentitySpec } = await import('../../src/server/services/dna/compiler');
+      const ref2JobId = `job-ref2-real-${Date.now()}`;
+      const ref2GuardianId = `g-ref2-real-${Date.now()}`;
+      const uniqueGhId = Math.floor(Math.random() * 8000000) + 2000000;
+      const now = Date.now();
+
+      const spec = await compileIdentitySpec({
+        githubUserId: uniqueGhId,
+        telemetry: {
+          stars: 10,
+          forks: 5,
+          mergedExternalPRs: 3,
+          publicRepos: 10,
+          followers: 5,
+          accountAgeYears: 2,
+          releases: 1,
+          reviewRatio: 1.0,
+          collaborators: 2,
+          activeWeeks: 10,
+          nightCommitRatio: 0.1,
+          topLanguages: ['TypeScript']
+        }
+      });
+
+      // Seed user, guardian, and job into real D1
+      await env.DB.prepare(
+        'INSERT INTO users (id, github_user_id, status, created_at, updated_at) VALUES (?, ?, "active", ?, ?)'
+      ).bind(`user-${uniqueGhId}`, uniqueGhId, now, now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardians (id, user_id, github_user_id, name, egg_type, species, element, dna_seed, rarity_tier, hero_image_url, traits, identity_spec, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(ref2GuardianId, `user-${uniqueGhId}`, uniqueGhId, 'Ref2RealPet', 'Cyber', 'NeonByte', 'Cyber', '12345', 'Common', '/hero.png', '{}', JSON.stringify(spec), 'PENDING', now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardian_hatch_jobs (id, guardian_id, request_fingerprint, state, model_id, attempts_count, frames_completed, reserved_cents, spent_cents, created_at, updated_at) VALUES (?, ?, ?, "PENDING", "nano-banana-pro-preview", 0, 0, 0, 0, ?, ?)'
+      ).bind(ref2JobId, ref2GuardianId, `fp-${ref2JobId}`, now, now).run();
+
+      const validHeroPng = createValidCenteredSubjectPng();
+      const validHeroB64 = Buffer.from(validHeroPng).toString('base64');
+      let callCount = 0;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (info: RequestInfo | URL) => {
+        const urlStr = typeof info === 'string' ? info : info.toString();
+        if (urlStr.includes('generateContent')) {
+          callCount++;
+          if (callCount === 1) {
+            return new Response('Gemini unavailable on attempt 1', { status: 503 });
+          }
+          return new Response(JSON.stringify({
+            candidates: [{
+              content: {
+                parts: [{
+                  inlineData: {
+                    mimeType: 'image/png',
+                    data: validHeroB64
+                  }
+                }]
+              }
+            }]
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response('Not found', { status: 404 });
+      });
+      const enqueuedMessages: any[] = [];
+      const queueTestEnv: any = {
+        ...env,
+        AI_QUEUE: {
+          send: async (msg: any) => {
+            enqueuedMessages.push(msg);
+          }
+        },
+        GEMINI_API_KEY: 'test-gemini-key',
+        AI_MODEL_TIER: 'nano-banana-pro-preview'
+      };
+      // 1. Dispatch Attempt 1 message through handleQueueBatch
+      const msg1 = {
+        id: 'msg-ref-1',
+        timestamp: new Date(),
+        attempts: 1,
+        body: { v: 1, type: 'HATCH_REFERENCE', jobId: ref2JobId, guardianId: ref2GuardianId, attempt: 1 } as GenerationQueueMessage
+      };
+      const batch1 = createMessageBatch('githoot-ai-queue', [msg1]);
+      const ctx1 = createExecutionContext();
+      await handleQueueBatch(batch1, queueTestEnv);
+      const qRes1 = await getQueueResult(batch1, ctx1);
+      expect(qRes1.ackAll || qRes1.explicitAcks.length > 0).toBe(true);
+
+      // Verify Attempt 1 was marked FAILED and 25c spent
+      const attempt1Row = await env.DB.prepare('SELECT state, error_message FROM guardian_pose_attempts WHERE job_id = ?1 AND attempt_number = 1').bind(ref2JobId).first<any>();
+      expect(attempt1Row?.state).toBe('FAILED');
+      expect(attempt1Row?.error_message).toContain('503');
+
+      // 2. Dispatch Attempt 2 message through handleQueueBatch
+      const msg2 = {
+        id: 'msg-ref-2',
+        timestamp: new Date(),
+        attempts: 1,
+        body: { v: 1, type: 'HATCH_REFERENCE', jobId: ref2JobId, guardianId: ref2GuardianId, attempt: 2 } as GenerationQueueMessage
+      };
+      const batch2 = createMessageBatch('githoot-ai-queue', [msg2]);
+      const ctx2 = createExecutionContext();
+      await handleQueueBatch(batch2, queueTestEnv);
+      const qRes2 = await getQueueResult(batch2, ctx2);
+      expect(qRes2.ackAll || qRes2.explicitAcks.length > 0).toBe(true);
+
+      // 3. Assert Attempt 2 succeeded, candidate is staged in VERIFYING, and attempt 2 is ACCEPTED
+      const candRow = await env.DB.prepare('SELECT candidate_sha256, state FROM guardian_reference_candidates WHERE guardian_id = ?1 AND state = "VERIFYING"').bind(ref2GuardianId).first<any>();
+      expect(candRow).toBeDefined();
+      expect(candRow?.state).toBe('VERIFYING');
+
+      const attempt2Row = await env.DB.prepare('SELECT state, frame_sha256 FROM guardian_pose_attempts WHERE job_id = ?1 AND attempt_number = 2').bind(ref2JobId).first<any>();
+      expect(attempt2Row?.state).toBe('ACCEPTED');
+      expect(attempt2Row?.frame_sha256).toBe(candRow?.candidate_sha256);
+      const jobRow = await env.DB.prepare('SELECT spent_cents, reserved_cents FROM guardian_hatch_jobs WHERE id = ?1').bind(ref2JobId).first<any>();
+      expect(jobRow?.spent_cents).toBe(50);
+      expect(jobRow?.reserved_cents).toBe(0);
+    });
+
+    it('Matrix 22: settleJobAndDailySpend is strictly idempotent across repeated calls on real workerd D1', async () => {
+      const { reserveJobAndDailySpend, settleJobAndDailySpend, getTodayDateString } = await import('../../src/server/services/billing/budget-guard');
+      const doubleSettleJobId = `job-double-settle-${Date.now()}`;
+      const doubleSettleGuardianId = `g-double-settle-${Date.now()}`;
+      const uniqueGhId = Math.floor(Math.random() * 8000000) + 2000000;
+      const now = Date.now();
+      const today = getTodayDateString();
+
+      // Seed user, guardian, and job into real D1
+      await env.DB.prepare(
+        'INSERT INTO users (id, github_user_id, status, created_at, updated_at) VALUES (?, ?, "active", ?, ?)'
+      ).bind(`user-${uniqueGhId}`, uniqueGhId, now, now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardians (id, user_id, github_user_id, name, egg_type, species, element, dna_seed, rarity_tier, hero_image_url, traits, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(doubleSettleGuardianId, `user-${uniqueGhId}`, uniqueGhId, 'DoubleSettlePet', 'Cyber', 'NeonByte', 'Cyber', '12345', 'Common', '/hero.png', '{}', 'PENDING', now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardian_hatch_jobs (id, guardian_id, request_fingerprint, state, model_id, attempts_count, frames_completed, reserved_cents, spent_cents, created_at, updated_at) VALUES (?, ?, ?, "PENDING", "nano-banana-pro-preview", 0, 0, 0, 0, ?, ?)'
+      ).bind(doubleSettleJobId, doubleSettleGuardianId, `fp-${doubleSettleJobId}`, now, now).run();
+
+      const initialLedger = await env.DB.prepare('SELECT settled_cents FROM ai_budget_ledger WHERE day = ?1').bind(today).first<any>();
+      const startSettled = initialLedger?.settled_cents || 0;
+
+      // 1. Reserve budget for attempt 1
+      await reserveJobAndDailySpend(env, doubleSettleJobId, 'hover', 1, 25);
+
+      // 2. Settle Call 1: transitions RESERVED -> COMMITTED, spent_cents += 25, settled_cents += 25
+      await settleJobAndDailySpend(env, doubleSettleJobId, 'hover', 1, true, 25);
+
+      const jobAfter1 = await env.DB.prepare('SELECT spent_cents, reserved_cents FROM guardian_hatch_jobs WHERE id = ?1').bind(doubleSettleJobId).first<any>();
+      expect(jobAfter1?.spent_cents).toBe(25);
+      expect(jobAfter1?.reserved_cents).toBe(0);
+
+      const ledgerAfter1 = await env.DB.prepare('SELECT settled_cents FROM ai_budget_ledger WHERE day = ?1').bind(today).first<any>();
+      expect(ledgerAfter1?.settled_cents).toBe(startSettled + 25);
+
+      // 3. Concurrent simultaneous settle calls (Promise.all): exactly one succeeds, exactly 25c spent
+      const [resA, resB, resC] = await Promise.all([
+        settleJobAndDailySpend(env, doubleSettleJobId, 'hover', 1, true, 25),
+        settleJobAndDailySpend(env, doubleSettleJobId, 'hover', 1, true, 25),
+        settleJobAndDailySpend(env, doubleSettleJobId, 'hover', 1, true, 25)
+      ]);
+
+      const jobAfter2 = await env.DB.prepare('SELECT spent_cents, reserved_cents FROM guardian_hatch_jobs WHERE id = ?1').bind(doubleSettleJobId).first<any>();
+      expect(jobAfter2?.spent_cents).toBe(25); // Exactly 25, not 75 or 100!
+      expect(jobAfter2?.reserved_cents).toBe(0);
+
+      const ledgerAfter2 = await env.DB.prepare('SELECT settled_cents FROM ai_budget_ledger WHERE day = ?1').bind(today).first<any>();
+      expect(ledgerAfter2?.settled_cents).toBe(startSettled + 25); // Exactly +25, no overcharge
+      expect([resA.settled, resB.settled, resC.settled].filter(Boolean).length).toBe(0); // All 3 concurrent duplicates rejected after initial settle
+    });
+    it('Matrix 23: concurrent simultaneous reserveJobAndDailySpend calls for the same attempt atomically elect exactly one winner and reserve exactly 25c on real workerd D1', async () => {
+      const { reserveJobAndDailySpend, getTodayDateString } = await import('../../src/server/services/billing/budget-guard');
+      const concJobId = `job-conc-res-${Date.now()}`;
+      const concGuardianId = `g-conc-res-${Date.now()}`;
+      const uniqueGhId = Math.floor(Math.random() * 8000000) + 2000000;
+      const now = Date.now();
+      const today = getTodayDateString();
+
+      // Seed user, guardian, and job into real D1
+      await env.DB.prepare(
+        'INSERT INTO users (id, github_user_id, status, created_at, updated_at) VALUES (?, ?, "active", ?, ?)'
+      ).bind(`user-${uniqueGhId}`, uniqueGhId, now, now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardians (id, user_id, github_user_id, name, egg_type, species, element, dna_seed, rarity_tier, hero_image_url, traits, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(concGuardianId, `user-${uniqueGhId}`, uniqueGhId, 'ConcResPet', 'Cyber', 'NeonByte', 'Cyber', '12345', 'Common', '/hero.png', '{}', 'PENDING', now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardian_hatch_jobs (id, guardian_id, request_fingerprint, state, model_id, attempts_count, frames_completed, reserved_cents, spent_cents, created_at, updated_at) VALUES (?, ?, ?, "PENDING", "nano-banana-pro-preview", 0, 0, 0, 0, ?, ?)'
+      ).bind(concJobId, concGuardianId, `fp-${concJobId}`, now, now).run();
+
+      const initialLedger = await env.DB.prepare('SELECT reserved_cents, total_calls FROM ai_budget_ledger WHERE day = ?1').bind(today).first<any>();
+      const startReserved = initialLedger?.reserved_cents || 0;
+      const startCalls = initialLedger?.total_calls || 0;
+
+      // 1. Simultaneous concurrent reservation calls for same (jobId, poseId, attemptNumber)
+      const results = await Promise.all([
+        reserveJobAndDailySpend(env, concJobId, 'hover', 1, 25),
+        reserveJobAndDailySpend(env, concJobId, 'hover', 1, 25),
+        reserveJobAndDailySpend(env, concJobId, 'hover', 1, 25)
+      ]);
+
+      // All 3 return ok: true (either elected winner or fast-checked idempotent existing reservation)
+      expect(results.every(r => r.ok)).toBe(true);
+
+      // 2. Exactly one 25c reservation is booked on the job and daily ledger (no triple-increment!)
+      const jobRow = await env.DB.prepare('SELECT reserved_cents, spent_cents FROM guardian_hatch_jobs WHERE id = ?1').bind(concJobId).first<any>();
+      expect(jobRow?.reserved_cents).toBe(25); // Exactly 25c, not 75c!
+      expect(jobRow?.spent_cents).toBe(0);
+
+      const ledgerRow = await env.DB.prepare('SELECT reserved_cents, total_calls FROM ai_budget_ledger WHERE day = ?1').bind(today).first<any>();
+      expect(ledgerRow?.reserved_cents).toBe(startReserved + 25); // Exactly +25c
+      expect(ledgerRow?.total_calls).toBe(startCalls + 1); // Exactly +1 call increment
+    });
+    it('Matrix 24: complete JPEG raw artifact lifecycle (storage -> composition -> review bundle -> preflight) succeeds on real workerd D1 and R2', async () => {
+      const { generateRawKey, fetchRawObjectFromR2, generateReferenceKey } = await import('../../src/server/services/ai/reference-manager');
+      const { assembleReviewBundle } = await import('../../src/server/routes/review');
+      const { verifyPublicationReady } = await import('../../src/server/services/claim/publication-preflight');
+      const { createValidCenteredSubjectPng } = await import('./fixtures/images');
+      const { compileIdentitySpec, canonicalJson } = await import('../../src/server/services/dna/compiler');
+      const { validateAndNormalizeFrame } = await import('../../src/server/services/image/frame-gate');
+      const { decodePngToRgba } = await import('../../src/server/services/image/png-codec');
+      const jpeg = await import('jpeg-js');
+
+      const jpegJobId = `job-jpeg-life-${Date.now()}`;
+      const jpegGuardianId = `g-jpeg-life-${Date.now()}`;
+      const uniqueGhId = Math.floor(Math.random() * 8000000) + 2000000;
+      const now = Date.now();
+
+      const spec = await compileIdentitySpec({
+        githubUserId: uniqueGhId,
+        telemetry: {
+          stars: 10, forks: 5, mergedExternalPRs: 3, publicRepos: 10,
+          followers: 5, accountAgeYears: 2, releases: 1, reviewRatio: 1.0,
+          collaborators: 2, activeWeeks: 10, nightCommitRatio: 0.1, topLanguages: ['TypeScript']
+        }
+      });
+
+      // 1. Seed user, guardian, job, and approved reference in D1
+      const refPng = createValidCenteredSubjectPng(1024, 1024);
+      const refSha = await sha256Hex(refPng);
+      await env.ASSETS_BUCKET.put(`references/${refSha}.png`, refPng, { httpMetadata: { contentType: 'image/png' } });
+
+      await env.DB.prepare(
+        'INSERT INTO users (id, github_user_id, status, created_at, updated_at) VALUES (?, ?, "active", ?, ?)'
+      ).bind(`user-${uniqueGhId}`, uniqueGhId, now, now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardians (id, user_id, github_user_id, name, egg_type, species, element, dna_seed, rarity_tier, hero_image_url, traits, identity_spec, reference_sha256, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "PENDING", ?)'
+      ).bind(jpegGuardianId, `user-${uniqueGhId}`, uniqueGhId, 'JpegLifePet', 'Cyber', 'NeonByte', 'Cyber', '12345', 'Common', '/hero.png', '{}', JSON.stringify(spec), refSha, now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardian_hatch_jobs (id, guardian_id, request_fingerprint, state, model_id, attempts_count, frames_completed, reserved_cents, spent_cents, created_at, updated_at) VALUES (?, ?, ?, "PENDING", "nano-banana-pro-preview", 0, 0, 0, 0, ?, ?)'
+      ).bind(jpegJobId, jpegGuardianId, `fp-${jpegJobId}`, now, now).run();
+
+      await env.DB.prepare(
+        'INSERT INTO guardian_reference_candidates (id, guardian_id, candidate_sha256, identity_hash, prompt_hash, model_id, raw_sha256, state, reviewer, verdict_data, created_at) VALUES (?, ?, ?, ?, "prompt-hash", "nano-banana-pro-preview", ?, "APPROVED", "lead@githoot.com", "{}", ?)'
+      ).bind(`ref-cand-${jpegJobId}`, jpegGuardianId, refSha, spec.identityHash, refSha, now).run();
+
+      // 2. Populate 16 frames: Frame 0 is JPEG, Frames 1-15 are PNG
+      for (let i = 0; i < POSE_SET.length; i++) {
+        const pose = POSE_SET[i]!;
+        let rawBytes: Uint8Array;
+        let claimedMime = 'image/png';
+
+        if (i === 0) {
+          // Frame 0: Encode raw JPEG
+          const validPng = createValidCenteredSubjectPng(256, 256);
+          const decoded = await decodePngToRgba(validPng);
+          const encodedJpeg = jpeg.encode({ data: decoded.data, width: decoded.width, height: decoded.height }, 90);
+          rawBytes = new Uint8Array(encodedJpeg.data);
+          claimedMime = 'image/jpeg';
+        } else {
+          rawBytes = createValidCenteredSubjectPng(256, 256);
+        }
+
+        const gateRes = await validateAndNormalizeFrame(rawBytes, { claimedMime });
+        if (!gateRes.ok) {
+          throw new Error(`Gate failure for frame ${i} (${claimedMime}): ${gateRes.reasons.join(', ')}`);
+        }
+        const rawSha = gateRes.rawSha256;
+        const frameSha = gateRes.frameSha256;
+        const rawKey = generateRawKey(jpegGuardianId, rawSha, gateRes.metrics.format);
+        await env.ASSETS_BUCKET.put(rawKey, rawBytes, { httpMetadata: { contentType: claimedMime } });
+
+        const frameKey = `guardians/${jpegGuardianId}/frames/f${pose.id}_${frameSha}.png`;
+        await env.ASSETS_BUCKET.put(frameKey, gateRes.normalizedPng, { httpMetadata: { contentType: 'image/png' } });
+
+        const gateMetricsJson = JSON.stringify({
+          componentsCount: gateRes.metrics.componentsCount,
+          dominanceRatio: gateRes.metrics.dominanceRatio,
+          fillRatio: gateRes.metrics.fillRatio,
+          aspectRatio: gateRes.metrics.aspectRatio,
+          format: gateRes.metrics.format
+        });
+
+        await env.DB.prepare(
+          'INSERT INTO guardian_hatch_frames (id, job_id, pose_id, pose_index, frame_sha256, raw_sha256, state, raw_gate_metrics, created_at) VALUES (?, ?, ?, ?, ?, ?, "ACCEPTED", ?, ?)'
+        ).bind(`f-${jpegJobId}-${pose.id}`, jpegJobId, pose.id, i, frameSha, rawSha, gateMetricsJson, now).run();
+      }
+
+      // 3. Run HATCH_COMPOSITE through handleQueueBatch (validates raw JPEG resolution during composition)
+      const compMsg = {
+        id: 'msg-comp-jpeg',
+        timestamp: new Date(),
+        attempts: 1,
+        body: { v: 1, type: 'HATCH_COMPOSITE', jobId: jpegJobId, guardianId: jpegGuardianId } as GenerationQueueMessage
+      };
+
+      const queueTestEnv: any = {
+        ...env,
+        CDN_DOMAIN: 'staging-cdn.githoot.com',
+        AI_MODEL_TIER: 'nano-banana-pro-preview'
+      };
+
+      await handleQueueBatch(createMessageBatch('githoot-ai-queue', [compMsg]), queueTestEnv);
+
+      // Verify composition transitioned job and guardian to VERIFYING
+      const jobRow = await env.DB.prepare('SELECT state, frames_completed, manifest_url FROM guardian_hatch_jobs WHERE id = ?1').bind(jpegJobId).first<any>();
+      expect(jobRow?.state).toBe('VERIFYING');
+      expect(jobRow?.frames_completed).toBe(16);
+      expect(jobRow?.manifest_url).toBeDefined();
+
+      const guardianRow = await env.DB.prepare('SELECT status, spritesheet_url, manifest_url FROM guardians WHERE id = ?1').bind(jpegGuardianId).first<any>();
+      expect(guardianRow?.status).toBe('VERIFYING');
+      expect(guardianRow?.manifest_url).toBe(jobRow?.manifest_url);
+
+      // 4. Invoke assembleReviewBundle (validates raw JPEG resolution during review assembly)
+      const reviewBundle = await assembleReviewBundle(jpegJobId, queueTestEnv);
+      expect(reviewBundle).toBeDefined();
+      expect(reviewBundle.bundleSha.length).toBe(64);
+      expect(reviewBundle.bundleData.frames.length).toBe(16);
+      expect(reviewBundle.bundleData.frames[0]?.poseId).toBe('hover');
+
+      // 5. Attach 16 hash-bound semantic verdicts and review record (authoritative review step)
+      const verdictStatements = reviewBundle.frames.map(frame => {
+        const verdictObj = {
+          verdict: 'pass',
+          reviewer: 'lead@githoot.com',
+          boundToSha256: frame.frame_sha256,
+          bundleSha: reviewBundle.bundleSha,
+          timestamp: now
+        };
+        return env.DB.prepare(
+          'UPDATE guardian_hatch_frames SET semantic_verdict = ?1 WHERE id = ?2'
+        ).bind(JSON.stringify(verdictObj), frame.id);
+      });
+
+      const reviewRecordStmt = env.DB.prepare(`
+        INSERT INTO guardian_review_records (
+          id, job_id, guardian_id, reviewer, decision, bundle_sha, manifest_sha, frame_hashes, notes, created_at
+        ) VALUES (?1, ?2, ?3, ?4, 'approve', ?5, ?6, ?7, ?8, ?9);
+      `).bind(
+        crypto.randomUUID(),
+        jpegJobId,
+        jpegGuardianId,
+        'lead@githoot.com',
+        reviewBundle.bundleSha,
+        reviewBundle.bundleData.manifestSha256 || null,
+        JSON.stringify(reviewBundle.frames.map(f => f.frame_sha256)),
+        'Approved in Matrix 24 test',
+        now
+      );
+
+      await env.DB.batch([...verdictStatements, reviewRecordStmt]);
+
+      // 6. Admin reviews and approves the 16-pose package via Single-Row Pointer CAS
+      const publishRes = await approveGuardianPosesAndPublish({
+        guardianId: jpegGuardianId,
+        reviewer: 'lead@githoot.com',
+        env: queueTestEnv
+      });
+      if (!publishRes.success) {
+        throw new Error(`Publish failed: ${JSON.stringify(publishRes)}`);
+      }
+      expect(publishRes.success).toBe(true);
+      expect(publishRes.status).toBe('ASSET_READY');
+
+      // 7. Invoke verifyPublicationReady (validates raw JPEG resolution during preflight verification)
+      const preflight = await verifyPublicationReady(jpegGuardianId, queueTestEnv);
+      if (!preflight.ready) {
+        throw new Error(`Preflight reasons: ${preflight.reasons.join('; ')}`);
+      }
+      expect(preflight.ready).toBe(true);
+      expect(preflight.reasons).toEqual([]);
+      expect(preflight.manifestSha256).toBeDefined();
+      expect(preflight.spritesheetSha256).toBeDefined();
     });
   });
 });

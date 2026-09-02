@@ -38,24 +38,43 @@ describe('Phase 7: Deploy Provenance, Staging & CI Gates', () => {
     } catch {}
   });
 
-  it('verifyDeployedWorker parses active version ID from wrangler deployments output', async () => {
+  it('verifyDeployedWorker parses active version ID from wrangler deployments output and asserts expected version', async () => {
     // @ts-ignore
     const { verifyDeployedWorker } = await import('../../scripts/bundle-provenance.mjs');
+    const multiDeployOutput = [
+      'Created:     2026-08-31T09:00:00.000Z',
+      'Version(s):  (100%) 11111111-2222-3333-4444-555555555555',
+      'Created:     2026-09-01T09:00:00.000Z',
+      'Version(s):  (100%) 4cd17a33-a917-4529-901b-cc471f71061a'
+    ].join('\n');
+
     const mockRunnerSuccess = () => ({
       ok: true,
-      output: 'Deployment ID: d9a1c24e-4cd1-4529-901b-cc471f71061a\nVersion(s):  (100%) 4cd17a33-a917-4529-901b-cc471f71061a\nCreated at: 2026-08-31T09:00:00.000Z'
+      output: multiDeployOutput
     });
 
-    const res = verifyDeployedWorker('wrangler.worker.toml', 'production', mockRunnerSuccess);
+    // 1. Parses latest active version ID (last entry in list)
+    const res = verifyDeployedWorker('wrangler.worker.toml', 'production', null, mockRunnerSuccess);
     expect(res.verified).toBe(true);
-    expect(res.versionId).toBe('d9a1c24e-4cd1-4529-901b-cc471f71061a');
+    expect(res.versionId).toBe('4cd17a33-a917-4529-901b-cc471f71061a');
 
+    // 2. Exact match on expected version succeeds
+    const resMatch = verifyDeployedWorker('wrangler.worker.toml', 'production', '4cd17a33-a917-4529-901b-cc471f71061a', mockRunnerSuccess);
+    expect(resMatch.verified).toBe(true);
+    expect(resMatch.versionId).toBe('4cd17a33-a917-4529-901b-cc471f71061a');
+
+    // 3. Mismatch on expected version fails closed
+    const resMismatch = verifyDeployedWorker('wrangler.worker.toml', 'production', '99999999-8888-7777-6666-555555555555', mockRunnerSuccess);
+    expect(resMismatch.verified).toBe(false);
+    expect(resMismatch.error).toContain('PROVENANCE_VERSION_MISMATCH');
+
+    // 4. Runner failure returns verified: false
     const mockRunnerFailure = () => ({
       ok: false,
       output: 'Authentication error: Cloudflare API token invalid'
     });
 
-    const resFail = verifyDeployedWorker('wrangler.worker.toml', 'production', mockRunnerFailure);
+    const resFail = verifyDeployedWorker('wrangler.worker.toml', 'production', null, mockRunnerFailure);
     expect(resFail.verified).toBe(false);
     expect(resFail.error).toContain('Failed to query deployments');
   });

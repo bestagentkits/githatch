@@ -6,6 +6,7 @@
 import type { Env, ReferenceCandidateRecord, HatchFrameRecord, IdentitySpec } from '../../types';
 import { sha256Hex } from '../crypto/web-crypto';
 import { validateAndNormalizeFrame, type FrameGateMetrics } from '../image/frame-gate';
+import { fetchRawObjectFromR2 } from '../ai/reference-manager';
 import { parseGuardianManifest, type GuardianManifest } from './manifest-schema';
 import { validateSemanticVerdict } from './verdict-contract';
 import { POSE_SET } from '../dna/contracts';
@@ -281,16 +282,16 @@ export async function verifyPublicationReady(
     }
 
     // Verify R2 Raw Frame Bytes + Re-run Contour Gate
-    const rawKey = `guardians/${guardianId}/raw/${d1Frame.raw_sha256}.png`;
-    const rawObj = await env.ASSETS_BUCKET.get(rawKey);
-    if (!rawObj) {
-      reasons.push(`Raw frame ${rawKey} missing from R2`);
+    const rawResult = await fetchRawObjectFromR2(env.ASSETS_BUCKET, guardianId, d1Frame.raw_sha256);
+    if (!rawResult) {
+      reasons.push(`Raw frame with SHA ${d1Frame.raw_sha256} missing from R2 for pose ${d1Frame.pose_id}`);
     } else {
-      const rawBuf = new Uint8Array(await rawObj.arrayBuffer());
+      const rawBuf = new Uint8Array(await rawResult.object.arrayBuffer());
       const actualRawSha = await sha256Hex(rawBuf);
       if (actualRawSha !== d1Frame.raw_sha256) {
-        reasons.push(`Raw frame ${rawKey} SHA mismatch: expected ${d1Frame.raw_sha256}, got ${actualRawSha}`);
+        reasons.push(`Raw frame SHA mismatch for pose ${d1Frame.pose_id}: expected ${d1Frame.raw_sha256}, got ${actualRawSha}`);
       } else {
+        const rawKey = rawResult.key;
         // Re-run Phase 3 contour gate over retained raw input
         const gateResult = await validateAndNormalizeFrame(rawBuf);
         if (!gateResult.ok) {

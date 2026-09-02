@@ -19,6 +19,7 @@ export interface HatchReferenceMessage extends BaseQueueMessage {
   type: 'HATCH_REFERENCE';
   jobId: string;
   guardianId: string;
+  attempt?: number;
 }
 
 export interface HatchPoseMessage extends BaseQueueMessage {
@@ -78,9 +79,14 @@ export function parseQueueMessage(raw: unknown): ParseQueueMessageResult {
     case 'HATCH_REFERENCE': {
       const jobId = typeof obj.jobId === 'string' ? obj.jobId.trim() : '';
       const guardianId = typeof obj.guardianId === 'string' ? obj.guardianId.trim() : '';
+      const attempt = typeof obj.attempt === 'number' ? obj.attempt : Number(obj.attempt || 1);
 
       if (!jobId || !guardianId) {
         return { ok: false, error: 'HATCH_REFERENCE message requires valid "jobId" and "guardianId" strings.' };
+      }
+
+      if (!Number.isInteger(attempt) || attempt < 1 || attempt > 10) {
+        return { ok: false, error: `Invalid attempt count: ${attempt}. Must be an integer between 1 and 10.` };
       }
 
       return {
@@ -89,7 +95,8 @@ export function parseQueueMessage(raw: unknown): ParseQueueMessageResult {
           v: 1,
           type: 'HATCH_REFERENCE',
           jobId,
-          guardianId
+          guardianId,
+          attempt
         }
       };
     }
