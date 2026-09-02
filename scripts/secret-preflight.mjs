@@ -14,14 +14,14 @@ export const REQUIRED_WORKER_RUNTIME_SECRETS = [
   'GITHUB_TOKENS',
   'GH_CLIENT_ID',
   'GH_CLIENT_SECRET',
-  'CF_ACCESS_AUD',
-  'CF_ACCESS_TEAM_NAME',
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
   'R2_BUCKET_NAME'
 ];
 
 export const OPTIONAL_SECRETS = [
+  'CF_ACCESS_AUD',
+  'CF_ACCESS_TEAM_NAME',
   'CF_ACCESS_JWKS'
 ];
 
@@ -37,6 +37,16 @@ export function validateEnvironmentSecrets(
 ) {
   const missing = [];
   const available = [];
+  const effectiveEnv = { ...envSource };
+  if (!effectiveEnv.GITHUB_TOKENS && effectiveEnv.GH_TOKENS) {
+    effectiveEnv.GITHUB_TOKENS = effectiveEnv.GH_TOKENS;
+  }
+  if (!effectiveEnv.GH_CLIENT_ID && effectiveEnv.GITHUB_CLIENT_ID) {
+    effectiveEnv.GH_CLIENT_ID = effectiveEnv.GITHUB_CLIENT_ID;
+  }
+  if (!effectiveEnv.GH_CLIENT_SECRET && effectiveEnv.GITHUB_CLIENT_SECRET) {
+    effectiveEnv.GH_CLIENT_SECRET = effectiveEnv.GITHUB_CLIENT_SECRET;
+  }
 
   let requiredList = [];
   if (target === 'ci_deploy') {
@@ -48,7 +58,7 @@ export function validateEnvironmentSecrets(
   }
 
   for (const secretKey of requiredList) {
-    const val = envSource[secretKey];
+    const val = effectiveEnv[secretKey];
     if (!val || val.trim().length === 0) {
       missing.push(secretKey);
     } else {

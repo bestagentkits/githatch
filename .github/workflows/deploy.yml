@@ -90,7 +90,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           ADMIN_REVIEW_SECRET: ${{ secrets.ADMIN_REVIEW_SECRET }}
-          GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
+          GITHUB_TOKENS: ${{ secrets.GH_TOKENS || secrets.GITHUB_TOKENS }}
           GH_CLIENT_ID: ${{ secrets.GH_CLIENT_ID }}
           GH_CLIENT_SECRET: ${{ secrets.GH_CLIENT_SECRET }}
           CF_ACCESS_AUD: ${{ secrets.CF_ACCESS_AUD }}
@@ -107,7 +107,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           ADMIN_REVIEW_SECRET: ${{ secrets.ADMIN_REVIEW_SECRET }}
-          GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
+          GITHUB_TOKENS: ${{ secrets.GH_TOKENS || secrets.GITHUB_TOKENS }}
         run: node scripts/staging-bootstrap.mjs
 
       - name: Apply D1 Production Migrations
@@ -127,7 +127,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           ADMIN_REVIEW_SECRET: ${{ secrets.ADMIN_REVIEW_SECRET }}
-          GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
+          GITHUB_TOKENS: ${{ secrets.GH_TOKENS || secrets.GITHUB_TOKENS }}
         run: |
           printf '%s' "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY --config wrangler.worker.toml --env production
           printf '%s' "$AUTH_SECRET" | npx wrangler secret put AUTH_SECRET --config wrangler.worker.toml --env production
@@ -139,7 +139,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
+          GITHUB_TOKENS: ${{ secrets.GH_TOKENS || secrets.GITHUB_TOKENS }}
           GH_CLIENT_ID: ${{ secrets.GH_CLIENT_ID }}
           GH_CLIENT_SECRET: ${{ secrets.GH_CLIENT_SECRET }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
@@ -160,9 +160,8 @@ jobs:
           printf '%s' "$R2_ACCESS_KEY_ID" | npx wrangler pages secret put R2_ACCESS_KEY_ID --project-name=githoot
           printf '%s' "$R2_SECRET_ACCESS_KEY" | npx wrangler pages secret put R2_SECRET_ACCESS_KEY --project-name=githoot
           printf '%s' "$R2_BUCKET_NAME" | npx wrangler pages secret put R2_BUCKET_NAME --project-name=githoot
-          printf '%s' "$CF_ACCESS_AUD" | npx wrangler pages secret put CF_ACCESS_AUD --project-name=githoot
-          printf '%s' "$CF_ACCESS_TEAM_NAME" | npx wrangler pages secret put CF_ACCESS_TEAM_NAME --project-name=githoot
-
+          if [ -n "$CF_ACCESS_AUD" ]; then printf '%s' "$CF_ACCESS_AUD" | npx wrangler pages secret put CF_ACCESS_AUD --project-name=githoot; fi
+          if [ -n "$CF_ACCESS_TEAM_NAME" ]; then printf '%s' "$CF_ACCESS_TEAM_NAME" | npx wrangler pages secret put CF_ACCESS_TEAM_NAME --project-name=githoot; fi
       - name: Deploy Dedicated Queue Consumer Worker (Single-Source --no-bundle)
         uses: cloudflare/wrangler-action@v3
         with:
