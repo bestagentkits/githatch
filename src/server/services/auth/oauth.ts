@@ -325,9 +325,7 @@ export async function revokeAccessToken(accessToken: string, env: Env): Promise<
     }
 
     if (attempt < maxAttempts) {
-      const { promise, resolve } = Promise.withResolvers<void>();
-      setTimeout(resolve, 200 * attempt);
-      await promise;
+      await new Promise<void>((resolve) => setTimeout(resolve, 200 * attempt));
     }
   }
 

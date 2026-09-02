@@ -608,7 +608,10 @@ describe('Fail-Closed Authentication Configuration Security', () => {
           avatar_url: 'https://avatars.githubusercontent.com/u/88888'
         }), { headers: { 'Content-Type': 'application/json' } });
       }
-      return originalFetch(input);
+      if (url.includes('api.github.com/applications/')) {
+        return new Response(null, { status: 204 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
     };
 
     try {
