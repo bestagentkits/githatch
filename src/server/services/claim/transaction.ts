@@ -11,6 +11,7 @@ import { fetchTelemetrySnapshot } from '../github/resolver';
 import { createOutboxStatement } from '../../queue/outbox';
 import type { GenerationQueueMessage } from '../../queue/message-schema';
 
+import { reconcileGuardiansSchema } from '../../db/schema-guard';
 export interface ClaimResult {
   success: boolean;
   guardian: GuardianSummary;
@@ -29,6 +30,9 @@ export async function executeClaimTransaction(
   const userId = crypto.randomUUID();
   const guardianId = crypto.randomUUID();
   const jobId = crypto.randomUUID();
+
+  // 0. Ensure schema parity (guards against missing columns on drifted databases)
+  await reconcileGuardiansSchema(env.DB);
 
   // 1. Check if user already has a Guardian (Idempotency)
   const existingGuardian = await env.DB.prepare(
