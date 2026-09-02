@@ -209,6 +209,7 @@ export interface GuardianDNA {
 export interface GuardianSummary {
   id: string;
   name: string;
+  egg_type?: string;
   species: string;
   species_name?: string;
   anatomy?: string;

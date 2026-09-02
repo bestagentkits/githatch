@@ -7,6 +7,7 @@ import type { GuardianSummary } from '../../server/types';
 import { track } from '../lib/analytics';
 import { launchConfettiBurst } from '../utils/particles';
 import { SocialSharePanel } from './SocialSharePanel';
+import { EggSpritesheetPlayer } from './EggSpritesheetPlayer';
 
 export interface GachaRevealModalProps {
   username: string;
@@ -168,9 +169,9 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
                   backgroundPosition: isPlaying ? undefined : `${bgPositionX}px 0`
                 }}
               />
-            ) : (
+            ) : guardian.hero_image_url ? (
               <img
-                src={guardian.hero_image_url || ''}
+                src={guardian.hero_image_url}
                 alt={guardian.name}
                 style={{
                   width: '100%',
@@ -178,6 +179,10 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({
                   objectFit: 'contain'
                 }}
               />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+                <EggSpritesheetPlayer archetypeId={guardian.egg_type || 'neon-byte'} state="wobble" interactive={false} />
+              </div>
             )}
           </div>
 
