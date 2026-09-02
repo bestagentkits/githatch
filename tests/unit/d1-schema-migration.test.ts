@@ -88,4 +88,46 @@ describe('D1 Database Migrations', () => {
     expect(res2.addedColumns.length).toBe(0);
     expect(res2.totalColumnsCount).toBe(25);
   });
+
+  it('reconcileRemoteDatabase CLI reconciles drifted schema and fails closed if columns remain missing', async () => {
+    // @ts-ignore
+    const { reconcileRemoteDatabase } = await import('../../scripts/reconcile-d1-schema.mjs');
+
+    let currentCols = [
+      { name: 'id' }, { name: 'user_id' }, { name: 'github_user_id' }, { name: 'name' },
+      { name: 'egg_type' }, { name: 'species' }, { name: 'element' }, { name: 'dna_seed' },
+      { name: 'rarity_tier' }, { name: 'hero_image_url' }, { name: 'spritesheet_url' },
+      { name: 'traits' }, { name: 'level' }, { name: 'experience' }, { name: 'energy_state' },
+      { name: 'created_at' }
+    ];
+
+    const mockRunner = (cmd: string) => {
+      if (cmd.includes('PRAGMA table_info')) {
+        return { ok: true, output: JSON.stringify([{ results: currentCols }]) };
+      }
+      if (cmd.includes('ALTER TABLE guardians ADD COLUMN')) {
+        const m = cmd.match(/ALTER TABLE guardians ADD COLUMN ([a-zA-Z0-9_]+)/);
+        if (m && m[1]) {
+          currentCols.push({ name: m[1] });
+        }
+        return { ok: true, output: 'ok' };
+      }
+      return { ok: true, output: 'ok' };
+    };
+
+    const res = reconcileRemoteDatabase('mock_db', 'wrangler.staging.toml', mockRunner);
+    expect(res.ok).toBe(true);
+    expect(res.added.length).toBe(9);
+    expect(res.totalColumns).toBe(25);
+
+    // Test fail-closed: if ALTER fails and columns remain missing, it must throw
+    const failingRunner = (cmd: string) => {
+      if (cmd.includes('PRAGMA table_info')) {
+        return { ok: true, output: JSON.stringify([{ results: [{ name: 'id' }] }]) };
+      }
+      return { ok: false, output: 'ALTER failed' };
+    };
+
+    expect(() => reconcileRemoteDatabase('failing_db', '', failingRunner)).toThrow('D1_SCHEMA_RECONCILIATION_FAILED');
+  });
 });
