@@ -17,7 +17,7 @@ export interface ColumnExpectation {
   name: string;
   type: 'TEXT' | 'INTEGER';
   notnull: boolean;
-  dflt_value?: string | null;
+  dflt_value: string | null;
   pk?: boolean;
 }
 
@@ -49,31 +49,31 @@ export const REQUIRED_V2_TABLES = [
 ];
 
 export const GUARDIAN_CANONICAL_COLUMNS: ColumnExpectation[] = [
-  { name: 'id', type: 'TEXT', notnull: false, pk: true },
-  { name: 'user_id', type: 'TEXT', notnull: true, pk: false },
-  { name: 'github_user_id', type: 'INTEGER', notnull: true, pk: false },
-  { name: 'name', type: 'TEXT', notnull: true, pk: false },
-  { name: 'egg_type', type: 'TEXT', notnull: true, pk: false },
-  { name: 'species', type: 'TEXT', notnull: true, pk: false },
-  { name: 'species_name', type: 'TEXT', notnull: false, pk: false },
-  { name: 'anatomy', type: 'TEXT', notnull: false, pk: false },
-  { name: 'element', type: 'TEXT', notnull: true, pk: false },
-  { name: 'dna_seed', type: 'TEXT', notnull: true, pk: false },
-  { name: 'dna_version', type: 'TEXT', notnull: false, dflt_value: 'v1', pk: false },
-  { name: 'rarity_tier', type: 'TEXT', notnull: true, pk: false },
-  { name: 'status', type: 'TEXT', notnull: false, dflt_value: 'PENDING', pk: false },
-  { name: 'hero_image_url', type: 'TEXT', notnull: true, pk: false },
-  { name: 'spritesheet_url', type: 'TEXT', notnull: false, pk: false },
-  { name: 'traits', type: 'TEXT', notnull: true, pk: false },
-  { name: 'telemetry_snapshot', type: 'TEXT', notnull: false, pk: false },
-  { name: 'identity_spec', type: 'TEXT', notnull: false, pk: false },
-  { name: 'reference_sha256', type: 'TEXT', notnull: false, pk: false },
-  { name: 'request_fingerprint', type: 'TEXT', notnull: false, pk: false },
-  { name: 'manifest_url', type: 'TEXT', notnull: false, pk: false },
-  { name: 'level', type: 'INTEGER', notnull: false, dflt_value: '1', pk: false },
-  { name: 'experience', type: 'INTEGER', notnull: false, dflt_value: '0', pk: false },
-  { name: 'energy_state', type: 'TEXT', notnull: false, dflt_value: 'Active', pk: false },
-  { name: 'created_at', type: 'INTEGER', notnull: true, pk: false }
+  { name: 'id', type: 'TEXT', notnull: false, pk: true, dflt_value: null },
+  { name: 'user_id', type: 'TEXT', notnull: true, pk: false, dflt_value: null },
+  { name: 'github_user_id', type: 'INTEGER', notnull: true, pk: false, dflt_value: null },
+  { name: 'name', type: 'TEXT', notnull: true, pk: false, dflt_value: null },
+  { name: 'egg_type', type: 'TEXT', notnull: true, pk: false, dflt_value: null },
+  { name: 'species', type: 'TEXT', notnull: true, pk: false, dflt_value: null },
+  { name: 'species_name', type: 'TEXT', notnull: false, pk: false, dflt_value: null },
+  { name: 'anatomy', type: 'TEXT', notnull: false, pk: false, dflt_value: null },
+  { name: 'element', type: 'TEXT', notnull: true, pk: false, dflt_value: null },
+  { name: 'dna_seed', type: 'TEXT', notnull: true, pk: false, dflt_value: null },
+  { name: 'dna_version', type: 'TEXT', notnull: false, pk: false, dflt_value: 'v1' },
+  { name: 'rarity_tier', type: 'TEXT', notnull: true, pk: false, dflt_value: null },
+  { name: 'status', type: 'TEXT', notnull: false, pk: false, dflt_value: 'PENDING' },
+  { name: 'hero_image_url', type: 'TEXT', notnull: true, pk: false, dflt_value: null },
+  { name: 'spritesheet_url', type: 'TEXT', notnull: false, pk: false, dflt_value: null },
+  { name: 'traits', type: 'TEXT', notnull: true, pk: false, dflt_value: null },
+  { name: 'telemetry_snapshot', type: 'TEXT', notnull: false, pk: false, dflt_value: null },
+  { name: 'identity_spec', type: 'TEXT', notnull: false, pk: false, dflt_value: null },
+  { name: 'reference_sha256', type: 'TEXT', notnull: false, pk: false, dflt_value: null },
+  { name: 'request_fingerprint', type: 'TEXT', notnull: false, pk: false, dflt_value: null },
+  { name: 'manifest_url', type: 'TEXT', notnull: false, pk: false, dflt_value: null },
+  { name: 'level', type: 'INTEGER', notnull: false, pk: false, dflt_value: '1' },
+  { name: 'experience', type: 'INTEGER', notnull: false, pk: false, dflt_value: '0' },
+  { name: 'energy_state', type: 'TEXT', notnull: false, pk: false, dflt_value: 'Active' },
+  { name: 'created_at', type: 'INTEGER', notnull: true, pk: false, dflt_value: null }
 ];
 
 export const REQUIRED_UNIQUE_CONSTRAINTS: Array<{ table: string; columns: string[] }> = [
@@ -114,7 +114,7 @@ export const GUARDIAN_REQUIRED_COLUMNS: Array<{ name: string; typeDef: string }>
   { name: 'created_at', typeDef: 'INTEGER NOT NULL' }
 ];
 
-function normalizeDefaultValue(val: string | null | undefined): string | null {
+export function normalizeDefaultValue(val: string | null | undefined): string | null {
   if (val === null || val === undefined) return null;
   const str = String(val).trim();
   if ((str.startsWith("'") && str.endsWith("'")) || (str.startsWith('"') && str.endsWith('"'))) {
@@ -123,15 +123,54 @@ function normalizeDefaultValue(val: string | null | undefined): string | null {
   return str;
 }
 
-export function isTypeAffinityMatch(actualType: string, expectedType: 'TEXT' | 'INTEGER'): boolean {
-  const t = (actualType || '').trim().toUpperCase();
-  if (expectedType === 'INTEGER') {
-    return t === 'INTEGER' || t === 'INT';
+/**
+ * Shared central validator for guardians table columns, types, nullability, defaults, and PK.
+ * Enforces exact declared type equality (TEXT === TEXT, INTEGER === INTEGER).
+ */
+export function validateGuardianColumns(colMap: Map<string, ColumnInfo>): {
+  missingCols: string[];
+  constraintDrifts: string[];
+} {
+  const missingCols: string[] = [];
+  const constraintDrifts: string[] = [];
+
+  for (const expected of GUARDIAN_CANONICAL_COLUMNS) {
+    const actual = colMap.get(expected.name);
+    if (!actual) {
+      missingCols.push(expected.name);
+      continue;
+    }
+
+    // Exact declared type equality (TEXT === TEXT, INTEGER === INTEGER)
+    const normalizedActualType = (actual.type || '').trim().toUpperCase();
+    if (normalizedActualType !== expected.type) {
+      constraintDrifts.push(`Column ${expected.name} type mismatch: expected ${expected.type}, got ${actual.type}`);
+    }
+
+    // Primary key check
+    if (expected.pk && !actual.pk) {
+      constraintDrifts.push(`Column ${expected.name} must be primary key`);
+    }
+
+    // NOT NULL constraint check
+    if (expected.notnull && actual.notnull === 0) {
+      constraintDrifts.push(`Column ${expected.name} must have NOT NULL constraint`);
+    }
+
+    // Strict Default value check for all columns
+    const normalizedActualDefault = normalizeDefaultValue(actual.dflt_value);
+    if (expected.dflt_value === null) {
+      if (normalizedActualDefault !== null) {
+        constraintDrifts.push(`Column ${expected.name} must not have a default value, got '${actual.dflt_value}'`);
+      }
+    } else {
+      if (normalizedActualDefault !== expected.dflt_value) {
+        constraintDrifts.push(`Column ${expected.name} default mismatch: expected '${expected.dflt_value}', got '${actual.dflt_value}'`);
+      }
+    }
   }
-  if (expectedType === 'TEXT') {
-    return t === 'TEXT' || t.startsWith('VARCHAR') || t.startsWith('CHAR') || t === 'CLOB';
-  }
-  return false;
+
+  return { missingCols, constraintDrifts };
 }
 
 const verifiedDatabases = new WeakSet<object>();
@@ -163,7 +202,7 @@ export async function assertDatabaseSchemaReady(db: any): Promise<{
     throw new Error(`SCHEMA_INVARIANT_VIOLATION: Database is missing required tables: [${missingTables.join(', ')}]`);
   }
 
-  // 2. Verify guardians table columns, types, nullability, defaults, and PK
+  // 2. Verify guardians table columns, types, nullability, defaults, and PK via shared validator
   const colQuery = await db.prepare("PRAGMA table_info(guardians);").all();
   const results = (colQuery.results || []) as ColumnInfo[];
   const colMap = new Map<string, ColumnInfo>();
@@ -171,39 +210,7 @@ export async function assertDatabaseSchemaReady(db: any): Promise<{
     colMap.set(r.name, r);
   }
 
-  const missingCols: string[] = [];
-  const constraintDrifts: string[] = [];
-
-  for (const expected of GUARDIAN_CANONICAL_COLUMNS) {
-    const actual = colMap.get(expected.name);
-    if (!actual) {
-      missingCols.push(expected.name);
-      continue;
-    }
-
-    // Strict Type affinity check (TEXT vs INTEGER)
-    if (!isTypeAffinityMatch(actual.type, expected.type)) {
-      constraintDrifts.push(`Column ${expected.name} type mismatch: expected ${expected.type}, got ${actual.type}`);
-    }
-
-    // Primary key check
-    if (expected.pk && !actual.pk) {
-      constraintDrifts.push(`Column ${expected.name} must be primary key`);
-    }
-
-    // NOT NULL constraint check
-    if (expected.notnull && actual.notnull === 0) {
-      constraintDrifts.push(`Column ${expected.name} must have NOT NULL constraint`);
-    }
-
-    // Default value check (when expected default is defined)
-    if (expected.dflt_value !== undefined) {
-      const normalizedActualDefault = normalizeDefaultValue(actual.dflt_value);
-      if (normalizedActualDefault !== expected.dflt_value) {
-        constraintDrifts.push(`Column ${expected.name} default mismatch: expected '${expected.dflt_value}', got '${actual.dflt_value}'`);
-      }
-    }
-  }
+  const { missingCols, constraintDrifts } = validateGuardianColumns(colMap);
 
   if (missingCols.length > 0) {
     throw new Error(`SCHEMA_INVARIANT_VIOLATION: Guardians table is missing required columns: [${missingCols.join(', ')}]`);

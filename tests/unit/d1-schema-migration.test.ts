@@ -295,8 +295,12 @@ describe('D1 Database Migrations', () => {
         return { ok: true, output: JSON.stringify([{ results: [
           { name: 'idx_guardians_status', unique: 0 },
           { name: 'idx_guardians_ref_sha', unique: 0 },
-          { name: 'idx_guardians_gh_id', unique: 0 }
+          { name: 'idx_guardians_gh_id', unique: 0 },
+          { name: 'sqlite_autoindex_guardians_1', unique: 1 }
         ] }]) };
+      }
+      if (cmd.includes("PRAGMA index_info(sqlite_autoindex_guardians_1)")) {
+        return { ok: true, output: JSON.stringify([{ results: [{ seqno: 0, cid: 0, name: 'github_user_id' }] }]) };
       }
       if (cmd.includes("PRAGMA index_info(")) {
         const m = cmd.match(/PRAGMA index_info\(([a-zA-Z0-9_]+)\)/);

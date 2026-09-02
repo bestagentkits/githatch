@@ -6,7 +6,14 @@
 
 import fs from 'fs';
 import { execSync } from 'child_process';
-import { REQUIRED_V2_TABLES, GUARDIAN_CANONICAL_COLUMNS, GUARDIAN_REQUIRED_COLUMNS, REQUIRED_CANONICAL_INDEXES } from '../src/server/db/schema-guard.ts';
+import {
+  REQUIRED_V2_TABLES,
+  GUARDIAN_CANONICAL_COLUMNS,
+  GUARDIAN_REQUIRED_COLUMNS,
+  REQUIRED_CANONICAL_INDEXES,
+  REQUIRED_UNIQUE_CONSTRAINTS,
+  validateGuardianColumns
+} from '../src/server/db/schema-guard.ts';
 
 function loadLocalEnv() {
   const envPath = process.env.GITHOOT_ENV_PATH || 'D:/www/oss/githatch/.env';
@@ -68,7 +75,7 @@ export function auditAndReconcileDatabase(
     throw new Error(`D1_SCHEMA_AUDIT_FAILED: Missing required tables on ${dbName}: [${missingTables.join(', ')}]`);
   }
 
-  // 2. Audit Guardians Columns
+  // 2. Audit Guardians Columns via shared central validator
   const infoRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "PRAGMA table_info(guardians);" --json`);
   if (!infoRes.ok) {
     throw new Error(`Failed to query table info from ${dbName}: ${infoRes.output}`);
@@ -96,12 +103,12 @@ export function auditAndReconcileDatabase(
   }
 
   // Ensure required indexes exist
-  const idxCreateRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "CREATE INDEX IF NOT EXISTS idx_guardians_status ON guardians(status); CREATE INDEX IF NOT EXISTS idx_guardians_ref_sha ON guardians(reference_sha256);"`);
+  const idxCreateRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "CREATE INDEX IF NOT EXISTS idx_guardians_status ON guardians(status); CREATE INDEX IF NOT EXISTS idx_guardians_ref_sha ON guardians(reference_sha256); CREATE INDEX IF NOT EXISTS idx_guardians_gh_id ON guardians(github_user_id);"`);
   if (!idxCreateRes.ok) {
     throw new Error(`D1_INDEX_CREATION_FAILED: Failed to create indexes on ${dbName}: ${idxCreateRes.output}`);
   }
 
-  // 3. Strict Fail-Closed Post-Verification of Columns, Types & Indexes
+  // 3. Strict Fail-Closed Post-Verification of Columns, Types, Defaults & PK via shared validator
   const verifyRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "PRAGMA table_info(guardians);" --json`);
   if (!verifyRes.ok) {
     throw new Error(`Failed to verify post-reconciliation schema on ${dbName}: ${verifyRes.output}`);
@@ -114,29 +121,7 @@ export function auditAndReconcileDatabase(
     colMap.set(r.name, r);
   }
 
-  const missingCols = [];
-  const constraintDrifts = [];
-
-  for (const expected of GUARDIAN_CANONICAL_COLUMNS) {
-    const actual = colMap.get(expected.name);
-    if (!actual) {
-      missingCols.push(expected.name);
-      continue;
-    }
-
-    const normalizedActualType = (actual.type || '').toUpperCase();
-    if (!normalizedActualType.includes(expected.type)) {
-      constraintDrifts.push(`Column ${expected.name} type mismatch: expected ${expected.type}, got ${actual.type}`);
-    }
-
-    if (expected.pk && !actual.pk) {
-      constraintDrifts.push(`Column ${expected.name} must be primary key`);
-    }
-
-    if (expected.notnull && actual.notnull === 0) {
-      constraintDrifts.push(`Column ${expected.name} must have NOT NULL constraint`);
-    }
-  }
+  const { missingCols, constraintDrifts } = validateGuardianColumns(colMap);
 
   if (missingCols.length > 0) {
     throw new Error(`D1_SCHEMA_RECONCILIATION_FAILED: Guardians table on ${dbName} is missing columns: [${missingCols.join(', ')}]`);
@@ -179,11 +164,42 @@ export function auditAndReconcileDatabase(
     if (!isExactMatch) {
       indexDrifts.push(`Index ${expIdx.name} column mismatch: expected [${expIdx.columns.join(', ')}], got [${actualCols.join(', ')}]`);
     }
+
+    if (expIdx.unique !== undefined && (existingIdxMap.get(expIdx.name)?.unique === 1) !== expIdx.unique) {
+      indexDrifts.push(`Index ${expIdx.name} uniqueness mismatch: expected unique=${expIdx.unique}`);
+    }
+  }
+
+  // 5. Verify contractual UNIQUE constraints
+  const uniqueIndexes = indexRows.filter(i => i.unique === 1);
+  for (const expUnique of REQUIRED_UNIQUE_CONSTRAINTS) {
+    if (expUnique.table === 'guardians') {
+      let uniqueSatisfied = false;
+      for (const uIdx of uniqueIndexes) {
+        const uInfoRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "PRAGMA index_info(${uIdx.name});" --json`);
+        if (uInfoRes.ok) {
+          const uInfoParsed = JSON.parse(uInfoRes.output);
+          const uColRows = (uInfoParsed[0]?.results || []);
+          const uActualCols = uColRows.map(r => r.name);
+          if (
+            uActualCols.length === expUnique.columns.length &&
+            expUnique.columns.every((c, idx) => uActualCols[idx] === c)
+          ) {
+            uniqueSatisfied = true;
+            break;
+          }
+        }
+      }
+      if (!uniqueSatisfied) {
+        indexDrifts.push(`Table ${expUnique.table} is missing required UNIQUE constraint/index over columns [${expUnique.columns.join(', ')}]`);
+      }
+    }
   }
 
   if (indexDrifts.length > 0) {
     throw new Error(`D1_SCHEMA_AUDIT_FAILED: Index definition drift on ${dbName}: [${indexDrifts.join('; ')}]`);
   }
+
   console.log(`✓ [D1Reconciler] Strict schema parity verified on ${dbName}. Total tables: ${existingTables.size}, Total columns: ${verifyResults.length}. Reconciled: ${added.length > 0 ? added.join(', ') : 'none (already in sync)'}`);
   return { ok: true, dbName, totalTables: existingTables.size, totalColumns: verifyResults.length, added };
 }
