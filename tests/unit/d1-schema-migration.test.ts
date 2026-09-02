@@ -39,10 +39,54 @@ describe('D1 Database Migrations', () => {
     expect(sql).toContain('reference_sha256');
   });
 
-  it('reconcileGuardiansSchema detects missing columns on drifted database and restores parity', async () => {
-    const { reconcileGuardiansSchema, GUARDIAN_V2_COLUMNS } = await import('../../src/server/db/schema-guard');
+  it('assertDatabaseSchemaReady passes on complete schema and throws on missing table or column', async () => {
+    const { assertDatabaseSchemaReady, REQUIRED_V2_TABLES, GUARDIAN_REQUIRED_COLUMNS } = await import('../../src/server/db/schema-guard');
 
-    // Simulate a drifted database that only has 0001_initial columns (missing all V2 columns)
+    // Complete database fixture
+    const completeTables = REQUIRED_V2_TABLES.map(name => ({ name }));
+    const completeCols = GUARDIAN_REQUIRED_COLUMNS.map(c => ({ name: c.name }));
+
+    const readyDb: any = {
+      prepare: (sql: string) => ({
+        all: async () => {
+          if (sql.includes('sqlite_master')) return { results: completeTables };
+          if (sql.includes('PRAGMA table_info')) return { results: completeCols };
+          return { results: [] };
+        }
+      })
+    };
+
+    const res = await assertDatabaseSchemaReady(readyDb);
+    expect(res.ready).toBe(true);
+    expect(res.tablesCount).toBe(REQUIRED_V2_TABLES.length);
+
+    // Missing table fixture -> must throw fail-closed
+    const missingTableDb: any = {
+      prepare: (sql: string) => ({
+        all: async () => {
+          if (sql.includes('sqlite_master')) return { results: [{ name: 'users' }, { name: 'guardians' }] };
+          return { results: completeCols };
+        }
+      })
+    };
+    await expect(assertDatabaseSchemaReady(missingTableDb)).rejects.toThrow('SCHEMA_INVARIANT_VIOLATION: Database is missing required tables');
+
+    // Missing column fixture (missing species_name) -> must throw fail-closed
+    const missingColDb: any = {
+      prepare: (sql: string) => ({
+        all: async () => {
+          if (sql.includes('sqlite_master')) return { results: completeTables };
+          if (sql.includes('PRAGMA table_info')) return { results: completeCols.filter(c => c.name !== 'species_name') };
+          return { results: [] };
+        }
+      })
+    };
+    await expect(assertDatabaseSchemaReady(missingColDb)).rejects.toThrow('SCHEMA_INVARIANT_VIOLATION: Guardians table is missing required columns: [species_name]');
+  });
+
+  it('reconcileGuardiansSchema detects missing columns on drifted database and restores parity', async () => {
+    const { reconcileGuardiansSchema } = await import('../../src/server/db/schema-guard');
+
     const existingCols = [
       { name: 'id' }, { name: 'user_id' }, { name: 'github_user_id' }, { name: 'name' },
       { name: 'egg_type' }, { name: 'species' }, { name: 'element' }, { name: 'dna_seed' },
@@ -89,9 +133,10 @@ describe('D1 Database Migrations', () => {
     expect(res2.totalColumnsCount).toBe(25);
   });
 
-  it('reconcileRemoteDatabase CLI reconciles drifted schema and fails closed if columns remain missing', async () => {
+  it('auditAndReconcileDatabase CLI audits schema and fails closed on missing tables or columns', async () => {
     // @ts-ignore
-    const { reconcileRemoteDatabase } = await import('../../scripts/reconcile-d1-schema.mjs');
+    const { auditAndReconcileDatabase } = await import('../../scripts/reconcile-d1-schema.mjs');
+    const { REQUIRED_V2_TABLES } = await import('../../src/server/db/schema-guard');
 
     let currentCols = [
       { name: 'id' }, { name: 'user_id' }, { name: 'github_user_id' }, { name: 'name' },
@@ -102,6 +147,9 @@ describe('D1 Database Migrations', () => {
     ];
 
     const mockRunner = (cmd: string) => {
+      if (cmd.includes('SELECT name FROM sqlite_master')) {
+        return { ok: true, output: JSON.stringify([{ results: REQUIRED_V2_TABLES.map(name => ({ name })) }]) };
+      }
       if (cmd.includes('PRAGMA table_info')) {
         return { ok: true, output: JSON.stringify([{ results: currentCols }]) };
       }
@@ -115,19 +163,19 @@ describe('D1 Database Migrations', () => {
       return { ok: true, output: 'ok' };
     };
 
-    const res = reconcileRemoteDatabase('mock_db', 'wrangler.staging.toml', mockRunner);
+    const res = auditAndReconcileDatabase('mock_db', 'wrangler.staging.toml', mockRunner);
     expect(res.ok).toBe(true);
     expect(res.added.length).toBe(9);
     expect(res.totalColumns).toBe(25);
 
-    // Test fail-closed: if ALTER fails and columns remain missing, it must throw
-    const failingRunner = (cmd: string) => {
-      if (cmd.includes('PRAGMA table_info')) {
-        return { ok: true, output: JSON.stringify([{ results: [{ name: 'id' }] }]) };
+    // Test fail-closed on missing tables
+    const missingTableRunner = (cmd: string) => {
+      if (cmd.includes('SELECT name FROM sqlite_master')) {
+        return { ok: true, output: JSON.stringify([{ results: [{ name: 'users' }] }]) };
       }
-      return { ok: false, output: 'ALTER failed' };
+      return { ok: true, output: '[]' };
     };
 
-    expect(() => reconcileRemoteDatabase('failing_db', '', failingRunner)).toThrow('D1_SCHEMA_RECONCILIATION_FAILED');
+    expect(() => auditAndReconcileDatabase('bad_db', '', missingTableRunner)).toThrow('D1_SCHEMA_AUDIT_FAILED');
   });
 });

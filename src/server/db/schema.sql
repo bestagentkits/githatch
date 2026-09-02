@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS guardians (
     dna_version TEXT DEFAULT 'v1',
     rarity_tier TEXT NOT NULL, -- "Common", "Rare", "Epic", "Legendary", "Mythic"
     status TEXT DEFAULT 'PENDING', -- 'PENDING', 'GENERATING', 'VERIFYING', 'ASSET_READY', 'QUARANTINED', 'FAILED'
-    hero_image_url TEXT,
+    hero_image_url TEXT NOT NULL,
     spritesheet_url TEXT,
     traits TEXT NOT NULL,   -- JSON: { archetype, silhouette, palette, temperament }
     telemetry_snapshot TEXT, -- JSON: normalized GitHub metrics

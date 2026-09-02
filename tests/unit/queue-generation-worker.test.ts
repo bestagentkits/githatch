@@ -178,6 +178,14 @@ async function createMockFullLifecycleEnv(): Promise<{
           return null;
         }),
         all: vi.fn().mockImplementation(async () => {
+          if (query.includes('sqlite_master')) {
+            const { REQUIRED_V2_TABLES } = await import('../../src/server/db/schema-guard');
+            return { results: REQUIRED_V2_TABLES.map(name => ({ name })) };
+          }
+          if (query.includes('PRAGMA table_info')) {
+            const { GUARDIAN_REQUIRED_COLUMNS } = await import('../../src/server/db/schema-guard');
+            return { results: GUARDIAN_REQUIRED_COLUMNS.map(c => ({ name: c.name })) };
+          }
           if (query.includes('FROM guardian_hatch_frames')) {
             if (query.includes('guardian_id = ?1')) {
               const gId = boundArgs[0];

@@ -15,7 +15,8 @@
     "test:routes": "node scripts/verify-real-routes.mjs",
     "deploy": "wrangler pages deploy dist --project-name=githoot",
     "d1:migrate:local": "wrangler d1 migrations apply githoot_db --local",
-    "d1:migrate:prod": "wrangler d1 migrations apply githoot_db_prod --remote"
+    "d1:migrate:prod": "wrangler d1 migrations apply githoot_db --remote",
+    "d1:audit": "node scripts/reconcile-d1-schema.mjs"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.4.3",
