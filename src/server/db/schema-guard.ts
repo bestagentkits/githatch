@@ -13,6 +13,21 @@ export interface ColumnInfo {
   pk: number;
 }
 
+export interface ColumnExpectation {
+  name: string;
+  type: 'TEXT' | 'INTEGER';
+  notnull: boolean;
+  dflt_value?: string | null;
+  pk?: boolean;
+}
+
+export interface IndexExpectation {
+  name: string;
+  table: string;
+  columns: string[];
+  unique?: boolean;
+}
+
 export const REQUIRED_V2_TABLES = [
   'users',
   'github_accounts',
@@ -31,6 +46,44 @@ export const REQUIRED_V2_TABLES = [
   'guardian_publication',
   'guardian_review_records',
   'github_aggregate_stats'
+];
+
+export const GUARDIAN_CANONICAL_COLUMNS: ColumnExpectation[] = [
+  { name: 'id', type: 'TEXT', notnull: false, pk: true },
+  { name: 'user_id', type: 'TEXT', notnull: true, pk: false },
+  { name: 'github_user_id', type: 'INTEGER', notnull: true, pk: false },
+  { name: 'name', type: 'TEXT', notnull: true, pk: false },
+  { name: 'egg_type', type: 'TEXT', notnull: true, pk: false },
+  { name: 'species', type: 'TEXT', notnull: true, pk: false },
+  { name: 'species_name', type: 'TEXT', notnull: false, pk: false },
+  { name: 'anatomy', type: 'TEXT', notnull: false, pk: false },
+  { name: 'element', type: 'TEXT', notnull: true, pk: false },
+  { name: 'dna_seed', type: 'TEXT', notnull: true, pk: false },
+  { name: 'dna_version', type: 'TEXT', notnull: false, dflt_value: 'v1', pk: false },
+  { name: 'rarity_tier', type: 'TEXT', notnull: true, pk: false },
+  { name: 'status', type: 'TEXT', notnull: false, dflt_value: 'PENDING', pk: false },
+  { name: 'hero_image_url', type: 'TEXT', notnull: true, pk: false },
+  { name: 'spritesheet_url', type: 'TEXT', notnull: false, pk: false },
+  { name: 'traits', type: 'TEXT', notnull: true, pk: false },
+  { name: 'telemetry_snapshot', type: 'TEXT', notnull: false, pk: false },
+  { name: 'identity_spec', type: 'TEXT', notnull: false, pk: false },
+  { name: 'reference_sha256', type: 'TEXT', notnull: false, pk: false },
+  { name: 'request_fingerprint', type: 'TEXT', notnull: false, pk: false },
+  { name: 'manifest_url', type: 'TEXT', notnull: false, pk: false },
+  { name: 'level', type: 'INTEGER', notnull: false, dflt_value: '1', pk: false },
+  { name: 'experience', type: 'INTEGER', notnull: false, dflt_value: '0', pk: false },
+  { name: 'energy_state', type: 'TEXT', notnull: false, dflt_value: 'Active', pk: false },
+  { name: 'created_at', type: 'INTEGER', notnull: true, pk: false }
+];
+
+export const REQUIRED_UNIQUE_CONSTRAINTS: Array<{ table: string; columns: string[] }> = [
+  { table: 'guardians', columns: ['github_user_id'] }
+];
+
+export const REQUIRED_CANONICAL_INDEXES: IndexExpectation[] = [
+  { name: 'idx_guardians_status', table: 'guardians', columns: ['status'], unique: false },
+  { name: 'idx_guardians_ref_sha', table: 'guardians', columns: ['reference_sha256'], unique: false },
+  { name: 'idx_guardians_gh_id', table: 'guardians', columns: ['github_user_id'] }
 ];
 
 export const GUARDIAN_REQUIRED_COLUMNS: Array<{ name: string; typeDef: string }> = [
@@ -60,25 +113,48 @@ export const GUARDIAN_REQUIRED_COLUMNS: Array<{ name: string; typeDef: string }>
   { name: 'energy_state', typeDef: "TEXT DEFAULT 'Active'" },
   { name: 'created_at', typeDef: 'INTEGER NOT NULL' }
 ];
+
+function normalizeDefaultValue(val: string | null | undefined): string | null {
+  if (val === null || val === undefined) return null;
+  const str = String(val).trim();
+  if ((str.startsWith("'") && str.endsWith("'")) || (str.startsWith('"') && str.endsWith('"'))) {
+    return str.slice(1, -1);
+  }
+  return str;
+}
+
+export function isTypeAffinityMatch(actualType: string, expectedType: 'TEXT' | 'INTEGER'): boolean {
+  const t = (actualType || '').trim().toUpperCase();
+  if (expectedType === 'INTEGER') {
+    return t === 'INTEGER' || t === 'INT';
+  }
+  if (expectedType === 'TEXT') {
+    return t === 'TEXT' || t.startsWith('VARCHAR') || t.startsWith('CHAR') || t === 'CLOB';
+  }
+  return false;
+}
+
 const verifiedDatabases = new WeakSet<object>();
 
 /**
  * Asserts database schema readiness fail-closed.
  * Tracks verification per DB object instance using WeakSet to prevent cross-database pollution.
- * Throws SCHEMA_INVARIANT_VIOLATION if any required table or column is missing.
+ * Throws SCHEMA_INVARIANT_VIOLATION if any required table, column, type, constraint, default, or index is missing/drifted.
  */
 export async function assertDatabaseSchemaReady(db: any): Promise<{
   ready: boolean;
   tablesCount: number;
   columnsCount: number;
 }> {
-  if (!db || typeof db !== 'object') {
-    throw new Error('SCHEMA_INVARIANT_VIOLATION: Database binding is null or undefined');
+  if (!db || typeof db !== 'object' || typeof db.prepare !== 'function') {
+    throw new Error('SCHEMA_INVARIANT_VIOLATION: Database binding is null, undefined, or missing prepare() method');
   }
 
   if (verifiedDatabases.has(db)) {
-    return { ready: true, tablesCount: REQUIRED_V2_TABLES.length, columnsCount: GUARDIAN_REQUIRED_COLUMNS.length };
+    return { ready: true, tablesCount: REQUIRED_V2_TABLES.length, columnsCount: GUARDIAN_CANONICAL_COLUMNS.length };
   }
+
+  // 1. Verify required tables exist
   const tableQuery = await db.prepare("SELECT name FROM sqlite_master WHERE type='table';").all();
   const existingTables = new Set(((tableQuery.results || []) as Array<{ name: string }>).map(r => r.name));
   const missingTables = REQUIRED_V2_TABLES.filter(t => !existingTables.has(t));
@@ -87,38 +163,143 @@ export async function assertDatabaseSchemaReady(db: any): Promise<{
     throw new Error(`SCHEMA_INVARIANT_VIOLATION: Database is missing required tables: [${missingTables.join(', ')}]`);
   }
 
-  // 2. Verify guardians table columns
+  // 2. Verify guardians table columns, types, nullability, defaults, and PK
   const colQuery = await db.prepare("PRAGMA table_info(guardians);").all();
-  const existingCols = new Set(((colQuery.results || []) as ColumnInfo[]).map(r => r.name));
-  const missingCols = GUARDIAN_REQUIRED_COLUMNS.filter(c => !existingCols.has(c.name)).map(c => c.name);
+  const results = (colQuery.results || []) as ColumnInfo[];
+  const colMap = new Map<string, ColumnInfo>();
+  for (const r of results) {
+    colMap.set(r.name, r);
+  }
+
+  const missingCols: string[] = [];
+  const constraintDrifts: string[] = [];
+
+  for (const expected of GUARDIAN_CANONICAL_COLUMNS) {
+    const actual = colMap.get(expected.name);
+    if (!actual) {
+      missingCols.push(expected.name);
+      continue;
+    }
+
+    // Strict Type affinity check (TEXT vs INTEGER)
+    if (!isTypeAffinityMatch(actual.type, expected.type)) {
+      constraintDrifts.push(`Column ${expected.name} type mismatch: expected ${expected.type}, got ${actual.type}`);
+    }
+
+    // Primary key check
+    if (expected.pk && !actual.pk) {
+      constraintDrifts.push(`Column ${expected.name} must be primary key`);
+    }
+
+    // NOT NULL constraint check
+    if (expected.notnull && actual.notnull === 0) {
+      constraintDrifts.push(`Column ${expected.name} must have NOT NULL constraint`);
+    }
+
+    // Default value check (when expected default is defined)
+    if (expected.dflt_value !== undefined) {
+      const normalizedActualDefault = normalizeDefaultValue(actual.dflt_value);
+      if (normalizedActualDefault !== expected.dflt_value) {
+        constraintDrifts.push(`Column ${expected.name} default mismatch: expected '${expected.dflt_value}', got '${actual.dflt_value}'`);
+      }
+    }
+  }
 
   if (missingCols.length > 0) {
     throw new Error(`SCHEMA_INVARIANT_VIOLATION: Guardians table is missing required columns: [${missingCols.join(', ')}]`);
+  }
+
+  if (constraintDrifts.length > 0) {
+    throw new Error(`SCHEMA_INVARIANT_VIOLATION: Guardians table has constraint/type drift: [${constraintDrifts.join('; ')}]`);
+  }
+
+  // 3. Verify required indexes exist and inspect exact ordered columns via PRAGMA index_info
+  const idxListQuery = await db.prepare("PRAGMA index_list(guardians);").all();
+  const indexRows = (idxListQuery.results || []) as Array<{ seq: number; name: string; unique: number; origin: string; partial: number }>;
+  const existingIndexMap = new Map<string, { unique: boolean }>();
+  for (const idx of indexRows) {
+    existingIndexMap.set(idx.name, { unique: idx.unique === 1 });
+  }
+
+  const indexDrifts: string[] = [];
+  for (const expIdx of REQUIRED_CANONICAL_INDEXES) {
+    if (expIdx.table === 'guardians') {
+      const idxEntry = existingIndexMap.get(expIdx.name);
+      if (!idxEntry) {
+        indexDrifts.push(`Missing required index: ${expIdx.name} on table guardians`);
+        continue;
+      }
+
+      // Query exact ordered columns via PRAGMA index_info
+      const infoQuery = await db.prepare(`PRAGMA index_info(${expIdx.name});`).all();
+      const colRows = (infoQuery.results || []) as Array<{ seqno: number; cid: number; name: string }>;
+      const actualCols = colRows.map(r => r.name);
+
+      const isExactMatch = actualCols.length === expIdx.columns.length &&
+        expIdx.columns.every((c, i) => actualCols[i] === c);
+
+      if (!isExactMatch) {
+        indexDrifts.push(`Index ${expIdx.name} column mismatch: expected [${expIdx.columns.join(', ')}], got [${actualCols.join(', ')}]`);
+      }
+
+      // Uniqueness assertion
+      if (expIdx.unique !== undefined && idxEntry.unique !== expIdx.unique) {
+        indexDrifts.push(`Index ${expIdx.name} uniqueness mismatch: expected unique=${expIdx.unique}, got unique=${idxEntry.unique}`);
+      }
+    }
+  }
+
+  // 4. Verify contractual UNIQUE constraints (name-independent: inspect all unique=1 indexes)
+  const uniqueIndexes = indexRows.filter(i => i.unique === 1);
+  for (const expUnique of REQUIRED_UNIQUE_CONSTRAINTS) {
+    if (expUnique.table === 'guardians') {
+      let uniqueSatisfied = false;
+      for (const uIdx of uniqueIndexes) {
+        const uInfoQuery = await db.prepare(`PRAGMA index_info(${uIdx.name});`).all();
+        const uColRows = (uInfoQuery.results || []) as Array<{ seqno: number; cid: number; name: string }>;
+        const uActualCols = uColRows.map(r => r.name);
+        if (
+          uActualCols.length === expUnique.columns.length &&
+          expUnique.columns.every((c, idx) => uActualCols[idx] === c)
+        ) {
+          uniqueSatisfied = true;
+          break;
+        }
+      }
+      if (!uniqueSatisfied) {
+        indexDrifts.push(`Table ${expUnique.table} is missing required UNIQUE constraint/index over columns [${expUnique.columns.join(', ')}]`);
+      }
+    }
+  }
+
+  if (indexDrifts.length > 0) {
+    throw new Error(`SCHEMA_INVARIANT_VIOLATION: Database has index definition drift: [${indexDrifts.join('; ')}]`);
   }
 
   verifiedDatabases.add(db);
   return {
     ready: true,
     tablesCount: existingTables.size,
-    columnsCount: existingCols.size
+    columnsCount: results.length
   };
 }
 
 /**
- * Reconciles guardians table schema if any V2 columns are missing (defense-in-depth/recovery).
- * Throws fail-closed if any column cannot be added or verified.
+ * Reconciles guardians table schema if any V2 columns or indexes are missing (defense-in-depth/recovery).
+ * Throws fail-closed if any column or index cannot be added or verified.
  */
 export async function reconcileGuardiansSchema(db: any): Promise<{
   reconciled: boolean;
   addedColumns: string[];
   totalColumnsCount: number;
 }> {
-  if (!db) {
-    throw new Error('SCHEMA_INVARIANT_VIOLATION: Database binding is null or undefined');
+  if (!db || typeof db !== 'object' || typeof db.prepare !== 'function') {
+    throw new Error('SCHEMA_INVARIANT_VIOLATION: Database binding is null, undefined, or missing prepare() method');
   }
 
   const colQuery = await db.prepare("PRAGMA table_info(guardians);").all();
-  const existingCols = new Set(((colQuery.results || []) as ColumnInfo[]).map(r => r.name));
+  const results = (colQuery.results || []) as ColumnInfo[];
+  const existingCols = new Set(results.map(r => r.name));
   const addedColumns: string[] = [];
 
   const v2ColsToAdd = GUARDIAN_REQUIRED_COLUMNS.filter(c => [
@@ -137,15 +318,16 @@ export async function reconcileGuardiansSchema(db: any): Promise<{
     }
   }
 
-  if (addedColumns.length > 0) {
-    await db.prepare("CREATE INDEX IF NOT EXISTS idx_guardians_status ON guardians(status);").run();
-    await db.prepare("CREATE INDEX IF NOT EXISTS idx_guardians_ref_sha ON guardians(reference_sha256);").run();
-  }
+  // Ensure required indexes exist
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_guardians_status ON guardians(status);").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_guardians_ref_sha ON guardians(reference_sha256);").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_guardians_gh_id ON guardians(github_user_id);").run();
 
   // Strict post-verification
   const verifyQuery = await db.prepare("PRAGMA table_info(guardians);").all();
-  const verifiedCols = new Set(((verifyQuery.results || []) as ColumnInfo[]).map(r => r.name));
-  const stillMissing = GUARDIAN_REQUIRED_COLUMNS.filter(c => !verifiedCols.has(c.name)).map(c => c.name);
+  const verifyResults = (verifyQuery.results || []) as ColumnInfo[];
+  const verifiedCols = new Set(verifyResults.map(r => r.name));
+  const stillMissing = GUARDIAN_CANONICAL_COLUMNS.filter(c => !verifiedCols.has(c.name)).map(c => c.name);
 
   if (stillMissing.length > 0) {
     throw new Error(`SCHEMA_RECONCILIATION_FAILED: Guardians table is still missing columns after reconciliation: [${stillMissing.join(', ')}]`);
@@ -154,6 +336,6 @@ export async function reconcileGuardiansSchema(db: any): Promise<{
   return {
     reconciled: addedColumns.length > 0,
     addedColumns,
-    totalColumnsCount: verifiedCols.size
+    totalColumnsCount: verifyResults.length
   };
 }

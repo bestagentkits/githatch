@@ -178,13 +178,37 @@ async function createMockFullLifecycleEnv(): Promise<{
           return null;
         }),
         all: vi.fn().mockImplementation(async () => {
+          if (query.includes("PRAGMA index_list(guardians)")) {
+            const { REQUIRED_CANONICAL_INDEXES } = await import('../../src/server/db/schema-guard');
+            return {
+              results: [
+                ...REQUIRED_CANONICAL_INDEXES.map((idx: any, seq: number) => ({ seq, name: idx.name, unique: 0, origin: 'c', partial: 0 })),
+                { seq: 99, name: 'sqlite_autoindex_guardians_1', unique: 1, origin: 'u', partial: 0 }
+              ]
+            };
+          }
+          if (query.includes("PRAGMA index_info(sqlite_autoindex_guardians_1)")) {
+            return { results: [{ seqno: 0, cid: 0, name: 'github_user_id' }] };
+          }
+          if (query.includes("PRAGMA index_info(")) {
+            const { REQUIRED_CANONICAL_INDEXES } = await import('../../src/server/db/schema-guard');
+            const m = query.match(/PRAGMA index_info\(([a-zA-Z0-9_]+)\)/);
+            const idxName = m ? m[1] : '';
+            const found = REQUIRED_CANONICAL_INDEXES.find((i: any) => i.name === idxName);
+            const cols = found ? found.columns : ['status'];
+            return { results: cols.map((colName: string, seqno: number) => ({ seqno, cid: 0, name: colName })) };
+          }
+          if (query.includes("WHERE type='index'")) {
+            const { REQUIRED_CANONICAL_INDEXES } = await import('../../src/server/db/schema-guard');
+            return { results: REQUIRED_CANONICAL_INDEXES.map((idx: any) => ({ name: idx.name, tbl_name: idx.table, sql: `CREATE INDEX ${idx.name} ON ${idx.table}(${idx.columns.join(', ')})` })) };
+          }
           if (query.includes('sqlite_master')) {
             const { REQUIRED_V2_TABLES } = await import('../../src/server/db/schema-guard');
             return { results: REQUIRED_V2_TABLES.map(name => ({ name })) };
           }
           if (query.includes('PRAGMA table_info')) {
-            const { GUARDIAN_REQUIRED_COLUMNS } = await import('../../src/server/db/schema-guard');
-            return { results: GUARDIAN_REQUIRED_COLUMNS.map(c => ({ name: c.name })) };
+            const { GUARDIAN_CANONICAL_COLUMNS } = await import('../../src/server/db/schema-guard');
+            return { results: GUARDIAN_CANONICAL_COLUMNS.map(c => ({ name: c.name, type: c.type, notnull: c.notnull ? 1 : 0, pk: c.pk ? 1 : 0, dflt_value: c.dflt_value ? `'${c.dflt_value}'` : null })) };
           }
           if (query.includes('FROM guardian_hatch_frames')) {
             if (query.includes('guardian_id = ?1')) {

@@ -131,8 +131,9 @@ describe('Phase 7: Deploy Provenance, Staging & CI Gates', () => {
     expect(content).toContain('--env production');
     expect(content).toContain('node scripts/secret-preflight.mjs all');
     expect(content).toContain('node scripts/staging-bootstrap.mjs');
+    expect(content).toContain('actions/upload-artifact@v4');
+    expect(content).toContain('actions/download-artifact@v4');
     expect(content).toContain('node scripts/bundle-provenance.mjs verify-deployed wrangler.worker.toml production');
-
     // 2. Strict ordering: build precedes test and deploy
     const buildIdx = content.indexOf('npm run build');
     const unitTestIdx = content.indexOf('npx vitest run tests/unit');

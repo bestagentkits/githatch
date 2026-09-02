@@ -844,5 +844,98 @@ describe('Workers Runtime Harness Smoke', () => {
       const recomputedSha = await sha256Hex(testVector);
       expect(recomputedSha).toBe(computedSha);
     });
+
+    it('executes full executeClaimTransaction batch on real workerd D1 with zero missing-table or missing-column errors', async () => {
+      const { executeClaimTransaction } = await import('../../src/server/services/claim/transaction');
+      const authUser: any = {
+        id: 99443322,
+        login: 'workerd-claim-user',
+        name: 'Workerd Claimer',
+        avatar_url: 'https://avatars.githubusercontent.com/u/99443322',
+        bio: 'Workerd E2E tester',
+        public_repos: 15,
+        followers: 10,
+        created_at: '2020-01-01T00:00:00Z'
+      };
+      const sentQueueMessages: any[] = [];
+      const testEnv: any = {
+        ...env,
+        AI_QUEUE: {
+          send: async (msg: any) => {
+            sentQueueMessages.push(msg);
+          }
+        }
+      };
+
+      // 1. First Claim: executes full 6-statement batch on real workerd D1 (user, account, guardian, job, outbox, early_access_slots)
+      const claim1 = await executeClaimTransaction(authUser, testEnv);
+      expect(claim1.success).toBe(true);
+      expect(claim1.isNewClaim).toBe(true);
+      expect(claim1.deliveryStatus).toBe('delivered');
+      expect(claim1.guardian.species).toBeDefined();
+      expect(claim1.guardian.species_name).toBeDefined();
+      expect(claim1.guardian.status).toBe('PENDING');
+      expect(sentQueueMessages.length).toBe(1);
+
+      // 2. Assert real D1 rows exist and all 25 columns are readable
+      const gRow = await env.DB.prepare(
+        'SELECT id, name, species, species_name, anatomy, element, rarity_tier, status, hero_image_url, traits, telemetry_snapshot, identity_spec, request_fingerprint FROM guardians WHERE github_user_id = ?'
+      ).bind(authUser.id).first<any>();
+      expect(gRow).toBeDefined();
+      expect(gRow?.name).toBeDefined();
+      expect(gRow?.species_name).toBe(claim1.guardian.species_name);
+      expect(gRow?.anatomy).toBeDefined();
+      expect(gRow?.identity_spec).toBeDefined();
+      expect(gRow?.request_fingerprint).toBeDefined();
+
+      const jRow = await env.DB.prepare(
+        'SELECT id, guardian_id, request_fingerprint, state FROM guardian_hatch_jobs WHERE guardian_id = ?'
+      ).bind(claim1.guardian.id).first<any>();
+      expect(jRow).toBeDefined();
+      expect(jRow?.state).toBe('PENDING');
+
+      const outboxRow = await env.DB.prepare(
+        'SELECT id, claim_key, queue_name, payload, state, delivered_at FROM guardian_outbox WHERE claim_key = ?'
+      ).bind(`claim:${claim1.guardian.id}`).first<any>();
+      expect(outboxRow).toBeDefined();
+      expect(outboxRow?.state).toBe('DELIVERED');
+      expect(outboxRow?.delivered_at).toBeGreaterThan(0);
+      expect(outboxRow?.queue_name).toBe('githoot-ai-queue');
+
+      // 3. Second Claim (Idempotency check on real D1): returns existing guardian with isNewClaim = false
+      const claim2 = await executeClaimTransaction(authUser, testEnv);
+      expect(claim2.success).toBe(true);
+      expect(claim2.isNewClaim).toBe(false);
+      expect(claim2.guardian.id).toBe(claim1.guardian.id);
+
+      // 4. Failed Send Scenario: when queue send throws, returns deliveryStatus 'pending-delivery' and outbox row remains 'PENDING'
+      const authUserFailingQueue: any = {
+        id: 99443388,
+        login: 'workerd-failing-queue-user',
+        name: 'Workerd Failing Queue Claimer',
+        avatar_url: 'https://avatars.githubusercontent.com/u/99443388',
+        bio: 'Failing queue tester',
+        public_repos: 5,
+        followers: 2,
+        created_at: '2021-01-01T00:00:00Z'
+      };
+      const failingEnv: any = {
+        ...env,
+        AI_QUEUE: {
+          send: async () => {
+            throw new Error('AI_QUEUE_TEMPORARY_NETWORK_FAULT');
+          }
+        }
+      };
+      const claim3 = await executeClaimTransaction(authUserFailingQueue, failingEnv);
+      expect(claim3.success).toBe(true);
+      expect(claim3.deliveryStatus).toBe('pending-delivery');
+
+      const outboxRowPending = await env.DB.prepare(
+        'SELECT id, claim_key, state, delivered_at FROM guardian_outbox WHERE claim_key = ?'
+      ).bind(`claim:${claim3.guardian.id}`).first<any>();
+      expect(outboxRowPending?.state).toBe('PENDING');
+      expect(outboxRowPending?.delivered_at).toBeNull();
+    });
   });
 });

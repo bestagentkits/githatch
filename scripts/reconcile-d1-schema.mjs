@@ -6,7 +6,7 @@
 
 import fs from 'fs';
 import { execSync } from 'child_process';
-import { REQUIRED_V2_TABLES, GUARDIAN_REQUIRED_COLUMNS } from '../src/server/db/schema-guard.ts';
+import { REQUIRED_V2_TABLES, GUARDIAN_CANONICAL_COLUMNS, GUARDIAN_REQUIRED_COLUMNS, REQUIRED_CANONICAL_INDEXES } from '../src/server/db/schema-guard.ts';
 
 function loadLocalEnv() {
   const envPath = process.env.GITHOOT_ENV_PATH || 'D:/www/oss/githatch/.env';
@@ -95,39 +95,97 @@ export function auditAndReconcileDatabase(
     }
   }
 
-  if (added.length > 0) {
-    const idxRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "CREATE INDEX IF NOT EXISTS idx_guardians_status ON guardians(status); CREATE INDEX IF NOT EXISTS idx_guardians_ref_sha ON guardians(reference_sha256);"`);
-    if (!idxRes.ok) {
-      throw new Error(`D1_INDEX_CREATION_FAILED: Failed to create indexes on ${dbName}: ${idxRes.output}`);
-    }
+  // Ensure required indexes exist
+  const idxCreateRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "CREATE INDEX IF NOT EXISTS idx_guardians_status ON guardians(status); CREATE INDEX IF NOT EXISTS idx_guardians_ref_sha ON guardians(reference_sha256);"`);
+  if (!idxCreateRes.ok) {
+    throw new Error(`D1_INDEX_CREATION_FAILED: Failed to create indexes on ${dbName}: ${idxCreateRes.output}`);
   }
-  // 3. Strict Fail-Closed Post-Verification of Columns & Indexes
+
+  // 3. Strict Fail-Closed Post-Verification of Columns, Types & Indexes
   const verifyRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "PRAGMA table_info(guardians);" --json`);
   if (!verifyRes.ok) {
     throw new Error(`Failed to verify post-reconciliation schema on ${dbName}: ${verifyRes.output}`);
   }
 
   const verifyParsed = JSON.parse(verifyRes.output);
-  const verifiedCols = new Set((verifyParsed[0]?.results || []).map(r => r.name));
-  const stillMissing = GUARDIAN_REQUIRED_COLUMNS.filter(c => !verifiedCols.has(c.name)).map(c => c.name);
-
-  if (stillMissing.length > 0) {
-    throw new Error(`D1_SCHEMA_RECONCILIATION_FAILED: Guardians table on ${dbName} is still missing columns: [${stillMissing.join(', ')}]`);
+  const verifyResults = (verifyParsed[0]?.results || []);
+  const colMap = new Map();
+  for (const r of verifyResults) {
+    colMap.set(r.name, r);
   }
 
-  const idxCheckRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "SELECT name FROM sqlite_master WHERE type='index';" --json`);
-  if (!idxCheckRes.ok) {
-    throw new Error(`Failed to query indexes on ${dbName}: ${idxCheckRes.output}`);
+  const missingCols = [];
+  const constraintDrifts = [];
+
+  for (const expected of GUARDIAN_CANONICAL_COLUMNS) {
+    const actual = colMap.get(expected.name);
+    if (!actual) {
+      missingCols.push(expected.name);
+      continue;
+    }
+
+    const normalizedActualType = (actual.type || '').toUpperCase();
+    if (!normalizedActualType.includes(expected.type)) {
+      constraintDrifts.push(`Column ${expected.name} type mismatch: expected ${expected.type}, got ${actual.type}`);
+    }
+
+    if (expected.pk && !actual.pk) {
+      constraintDrifts.push(`Column ${expected.name} must be primary key`);
+    }
+
+    if (expected.notnull && actual.notnull === 0) {
+      constraintDrifts.push(`Column ${expected.name} must have NOT NULL constraint`);
+    }
   }
-  const parsedIdx = JSON.parse(idxCheckRes.output);
-  const existingIdx = new Set(((parsedIdx[0]?.results || []).map(r => r.name)));
-  const REQUIRED_INDEXES = ['idx_guardians_status', 'idx_guardians_ref_sha'];
-  const missingIdx = REQUIRED_INDEXES.filter(i => !existingIdx.has(i));
-  if (missingIdx.length > 0) {
-    throw new Error(`D1_SCHEMA_AUDIT_FAILED: Missing required indexes on ${dbName}: [${missingIdx.join(', ')}]`);
+
+  if (missingCols.length > 0) {
+    throw new Error(`D1_SCHEMA_RECONCILIATION_FAILED: Guardians table on ${dbName} is missing columns: [${missingCols.join(', ')}]`);
   }
-  console.log(`✓ [D1Reconciler] Strict schema parity verified on ${dbName}. Total tables: ${existingTables.size}, Total columns: ${verifiedCols.size}. Reconciled: ${added.length > 0 ? added.join(', ') : 'none (already in sync)'}`);
-  return { ok: true, dbName, totalTables: existingTables.size, totalColumns: verifiedCols.size, added };
+
+  if (constraintDrifts.length > 0) {
+    throw new Error(`D1_SCHEMA_RECONCILIATION_FAILED: Guardians table on ${dbName} has constraint/type drift: [${constraintDrifts.join('; ')}]`);
+  }
+
+  // 4. Strict Fail-Closed Index & Indexed Columns Verification
+  const idxListRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "PRAGMA index_list(guardians);" --json`);
+  if (!idxListRes.ok) {
+    throw new Error(`Failed to query indexes on ${dbName}: ${idxListRes.output}`);
+  }
+  const parsedIdxList = JSON.parse(idxListRes.output);
+  const indexRows = (parsedIdxList[0]?.results || []);
+  const existingIdxMap = new Map();
+  for (const idx of indexRows) {
+    existingIdxMap.set(idx.name, idx);
+  }
+
+  const indexDrifts = [];
+  for (const expIdx of REQUIRED_CANONICAL_INDEXES) {
+    if (!existingIdxMap.has(expIdx.name)) {
+      indexDrifts.push(`Missing required index ${expIdx.name} on ${expIdx.table}`);
+      continue;
+    }
+
+    const infoRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "PRAGMA index_info(${expIdx.name});" --json`);
+    if (!infoRes.ok) {
+      indexDrifts.push(`Failed to query index_info for ${expIdx.name}: ${infoRes.output}`);
+      continue;
+    }
+    const infoParsed = JSON.parse(infoRes.output);
+    const colRows = (infoParsed[0]?.results || []);
+    const actualCols = colRows.map(r => r.name);
+    const isExactMatch = actualCols.length === expIdx.columns.length &&
+      expIdx.columns.every((c, i) => actualCols[i] === c);
+
+    if (!isExactMatch) {
+      indexDrifts.push(`Index ${expIdx.name} column mismatch: expected [${expIdx.columns.join(', ')}], got [${actualCols.join(', ')}]`);
+    }
+  }
+
+  if (indexDrifts.length > 0) {
+    throw new Error(`D1_SCHEMA_AUDIT_FAILED: Index definition drift on ${dbName}: [${indexDrifts.join('; ')}]`);
+  }
+  console.log(`✓ [D1Reconciler] Strict schema parity verified on ${dbName}. Total tables: ${existingTables.size}, Total columns: ${verifyResults.length}. Reconciled: ${added.length > 0 ? added.join(', ') : 'none (already in sync)'}`);
+  return { ok: true, dbName, totalTables: existingTables.size, totalColumns: verifyResults.length, added };
 }
 
 // CLI entry point

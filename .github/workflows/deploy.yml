@@ -48,6 +48,15 @@ jobs:
       - name: Verify Pre-Deploy Local Bundle Provenance
         run: node scripts/bundle-provenance.mjs verify
 
+      - name: Upload Single-Source Dist Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: single-source-dist
+          path: |
+            dist/
+            dist-worker/
+          if-no-files-found: error
+          retention-days: 7
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -66,10 +75,13 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Build Single-Source Artifacts & Record Provenance
-        run: npm run build
-        env:
-          NODE_ENV: production
+      - name: Download Tested Single-Source Dist Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: single-source-dist
+
+      - name: Assert Downloaded Artifact Provenance Before Deploy
+        run: node scripts/bundle-provenance.mjs verify
 
       - name: Fail-Closed Secrets Preflight Gate (All Required Roles & Components)
         env:
