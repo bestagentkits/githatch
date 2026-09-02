@@ -60,9 +60,11 @@ export const GUARDIAN_REQUIRED_COLUMNS: Array<{ name: string; typeDef: string }>
   { name: 'energy_state', typeDef: "TEXT DEFAULT 'Active'" },
   { name: 'created_at', typeDef: 'INTEGER NOT NULL' }
 ];
+const verifiedDatabases = new WeakSet<object>();
 
 /**
  * Asserts database schema readiness fail-closed.
+ * Tracks verification per DB object instance using WeakSet to prevent cross-database pollution.
  * Throws SCHEMA_INVARIANT_VIOLATION if any required table or column is missing.
  */
 export async function assertDatabaseSchemaReady(db: any): Promise<{
@@ -70,11 +72,13 @@ export async function assertDatabaseSchemaReady(db: any): Promise<{
   tablesCount: number;
   columnsCount: number;
 }> {
-  if (!db) {
+  if (!db || typeof db !== 'object') {
     throw new Error('SCHEMA_INVARIANT_VIOLATION: Database binding is null or undefined');
   }
 
-  // 1. Verify required tables exist
+  if (verifiedDatabases.has(db)) {
+    return { ready: true, tablesCount: REQUIRED_V2_TABLES.length, columnsCount: GUARDIAN_REQUIRED_COLUMNS.length };
+  }
   const tableQuery = await db.prepare("SELECT name FROM sqlite_master WHERE type='table';").all();
   const existingTables = new Set(((tableQuery.results || []) as Array<{ name: string }>).map(r => r.name));
   const missingTables = REQUIRED_V2_TABLES.filter(t => !existingTables.has(t));
@@ -92,6 +96,7 @@ export async function assertDatabaseSchemaReady(db: any): Promise<{
     throw new Error(`SCHEMA_INVARIANT_VIOLATION: Guardians table is missing required columns: [${missingCols.join(', ')}]`);
   }
 
+  verifiedDatabases.add(db);
   return {
     ready: true,
     tablesCount: existingTables.size,

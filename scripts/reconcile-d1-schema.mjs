@@ -101,8 +101,7 @@ export function auditAndReconcileDatabase(
       throw new Error(`D1_INDEX_CREATION_FAILED: Failed to create indexes on ${dbName}: ${idxRes.output}`);
     }
   }
-
-  // 3. Strict Fail-Closed Post-Verification
+  // 3. Strict Fail-Closed Post-Verification of Columns & Indexes
   const verifyRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "PRAGMA table_info(guardians);" --json`);
   if (!verifyRes.ok) {
     throw new Error(`Failed to verify post-reconciliation schema on ${dbName}: ${verifyRes.output}`);
@@ -116,6 +115,17 @@ export function auditAndReconcileDatabase(
     throw new Error(`D1_SCHEMA_RECONCILIATION_FAILED: Guardians table on ${dbName} is still missing columns: [${stillMissing.join(', ')}]`);
   }
 
+  const idxCheckRes = runner(`d1 execute ${dbName} --remote ${configArg} ${envArg} --command "SELECT name FROM sqlite_master WHERE type='index';" --json`);
+  if (!idxCheckRes.ok) {
+    throw new Error(`Failed to query indexes on ${dbName}: ${idxCheckRes.output}`);
+  }
+  const parsedIdx = JSON.parse(idxCheckRes.output);
+  const existingIdx = new Set(((parsedIdx[0]?.results || []).map(r => r.name)));
+  const REQUIRED_INDEXES = ['idx_guardians_status', 'idx_guardians_ref_sha'];
+  const missingIdx = REQUIRED_INDEXES.filter(i => !existingIdx.has(i));
+  if (missingIdx.length > 0) {
+    throw new Error(`D1_SCHEMA_AUDIT_FAILED: Missing required indexes on ${dbName}: [${missingIdx.join(', ')}]`);
+  }
   console.log(`✓ [D1Reconciler] Strict schema parity verified on ${dbName}. Total tables: ${existingTables.size}, Total columns: ${verifiedCols.size}. Reconciled: ${added.length > 0 ? added.join(', ') : 'none (already in sync)'}`);
   return { ok: true, dbName, totalTables: existingTables.size, totalColumns: verifiedCols.size, added };
 }

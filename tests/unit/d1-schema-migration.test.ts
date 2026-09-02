@@ -60,7 +60,11 @@ describe('D1 Database Migrations', () => {
     expect(res.ready).toBe(true);
     expect(res.tablesCount).toBe(REQUIRED_V2_TABLES.length);
 
-    // Missing table fixture -> must throw fail-closed
+    // 2. Subsequent call on SAME valid database uses instance cache
+    const resCached = await assertDatabaseSchemaReady(readyDb);
+    expect(resCached.ready).toBe(true);
+
+    // 3. Distinct second database object with missing tables MUST throw (isolated per instance)
     const missingTableDb: any = {
       prepare: (sql: string) => ({
         all: async () => {
@@ -71,7 +75,7 @@ describe('D1 Database Migrations', () => {
     };
     await expect(assertDatabaseSchemaReady(missingTableDb)).rejects.toThrow('SCHEMA_INVARIANT_VIOLATION: Database is missing required tables');
 
-    // Missing column fixture (missing species_name) -> must throw fail-closed
+    // 4. Distinct third database object with missing species_name MUST throw
     const missingColDb: any = {
       prepare: (sql: string) => ({
         all: async () => {
@@ -82,6 +86,10 @@ describe('D1 Database Migrations', () => {
       })
     };
     await expect(assertDatabaseSchemaReady(missingColDb)).rejects.toThrow('SCHEMA_INVARIANT_VIOLATION: Guardians table is missing required columns: [species_name]');
+
+    // 5. Null / undefined / invalid inputs throw fail-closed
+    await expect(assertDatabaseSchemaReady(null)).rejects.toThrow('SCHEMA_INVARIANT_VIOLATION: Database binding is null or undefined');
+    await expect(assertDatabaseSchemaReady(undefined)).rejects.toThrow('SCHEMA_INVARIANT_VIOLATION: Database binding is null or undefined');
   });
 
   it('reconcileGuardiansSchema detects missing columns on drifted database and restores parity', async () => {
@@ -147,6 +155,9 @@ describe('D1 Database Migrations', () => {
     ];
 
     const mockRunner = (cmd: string) => {
+      if (cmd.includes("SELECT name FROM sqlite_master WHERE type='index'")) {
+        return { ok: true, output: JSON.stringify([{ results: [{ name: 'idx_guardians_status' }, { name: 'idx_guardians_ref_sha' }] }]) };
+      }
       if (cmd.includes('SELECT name FROM sqlite_master')) {
         return { ok: true, output: JSON.stringify([{ results: REQUIRED_V2_TABLES.map(name => ({ name })) }]) };
       }
