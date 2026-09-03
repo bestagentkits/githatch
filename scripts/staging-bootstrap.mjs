@@ -734,7 +734,7 @@ export async function verifyOrProvisionStaging(
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                signal: AbortSignal.timeout(30000),
+                signal: AbortSignal.timeout(60000),
                 body: JSON.stringify({
                   contents: [{ parts: [{ text: 'generate a pixel art companion' }] }],
                   generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
