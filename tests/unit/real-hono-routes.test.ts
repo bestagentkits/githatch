@@ -117,7 +117,8 @@ describe('Real Hono Application Routes & State Exposure Policy', () => {
     const body = (await res.json()) as { guardian: { status: string; hero_image_url: string | null; spritesheet_url: string | null; manifest_url: string | null } };
     expect(body.guardian).toBeDefined();
     expect(body.guardian.status).toBe('PENDING');
-    expect(body.guardian.hero_image_url).toBeNull();
+    expect(body.guardian.hero_image_url).toBe('/assets/sample-pets/neonbyte.webp');
+    expect(body.guardian.hero_image_url).not.toContain('landing16-sheet.png');
     expect(body.guardian.spritesheet_url).toBeNull();
     expect(body.guardian.manifest_url).toBeNull();
   });
@@ -128,7 +129,8 @@ describe('Real Hono Application Routes & State Exposure Policy', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { guardian: { status: string; hero_image_url: string | null; spritesheet_url: string | null } };
     expect(body.guardian.status).toBe('VERIFYING');
-    expect(body.guardian.hero_image_url).toBeNull();
+    expect(body.guardian.hero_image_url).toBe('/assets/sample-pets/neonbyte.webp');
+    expect(body.guardian.hero_image_url).not.toContain('landing16-sheet.png');
     expect(body.guardian.spritesheet_url).toBeNull();
   });
 
@@ -138,7 +140,8 @@ describe('Real Hono Application Routes & State Exposure Policy', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { guardian: { status: string; hero_image_url: string | null; spritesheet_url: string | null } };
     expect(body.guardian.status).toBe('QUARANTINED');
-    expect(body.guardian.hero_image_url).toBeNull();
+    expect(body.guardian.hero_image_url).toBe('/assets/sample-pets/neonbyte.webp');
+    expect(body.guardian.hero_image_url).not.toContain('landing16-sheet.png');
     expect(body.guardian.spritesheet_url).toBeNull();
   });
 

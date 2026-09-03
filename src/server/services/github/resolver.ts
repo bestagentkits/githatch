@@ -431,11 +431,10 @@ async function getGuardianFromDb(githubUserId: number, env: Env): Promise<Guardi
     `).bind(githubUserId).first<GuardianJoinPublicationRow>();
 
     if (!row) return null;
-
     const cdnHost = env.CDN_DOMAIN || 'cdn.githoot.com';
     const isPublished = row.publication_state === 'ASSET_READY' && Boolean(row.manifest_key);
 
-    return {
+    const baseSummary: GuardianSummary = {
       id: row.id,
       name: row.name,
       species: row.species,
@@ -447,10 +446,12 @@ async function getGuardianFromDb(githubUserId: number, env: Env): Promise<Guardi
       level: row.level,
       experience: row.experience,
       energy_state: row.energy_state as any,
-      hero_image_url: isPublished ? (row.hero_image_url || `/assets/sample-pets/${row.species}.jpg`) : null,
+      hero_image_url: isPublished ? (row.hero_image_url || `/assets/sample-pets/${row.species}.jpg`) : `/assets/sample-pets/${row.species}.jpg`,
       spritesheet_url: isPublished && row.spritesheet_key ? `https://${cdnHost}/${row.spritesheet_key}` : null,
       manifest_url: isPublished && row.manifest_key ? `https://${cdnHost}/${row.manifest_key}` : null
     };
+
+    return normalizeGuardianSummary(baseSummary);
   } catch {
     return null;
   }

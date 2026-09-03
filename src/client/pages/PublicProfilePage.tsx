@@ -278,11 +278,32 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   className="guardian-pedestal"
                   style={{ '--pedestal-glow': getRarityGlowColor(profile.guardian.rarity_tier) } as React.CSSProperties}
                 >
-                  <img
-                    src={profile.guardian.hero_image_url || undefined}
-                    alt={profile.guardian.name}
-                    className={`guardian-hero-sprite guardian-pet-anim-${(profile.guardian.energy_state || 'active').toLowerCase().replace(/_/g, '-')}`}
-                  />
+                  {profile.guardian.spritesheet_url ? (
+                    <div
+                      className="landing-sprite-frame play"
+                      style={{
+                        backgroundImage: `url(${profile.guardian.spritesheet_url})`,
+                        width: '256px',
+                        height: '256px'
+                      }}
+                    />
+                  ) : profile.guardian.hero_image_url ? (
+                    <img
+                      src={profile.guardian.hero_image_url}
+                      alt={profile.guardian.name}
+                      className={`guardian-hero-sprite guardian-pet-anim-${(profile.guardian.energy_state || 'active').toLowerCase().replace(/_/g, '-')}`}
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.src.includes('celestialdrake') && !target.src.includes('verdant') && !target.src.includes('neonbyte')) {
+                          target.src = '/assets/sample-pets/celestialdrake.webp';
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+                      <EggSpritesheetPlayer archetypeId={profile.egg_archetype_id || 'neonbyte-core'} state="wobble" interactive={false} />
+                    </div>
+                  )}
                 </div>
                 {/* Guardian Title */}
                 <h2 style={{
