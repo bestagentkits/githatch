@@ -297,12 +297,21 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                     width: '100%'
                   } as React.CSSProperties}
                 >
-                  <PetSpritesheetPlayer
-                    guardian={profile.guardian}
-                    interactive={true}
-                    showControls={true}
-                    initialPose="idle"
-                  />
+                  {profile.guardian.status === 'ASSET_READY' ? (
+                    <PetSpritesheetPlayer
+                      guardian={profile.guardian}
+                      interactive={true}
+                      showControls={true}
+                      initialPose="idle"
+                    />
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '24px 0' }}>
+                      <EggSpritesheetPlayer archetypeId={profile.egg_archetype_id || 'neonbyte-core'} state="wobble" interactive={false} />
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#ffa800', marginTop: '12px', textAlign: 'center', fontWeight: 700, letterSpacing: '0.08em' }}>
+                        ✦ INCUBATING IN REALM ✦
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <h2 style={{
                   fontFamily: "'Archivo', sans-serif",

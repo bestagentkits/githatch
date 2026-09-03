@@ -119,8 +119,8 @@ generation unrelated to Guardians, or editing published manifests by hand.
    nonzero on console errors. Verify both the landing playback and the profile
    `PetSpritesheetPlayer` idle animation loop and emotion state transitions
    (`happy`, `sad`, `excited`, `angry`, `surprised`, `sleep`). Then inspect the
-   composited sheet for identity drift (species, build, silhouette, palette,
    crest, subject count) — the structural gate cannot detect body-type drift.
+   **Not yet implemented:** binding the rendered UI to the manifest's current
    artifact hashes. Until that exists, treat "browser passed" as wiring evidence
    only, and confirm the sheet you inspected is the one the UI actually loaded.
 9. **Publish atomically.** Only the publisher may set `ASSET_READY`, and only
@@ -170,8 +170,7 @@ node $SKILL/hatch.mjs approve-reference --job <job.json> \
   --verdict pass --reviewer "<name>" --sha <candidateSha256>
 
 # render N poses, raw-gate each, compose sheet+strip (png+webp), write manifest
-# Supports suite flags: --suite landing (default 16 poses) or --suite emotions (idle, happy, sad, excited, angry, surprised, sleep)
-node $SKILL/hatch.mjs render  --job <job.json> [--suite landing|emotions] [--resume]
+node $SKILL/hatch.mjs render  --job <job.json> [--resume]
 # deterministic layer, identity constraints, gate boundaries (35 assertions)
 node --test $SKILL/tests/determinism.test.mjs
 ```

@@ -1,7 +1,7 @@
 // ============================================================================
 // GitHoot Pet Spritesheet & Emotion Player (src/client/components/PetSpritesheetPlayer.tsx)
 // Authentic Canvas & CSS Spritesheet Engine with Continuous Idle Motion Loop
-// and Interactive Emotion States (Idle, Happy, Sad, Excited, Angry, Surprised, Sleep)
+// and Interactive Emotion States (Idle, Happy, Sleep, Proud, Combat, Work, Celebrate)
 // ============================================================================
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -15,7 +15,7 @@ export interface PetPlayerProps {
   onPoseChange?: (pose: PetEmotion) => void;
 }
 
-export type PetEmotion = 'idle' | 'happy' | 'sad' | 'excited' | 'angry' | 'surprised' | 'sleep';
+export type PetEmotion = 'idle' | 'happy' | 'sleep' | 'proud' | 'combat' | 'work' | 'celebrate';
 
 export interface EmotionConfig {
   id: PetEmotion;
@@ -27,14 +27,17 @@ export interface EmotionConfig {
   description: string;
 }
 
+// Exactly mirrors the 8 real cells in the 4x2 companion spritesheet (1024x512)
+// Row 0: col 0: portrait (hero bust), col 1: idle, col 2: happy, col 3: sleep
+// Row 1: col 0: proud, col 1: combat, col 2: work, col 3: celebrate
 export const PET_EMOTIONS: EmotionConfig[] = [
   { id: 'idle', label: 'Idle', icon: '✦', col: 1, row: 0, color: '#00f0ff', description: 'Chuyển động thở & bồng bềnh tự nhiên' },
   { id: 'happy', label: 'Happy', icon: '😊', col: 2, row: 0, color: '#00ff88', description: 'Hân hoan vui mừng cùng bạn' },
-  { id: 'sad', label: 'Sad', icon: '🥺', col: 0, row: 0, color: '#60a5fa', description: 'U buồn cần thêm commit mới' },
-  { id: 'excited', label: 'Excited', icon: '⚡', col: 1, row: 1, color: '#ffa800', description: 'Sôi nổi bừng sáng năng lượng' },
-  { id: 'angry', label: 'Combat', icon: '⚔️', col: 1, row: 1, color: '#ff2a85', description: 'Tức giận sẵn sàng nghênh chiến' },
-  { id: 'surprised', label: 'Shock', icon: '😲', col: 0, row: 1, color: '#e879f9', description: 'Ngạc nhiên sửng sốt' },
-  { id: 'sleep', label: 'Sleep', icon: '😴', col: 3, row: 0, color: '#a855f7', description: 'Say giấc ngủ đông êm đềm' }
+  { id: 'sleep', label: 'Sleep', icon: '😴', col: 3, row: 0, color: '#a855f7', description: 'Say giấc ngủ đông êm đềm' },
+  { id: 'proud', label: 'Proud', icon: '👑', col: 0, row: 1, color: '#ffa800', description: 'Kiêu hãnh tỏa sáng vương giả' },
+  { id: 'combat', label: 'Combat', icon: '⚔️', col: 1, row: 1, color: '#ff2a85', description: 'Tức giận sẵn sàng nghênh chiến' },
+  { id: 'work', label: 'Work', icon: '💻', col: 2, row: 1, color: '#38bdf8', description: 'Tập trung cao độ lập trình' },
+  { id: 'celebrate', label: 'Party', icon: '🎉', col: 3, row: 1, color: '#f43f5e', description: 'Ăn mừng chiến thắng rực rỡ' }
 ];
 
 export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
@@ -46,15 +49,13 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
 }) => {
   const [currentPose, setCurrentPose] = useState<PetEmotion>(initialPose);
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
-  const [imageLoaded, setImageLoaded] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const spriteImageRef = useRef<HTMLImageElement | null>(null);
 
   const activeEmotion = PET_EMOTIONS.find(e => e.id === currentPose) || PET_EMOTIONS[0];
 
   // Resolve sheet and hero sources
   const speciesSlug = (guardian.species || 'celestialdrake').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const spritesheetUrl = guardian.spritesheet_url || `/assets/sample-pets/${speciesSlug}-spritesheet.png`;
+  const emotionSheetUrl = guardian.emotion_sheet_url || (guardian.status === 'ASSET_READY' && guardian.spritesheet_url) || `/assets/sample-pets/${speciesSlug}-spritesheet.png`;
   const heroUrl = guardian.hero_image_url || `/assets/sample-pets/${speciesSlug}.webp`;
 
   // Preload and draw the active frame onto the canvas
@@ -66,41 +67,50 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
     if (!ctx) return;
 
     const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = spritesheetUrl;
+    // Intentionally no crossOrigin to avoid CORS failure on CDN domains
+    img.src = emotionSheetUrl;
 
     img.onload = () => {
       if (isCancelled) return;
-      spriteImageRef.current = img;
-      setImageLoaded(true);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Spritesheet frame sub-region (256x256)
-      const srcX = activeEmotion.col * 256;
-      const srcY = activeEmotion.row * 256;
+      // Adaptive geometry: detect 4096x256 horizontal strip vs 1024x512 4x2 grid
+      const isStrip = img.naturalWidth >= img.naturalHeight * 3.5;
+      const cols = isStrip ? Math.max(1, Math.round(img.naturalWidth / img.naturalHeight)) : 4;
+      const rows = isStrip ? 1 : 2;
+      const cellW = img.naturalWidth / cols;
+      const cellH = img.naturalHeight / rows;
 
-      // Draw centered onto 256x256 canvas
-      ctx.drawImage(img, srcX, srcY, 256, 256, 0, 0, canvas.width, canvas.height);
+      // Safe bounds mapping: strips map row*4+col to strip index, grids use (col, row)
+      const targetCol = isStrip
+        ? (activeEmotion.col + activeEmotion.row * 4) % cols
+        : Math.min(cols - 1, activeEmotion.col);
+      const targetRow = isStrip
+        ? 0
+        : Math.min(rows - 1, activeEmotion.row);
+
+      const srcX = targetCol * cellW;
+      const srcY = targetRow * cellH;
+
+      ctx.drawImage(img, srcX, srcY, cellW, cellH, 0, 0, canvas.width, canvas.height);
     };
 
     img.onerror = () => {
       if (isCancelled) return;
       // Fallback: draw static hero image
       const fallbackImg = new Image();
-      fallbackImg.crossOrigin = 'anonymous';
       fallbackImg.src = heroUrl;
       fallbackImg.onload = () => {
         if (isCancelled) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(fallbackImg, 0, 0, canvas.width, canvas.height);
-        setImageLoaded(true);
       };
     };
 
     return () => {
       isCancelled = true;
     };
-  }, [spritesheetUrl, heroUrl, activeEmotion.col, activeEmotion.row]);
+  }, [emotionSheetUrl, heroUrl, activeEmotion.col, activeEmotion.row]);
 
   const handlePoseSelect = (emotion: PetEmotion) => {
     if (emotion === currentPose) return;
@@ -119,16 +129,16 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
         return 'githoot-motion-idle';
       case 'happy':
         return 'githoot-motion-happy';
-      case 'excited':
-        return 'githoot-motion-excited';
-      case 'angry':
+      case 'combat':
         return 'githoot-motion-angry';
-      case 'surprised':
-        return 'githoot-motion-surprised';
+      case 'proud':
+        return 'githoot-motion-excited';
+      case 'work':
+        return 'githoot-motion-idle';
+      case 'celebrate':
+        return 'githoot-motion-happy';
       case 'sleep':
         return 'githoot-motion-sleep';
-      case 'sad':
-        return 'githoot-motion-sad';
       default:
         return 'githoot-motion-idle';
     }
@@ -154,6 +164,8 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
           ref={canvasRef}
           width={256}
           height={256}
+          role="img"
+          aria-label={`${guardian.name} in ${activeEmotion.label} state`}
           className={`guardian-hero-sprite ${getMotionAnimation()} ${isTransitioning ? 'githoot-pose-pulse' : ''}`}
           style={{
             width: '256px',
@@ -161,10 +173,8 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
             imageRendering: 'pixelated',
             filter: currentPose === 'sleep'
               ? 'drop-shadow(0 0 16px rgba(168, 85, 247, 0.45)) brightness(0.9)'
-              : currentPose === 'angry'
+              : currentPose === 'combat'
               ? 'drop-shadow(0 0 20px rgba(255, 42, 133, 0.6))'
-              : currentPose === 'excited'
-              ? 'drop-shadow(0 0 22px rgba(255, 168, 0, 0.65))'
               : `drop-shadow(0 0 18px ${activeEmotion.color}55)`,
             transition: 'filter 0.3s ease-out'
           }}
@@ -192,7 +202,7 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
         </div>
       </div>
 
-      {/* Interactive Emotion Switcher Toolbar */}
+      {/* Interactive Emotion Switcher Toolbar (Accessible 44px Touch Targets) */}
       {interactive && showControls && (
         <div style={{
           marginTop: '12px',
@@ -217,11 +227,11 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
           <div style={{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: '4px',
+            gap: '6px',
             justifyContent: 'center',
             background: 'rgba(15, 23, 42, 0.6)',
-            padding: '4px',
-            borderRadius: '8px',
+            padding: '6px',
+            borderRadius: '10px',
             border: '1px solid rgba(255, 255, 255, 0.08)'
           }}>
             {PET_EMOTIONS.map(emotion => {
@@ -232,24 +242,27 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
                   type="button"
                   onClick={() => handlePoseSelect(emotion.id)}
                   title={emotion.description}
+                  aria-label={`${emotion.label} state: ${emotion.description}`}
                   style={{
+                    minHeight: '44px',
                     background: isActive ? `${emotion.color}22` : 'transparent',
                     border: isActive ? `1px solid ${emotion.color}` : '1px solid transparent',
                     color: isActive ? emotion.color : '#8b9bb4',
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: '10px',
+                    fontSize: '11px',
                     fontWeight: 800,
-                    padding: '3px 8px',
-                    borderRadius: '5px',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '4px',
-                    boxShadow: isActive ? `0 0 8px ${emotion.color}33` : 'none'
+                    boxShadow: isActive ? `0 0 10px ${emotion.color}33` : 'none',
+                    outline: 'none'
                   }}
                 >
-                  <span>{emotion.icon}</span>
+                  <span style={{ fontSize: '14px' }}>{emotion.icon}</span>
                   <span>{emotion.label}</span>
                 </button>
               );

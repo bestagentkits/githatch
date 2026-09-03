@@ -219,6 +219,7 @@ export interface GuardianSummary {
   status?: GuardianStatus;
   hero_image_url?: string | null;
   spritesheet_url?: string | null;
+  emotion_sheet_url?: string | null;
   level: number;
   experience: number;
   energy_state: string;
