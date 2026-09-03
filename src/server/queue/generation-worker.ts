@@ -322,12 +322,27 @@ async function handleHatchReference(
 
     const referencePromptObj = await compileReferencePrompt(spec);
 
+    // Fetch canonical sample-pet reference image from R2 to strictly condition Gemini on committed art (Invariant #4)
+    let refImageOption: { mime: string; b64: string } | null = null;
+    let promptText = referencePromptObj.text;
+    const canonicalKey = `references/canonical/${spec.species}.jpg`;
+    const canonicalObj = await env.ASSETS_BUCKET.get(canonicalKey);
+    if (canonicalObj) {
+      const canonicalBuf = new Uint8Array(await canonicalObj.arrayBuffer());
+      refImageOption = {
+        mime: 'image/jpeg',
+        b64: Buffer.from(canonicalBuf).toString('base64')
+      };
+      promptText += ' Reference Image is for character identity and color palette ONLY. Render this exact creature centered on solid #00FF00 green background.';
+      console.log(`[Queue] Reference-conditioning candidate generation on canonical art: ${canonicalKey}`);
+    }
+
     try {
       const refGenRes = await generatePoseWithGemini({
-        prompt: referencePromptObj.text,
+        prompt: promptText,
+        referenceImage: refImageOption,
         reservation: { jobId: activeJobId, poseId: 'reference', attemptNumber: attempt }
       }, env);
-
       if (!refGenRes.success || !refGenRes.base64Data) {
         throw new Error(`Failed to generate reference candidate for ${guardianId}: ${refGenRes.error || 'No base64 data'}`);
       }

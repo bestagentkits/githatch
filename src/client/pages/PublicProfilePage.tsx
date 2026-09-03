@@ -327,7 +327,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   textAlign: 'center',
                   marginBottom: '14px'
                 }}>
-                  Species: <span style={{ color: '#00f0ff', fontWeight: 700 }}>{profile.guardian.species}</span>
+                  Species: <span style={{ color: '#00f0ff', fontWeight: 700 }}>{profile.guardian.species_name || profile.guardian.species}</span>
                 </div>
 
                 {/* Status Badges Row */}

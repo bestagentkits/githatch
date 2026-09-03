@@ -19,7 +19,7 @@ export async function deleteProfileCacheKeys(
   if (!kv) return;
   const clean = username.trim().toLowerCase();
   await Promise.allSettled([
-    kv.delete(`gh:profile:v4:${clean}`),
+    kv.delete(getProfileCacheKey(clean)),
     kv.delete(`gh:profile:v3:${clean}`),
     kv.delete(`gh:profile:v2:${clean}`),
     kv.delete(`gh:profile:${clean}`)
