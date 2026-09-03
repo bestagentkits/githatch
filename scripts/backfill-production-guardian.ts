@@ -12,7 +12,7 @@ async function main() {
 
   const spec = await compileIdentitySpec({
     githubUserId,
-    seed,
+    telemetry: {},
     pin: { element: 'Cosmic', rarity: 'Common' }
   });
 
