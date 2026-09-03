@@ -1,6 +1,6 @@
 ---
 name: githoot-hatch
-description: Generate GitHoot Guardian pet art from GitHub data with deterministic identity and Gemini Nano Banana 2 rendering. Use this skill whenever the user wants to hatch a pet or Guardian, generate or regenerate pet spritesheets, build superhero-landing or emotion pose sets, derive Guardian DNA / species / element / rarity from GitHub stats, debug identity drift or collage echoes in generated frames, set up the hatch generation queue, or validate and publish pet assets. Also use it when work touches assets/sample-pets, landing16 frames, chroma-key slicing, contour centering, or the GEMINI_API_KEY credential path for image generation.
+description: Generate GitHoot Guardian pet art from GitHub data with deterministic identity and Gemini Nano Banana 2 rendering. Use this skill whenever the user wants to hatch a pet or Guardian, generate or regenerate pet spritesheets (including continuous idle animation and emotion states: happy, sad, excited, angry, surprised, sleep), build superhero-landing or emotion pose sets, derive Guardian DNA / species / element / rarity from GitHub stats, debug identity drift or collage echoes in generated frames, set up the hatch generation queue, or validate and publish pet assets. Also use it when work touches assets/sample-pets, landing16 frames, emotion spritesheets, chroma-key slicing, contour centering, or the GEMINI_API_KEY credential path for image generation.
 ---
 
 # GitHoot Hatch Pipeline
@@ -13,8 +13,10 @@ are deterministic; only pixel-level rendering is generative.
 
 This skill handles: Guardian identity compilation from GitHub telemetry, prompt
 compilation, authorized Gemini Nano Banana 2 pose rendering, chroma removal,
-contour centering, frame validation, local sheet/strip composition, browser
-verification, and gated publication.
+contour centering, frame validation, local sheet/strip composition for both
+superhero landing sequences (`landing16`) and companion emotion/mood state
+spritesheets (`idle`, `happy`, `sad`, `excited`, `angry`, `surprised`, `sleep`),
+browser visual verification in `PetSpritesheetPlayer`, and gated publication.
 
 This skill does NOT handle: OAuth or payment implementation, DNA rerolls,
 evolution/arena/economy design, non-Gemini image providers, arbitrary image
@@ -85,8 +87,12 @@ generation unrelated to Guardians, or editing published manifests by hand.
    Guardians reuse the committed `assets/sample-pets/{id}-gemini-raw.jpg`.
    Missing reference → exit `5`.
 4. **Compile prompts.** `compileAllPosePrompts(spec)` → one byte-identical prompt
-   per pose with `promptHash`. Never let an LLM rewrite, translate, or embellish a
-   prompt. Creativity is bounded to subordinate texture/lighting/particles.
+   per pose with `promptHash` for the 16-beat landing sequence. In addition,
+   `compileAllEmotionPrompts(spec)` compiles byte-identical prompts for the
+   companion emotion suite: `idle` (breathing/hovering loop), `happy`, `sad`,
+   `excited`, `angry`, `surprised`, `sleep`, `work`, and `celebrate`. Never let
+   an LLM rewrite, translate, or embellish a prompt. Creativity is bounded to
+   subordinate texture/lighting/particles.
 5. **Render one pose per call.** Never ask the model for a pose grid — it returns
    wrong geometry (asked 4x4, got 5x4 with dividers) and repeats poses. Issue N
    independent calls, each with the pinned reference attached inline and the
@@ -103,15 +109,18 @@ generation unrelated to Guardians, or editing published manifests by hand.
    therefore requires matching raw evidence; if the evidence is missing or stale
    for the current policy/prompt/reference/model, the pose is re-rendered.
 7. **Compose locally.** `contourBBox()` → center into 256×256 (never fixed-offset
-   slicing of model output), then composite the 4×4 sheet and the N-frame strip
-   with `framePlacement()`. Emit **PNG and WebP together** in one step — a
-   png-only rewrite silently ships a stale sheet to any UI embedding the webp.
+   slicing of model output), then composite the 4×4 sheet and N-frame strip
+   with `framePlacement()`. For emotion suites, composite the 8-state grid
+   (4×2 at 1024×512 or horizontal strip). Emit **PNG and WebP together** in one
+   step — a png-only rewrite silently ships a stale sheet to any UI embedding
+   the webp.
 8. **Verify visually.** Run a browser check that exercises every frame, asserts
    distinct frame offsets, captures screenshots into `plans/reports/`, and exits
-   nonzero on console errors. Then inspect the composited sheet for identity
-   drift (species, build, silhouette, palette, crest, subject count) — the
-   structural gate cannot detect body-type drift.
-   **Not yet implemented:** binding the rendered UI to the manifest's current
+   nonzero on console errors. Verify both the landing playback and the profile
+   `PetSpritesheetPlayer` idle animation loop and emotion state transitions
+   (`happy`, `sad`, `excited`, `angry`, `surprised`, `sleep`). Then inspect the
+   composited sheet for identity drift (species, build, silhouette, palette,
+   crest, subject count) — the structural gate cannot detect body-type drift.
    artifact hashes. Until that exists, treat "browser passed" as wiring evidence
    only, and confirm the sheet you inspected is the one the UI actually loaded.
 9. **Publish atomically.** Only the publisher may set `ASSET_READY`, and only
@@ -161,8 +170,8 @@ node $SKILL/hatch.mjs approve-reference --job <job.json> \
   --verdict pass --reviewer "<name>" --sha <candidateSha256>
 
 # render N poses, raw-gate each, compose sheet+strip (png+webp), write manifest
-node $SKILL/hatch.mjs render  --job <job.json> [--resume]
-
+# Supports suite flags: --suite landing (default 16 poses) or --suite emotions (idle, happy, sad, excited, angry, surprised, sleep)
+node $SKILL/hatch.mjs render  --job <job.json> [--suite landing|emotions] [--resume]
 # deterministic layer, identity constraints, gate boundaries (35 assertions)
 node --test $SKILL/tests/determinism.test.mjs
 ```

@@ -82,6 +82,38 @@ export const POSE_PROMPT: Readonly<Record<string, string>> = Object.freeze({
   hero_stance: 'in a majestic full standing heroic victory stance, fists ready, aura steady'
 });
 
+export interface EmotionPoseDefinition {
+  id: string;
+  label: string;
+  icon: string;
+  col: number;
+  row: number;
+}
+
+export const EMOTION_POSE_SET: readonly EmotionPoseDefinition[] = Object.freeze([
+  { id: 'idle', label: 'Idle / Thư thái', icon: '✦', col: 1, row: 0 },
+  { id: 'happy', label: 'Happy / Vui vẻ', icon: '😊', col: 2, row: 0 },
+  { id: 'sad', label: 'Sad / Buồn bã', icon: '🥺', col: 0, row: 0 },
+  { id: 'excited', label: 'Excited / Hào hứng', icon: '⚡', col: 1, row: 1 },
+  { id: 'angry', label: 'Angry / Chiến đấu', icon: '⚔️', col: 1, row: 1 },
+  { id: 'surprised', label: 'Surprised / Ngạc nhiên', icon: '😲', col: 0, row: 1 },
+  { id: 'sleep', label: 'Sleep / Ngủ say', icon: '😴', col: 3, row: 0 },
+  { id: 'work', label: 'Work / Lập trình', icon: '💻', col: 2, row: 1 },
+  { id: 'celebrate', label: 'Celebrate / Ăn mừng', icon: '🎉', col: 3, row: 1 }
+]);
+
+export const EMOTION_POSE_PROMPT: Readonly<Record<string, string>> = Object.freeze({
+  idle: 'in a natural, alert, and peaceful idle standing posture with eyes focused and subtle gentle breathing',
+  happy: 'joyfully bouncing with cheerful smiling eyes, glowing sparkle particles and a delighted expression',
+  sad: 'in a drooping dejected posture with lowered head, downcast sad eyes, and soft blue gloomy motes',
+  excited: 'leaping with electric high energy, wide eager sparkling eyes, and vibrant energy sparks bursting outward',
+  angry: 'in a fierce combat battle-ready stance with narrowed fiery eyes, flared aura, and clenched ready fists',
+  surprised: 'startled in mid-air with wide shocked eyes, raised eyebrows, and little exclamation sparkle motes',
+  sleep: 'peacefully curled up or relaxed in a cozy sleeping pose, gentle closed eyes, and floating soft zZz dream motes',
+  work: 'intently focused on coding with holographic floating cyber runes and focused glowing eyes',
+  celebrate: 'triumphantly cheering with hands raised in victory, wide smile, and colorful energy confetti bursting around'
+});
+
 export const ELEMENTS = Object.freeze(['Fire', 'Cyber', 'Water', 'Nature', 'Light', 'Void', 'Metal', 'Cosmic']);
 
 export const LANGUAGE_ELEMENT: Readonly<Record<string, string>> = Object.freeze({

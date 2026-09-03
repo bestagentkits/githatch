@@ -81,6 +81,26 @@ and must be explicitly requested; generic "landing" wording does not produce it.
 
 Changing ids, order, or count = new `poseSet` version, not an ad-hoc branch.
 
+
+## Emotion & mood pose set (`emotions.v1`)
+
+`EMOTION_POSE_SET` defines the companion expressions and idle motion suite:
+
+| ID | Label | Pose Description / Intent |
+|---|---|---|
+| `idle` | Idle Motion | Natural standing breathing/hovering posture, alert and calm |
+| `happy` | Happy | Joyful bounce with smiling eyes and sparkle particles |
+| `sad` | Sad / Dejected | Drooping posture, lowered head, gloomy moody motes |
+| `excited` | Excited | Electric high-energy leap, eyes wide with sparkling aura flare |
+| `angry` | Combat / Angry | Fierce combat-ready stance, glowing eyes, aggressive posture |
+| `surprised` | Surprised | Startled leap, wide open eyes, exclamatory motes |
+| `sleep` | Sleep / Cozy | Curled or relaxed rest pose, closed eyes, floating soft zZz motes |
+| `work` | Coding / Work | Focused hacking pose with floating holographic runes or keyboard |
+| `celebrate` | Celebrate | Triumphant victory cheering pose with confetti burst |
+
+Prompts for the emotion suite use the exact same single-subject, chroma-key,
+reference-conditioned grammar as `compilePosePrompt()`, ensuring 100% identity
+lock across all emotion frames.
 ## Retries
 
 Up to `GATES.maxAttemptsPerPose` (3) attempts per pose. Prompt bytes stay

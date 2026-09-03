@@ -5,6 +5,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import type { ResolvedProfile } from '../../server/types';
 import { EggSpritesheetPlayer } from '../components/EggSpritesheetPlayer';
+import { PetSpritesheetPlayer } from '../components/PetSpritesheetPlayer';
 import { SocialSharePanel } from '../components/SocialSharePanel';
 import { track } from '../lib/analytics';
 import { calculateLevelProgression, getActivityExp, LevelProgression } from '../utils/progression';
@@ -283,39 +284,26 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                     : '✦ HATCHING IN PROGRESS ✦'}
                 </div>
 
-                {/* Floating Pedestal & Hero Sprite */}
+                {/* Floating Pedestal & Animated Spritesheet Companion */}
                 <div
                   className="guardian-pedestal"
-                  style={{ '--pedestal-glow': getRarityGlowColor(profile.guardian.rarity_tier) } as React.CSSProperties}
+                  style={{
+                    '--pedestal-glow': getRarityGlowColor(profile.guardian.rarity_tier),
+                    minHeight: '310px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '100%'
+                  } as React.CSSProperties}
                 >
-                  {profile.guardian.spritesheet_url ? (
-                    <div
-                      className="landing-sprite-frame play"
-                      style={{
-                        backgroundImage: `url(${profile.guardian.spritesheet_url})`,
-                        width: '256px',
-                        height: '256px'
-                      }}
-                    />
-                  ) : profile.guardian.hero_image_url && !imageLoadFailed ? (
-                    <img
-                      src={profile.guardian.hero_image_url}
-                      alt={profile.guardian.name}
-                      className={`guardian-hero-sprite guardian-pet-anim-${(profile.guardian.energy_state || 'active').toLowerCase().replace(/_/g, '-')}`}
-                      onError={() => setImageLoadFailed(true)}
-                    />
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
-                      <EggSpritesheetPlayer archetypeId={profile.egg_archetype_id || 'neonbyte-core'} state="wobble" interactive={false} />
-                      {profile.guardian.status !== 'ASSET_READY' && (
-                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#ffa800', marginTop: '12px', textAlign: 'center', fontWeight: 700, letterSpacing: '0.08em' }}>
-                          ✦ INCUBATING IN REALM ✦
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <PetSpritesheetPlayer
+                    guardian={profile.guardian}
+                    interactive={true}
+                    showControls={true}
+                    initialPose="idle"
+                  />
                 </div>
-                {/* Guardian Title */}
                 <h2 style={{
                   fontFamily: "'Archivo', sans-serif",
                   fontSize: 'clamp(22px, 3.5vw, 28px)',

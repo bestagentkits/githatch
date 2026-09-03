@@ -86,6 +86,31 @@ export const POSE_PROMPT = Object.freeze({
   hero_stance: 'in a majestic full standing heroic victory stance, fists ready, aura steady'
 });
 
+// Companion emotion and mood state pose set.
+export const EMOTION_POSE_SET = Object.freeze([
+  { id: 'idle', label: 'Idle / Thong tha', icon: '✦', col: 1, row: 0 },
+  { id: 'happy', label: 'Happy / Vui ve', icon: '😊', col: 2, row: 0 },
+  { id: 'sad', label: 'Sad / Buon ba', icon: '🥺', col: 0, row: 0 },
+  { id: 'excited', label: 'Excited / Hao hung', icon: '⚡', col: 1, row: 1 },
+  { id: 'angry', label: 'Angry / Chien dau', icon: '⚔️', col: 1, row: 1 },
+  { id: 'surprised', label: 'Surprised / Ngac nhien', icon: '😲', col: 0, row: 1 },
+  { id: 'sleep', label: 'Sleep / Ngu say', icon: '😴', col: 3, row: 0 },
+  { id: 'work', label: 'Work / Lap trinh', icon: '💻', col: 2, row: 1 },
+  { id: 'celebrate', label: 'Celebrate / An mung', icon: '🎉', col: 3, row: 1 }
+]);
+
+export const EMOTION_POSE_PROMPT = Object.freeze({
+  idle: 'in a natural, alert, and peaceful idle standing posture with eyes focused and subtle gentle breathing',
+  happy: 'joyfully bouncing with cheerful smiling eyes, glowing sparkle particles and a delighted expression',
+  sad: 'in a drooping dejected posture with lowered head, downcast sad eyes, and soft blue gloomy motes',
+  excited: 'leaping with electric high energy, wide eager sparkling eyes, and vibrant energy sparks bursting outward',
+  angry: 'in a fierce combat battle-ready stance with narrowed fiery eyes, flared aura, and clenched ready fists',
+  surprised: 'startled in mid-air with wide shocked eyes, raised eyebrows, and little exclamation sparkle motes',
+  sleep: 'peacefully curled up or relaxed in a cozy sleeping pose, gentle closed eyes, and floating soft zZz dream motes',
+  work: 'intently focused on coding with holographic floating cyber runes and focused glowing eyes',
+  celebrate: 'triumphantly cheering with hands raised in victory, wide smile, and colorful energy confetti bursting around'
+});
+
 // ---- Identity enum tables (deterministic personalization from GitHub data) ----
 // Bounded tables keep the design space large while every choice stays reproducible.
 

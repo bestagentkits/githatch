@@ -7,6 +7,7 @@ import type { IdentitySpec, RarityTier, TelemetrySnapshot } from '../../types';
 import { sha256Hex } from '../crypto/web-crypto';
 import {
   VERSIONS, POSE_SET, POSE_PROMPT, FRAME, CHROMA,
+  EMOTION_POSE_SET, EMOTION_POSE_PROMPT,
   ELEMENTS, LANGUAGE_ELEMENT, BUILDS, BUILD_PROMPT, SILHOUETTES, CRESTS,
   MARKINGS, MATERIALS, AURAS, TEMPERAMENTS, RARITIES, RARITY_CUTS, MERIT_WEIGHTS,
   SPECIES, SPECIES_PHENOTYPE, SPECIES_BUILDS, IDENTITY_TELEMETRY_FIELDS,
@@ -299,9 +300,28 @@ export async function compilePosePrompt(spec: IdentitySpec, poseId: string): Pro
   const promptHash = await sha256Hex(text);
   return { poseId, text, promptHash };
 }
-
 export async function compileAllPosePrompts(spec: IdentitySpec): Promise<Array<{ poseId: string; text: string; promptHash: string }>> {
   return await Promise.all(POSE_SET.map(p => compilePosePrompt(spec, p.id)));
+}
+
+export async function compileEmotionPrompt(spec: IdentitySpec, emotionId: string): Promise<{ poseId: string; text: string; promptHash: string }> {
+  const emotionDef = EMOTION_POSE_SET.find(p => p.id === emotionId);
+  if (!emotionDef) {
+    throw new Error(`unknown emotion pose id: ${emotionId}`);
+  }
+  const text = [
+    `Emotion spritesheet frame: ${emotionDef.label} expression of companion creature on solid green #00FF00 chroma background.`,
+    EMOTION_POSE_PROMPT[emotionDef.id] || `Character expressing ${emotionDef.label}.`,
+    `Single character centered in frame, no grid, no multi-panel, no border.`,
+    identityBlock(spec, { withReference: true }),
+    `Art style: match reference portrait color palette and identity exactly. Premium pixel art.`
+  ].join(' ');
+  const promptHash = await sha256Hex(text);
+  return { poseId: emotionId, text, promptHash };
+}
+
+export async function compileAllEmotionPrompts(spec: IdentitySpec): Promise<Array<{ poseId: string; text: string; promptHash: string }>> {
+  return await Promise.all(EMOTION_POSE_SET.map(p => compileEmotionPrompt(spec, p.id)));
 }
 
 export async function requestFingerprint({
