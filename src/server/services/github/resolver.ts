@@ -314,14 +314,24 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     let guardianRecord = await getGuardianFromDb(rawUser.id, env);
     const aggregateStats = await getAggregateStatsFromDb(rawUser.id, env);
     if (guardianRecord) {
+      const originalStoredExp = guardianRecord.experience || 0;
       const { totalExp, progression } = calculateDeveloperExperience({
         public_repos: rawUser.public_repos,
         followers: rawUser.followers,
         total_stars: totalStars,
         contributions_last_year: aggregateStats?.contributions_last_year,
         activities,
-        stored_experience: guardianRecord.experience
+        stored_experience: originalStoredExp
       });
+
+      // Persist high-water mark to D1 asynchronously so EXP/level never drops when rolling telemetry windows move
+      if (env.DB && totalExp > originalStoredExp) {
+        env.DB.prepare('UPDATE guardians SET experience = ?1, level = ?2 WHERE id = ?3 AND experience < ?1')
+          .bind(totalExp, progression.level, guardianRecord.id)
+          .run()
+          .catch(() => {});
+      }
+
       guardianRecord = {
         ...guardianRecord,
         experience: totalExp,
