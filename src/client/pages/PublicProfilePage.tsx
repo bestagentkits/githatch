@@ -297,12 +297,19 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                     width: '100%'
                   } as React.CSSProperties}
                 >
-                  {profile.guardian.status === 'ASSET_READY' ? (
+                  {profile.guardian.status === 'ASSET_READY' && profile.guardian.emotion_sheet_url ? (
                     <PetSpritesheetPlayer
                       guardian={profile.guardian}
                       interactive={true}
                       showControls={true}
                       initialPose="idle"
+                    />
+                  ) : profile.guardian.hero_image_url && !imageLoadFailed ? (
+                    <img
+                      src={profile.guardian.hero_image_url}
+                      alt={profile.guardian.name}
+                      className={`guardian-hero-sprite guardian-pet-anim-${(profile.guardian.energy_state || 'active').toLowerCase().replace(/_/g, '-')}`}
+                      onError={() => setImageLoadFailed(true)}
                     />
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '24px 0' }}>

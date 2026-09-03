@@ -125,12 +125,29 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
       const scraped = await scrapeGitHubPublicProfile(cleanUsername);
       if (scraped && scraped.userId > 0) {
         const dna = await deriveGuardianDNA(scraped.userId, cleanUsername, scraped.topLanguages);
-        const guardianRecord = await getGuardianFromDb(scraped.userId, env);
+        let guardianRecord = await getGuardianFromDb(scraped.userId, env);
         const aggregateStats = await getAggregateStatsFromDb(scraped.userId, env);
+        if (guardianRecord) {
+          const { totalExp, progression } = calculateDeveloperExperience({
+            public_repos: scraped.publicRepos,
+            followers: scraped.followers,
+            total_stars: 0,
+            contributions_last_year: aggregateStats?.contributions_last_year,
+            activities: [],
+            stored_experience: guardianRecord.experience || 0
+          });
+          guardianRecord = {
+            ...guardianRecord,
+            experience: totalExp,
+            level: progression.level,
+            progression
+          };
+        }
+
         const profile: ResolvedProfile = {
           github_user_id: scraped.userId,
           login: cleanUsername,
-          name: scraped.name,
+          name: scraped.name || cleanUsername,
           bio: scraped.bio,
           avatar_url: scraped.avatarUrl,
           public_repos: scraped.publicRepos,

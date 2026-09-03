@@ -15,7 +15,7 @@ This skill handles: Guardian identity compilation from GitHub telemetry, prompt
 compilation, authorized Gemini Nano Banana 2 pose rendering, chroma removal,
 contour centering, frame validation, local sheet/strip composition for both
 superhero landing sequences (`landing16`) and companion emotion/mood state
-spritesheets (`idle`, `happy`, `sad`, `excited`, `angry`, `surprised`, `sleep`),
+spritesheets (`idle`, `happy`, `sleep`, `proud`, `combat`, `work`, `celebrate`),
 browser visual verification in `PetSpritesheetPlayer`, and gated publication.
 
 This skill does NOT handle: OAuth or payment implementation, DNA rerolls,
@@ -89,10 +89,9 @@ generation unrelated to Guardians, or editing published manifests by hand.
 4. **Compile prompts.** `compileAllPosePrompts(spec)` → one byte-identical prompt
    per pose with `promptHash` for the 16-beat landing sequence. In addition,
    `compileAllEmotionPrompts(spec)` compiles byte-identical prompts for the
-   companion emotion suite: `idle` (breathing/hovering loop), `happy`, `sad`,
-   `excited`, `angry`, `surprised`, `sleep`, `work`, and `celebrate`. Never let
-   an LLM rewrite, translate, or embellish a prompt. Creativity is bounded to
-   subordinate texture/lighting/particles.
+   companion emotion suite: `portrait`, `idle`, `happy`, `sleep`, `proud`,
+   `combat`, `work`, and `celebrate`. Never let an LLM rewrite, translate, or
+   embellish a prompt. Creativity is bounded to subordinate texture/lighting/particles.
 5. **Render one pose per call.** Never ask the model for a pose grid — it returns
    wrong geometry (asked 4x4, got 5x4 with dividers) and repeats poses. Issue N
    independent calls, each with the pinned reference attached inline and the
@@ -118,7 +117,8 @@ generation unrelated to Guardians, or editing published manifests by hand.
    distinct frame offsets, captures screenshots into `plans/reports/`, and exits
    nonzero on console errors. Verify both the landing playback and the profile
    `PetSpritesheetPlayer` idle animation loop and emotion state transitions
-   (`happy`, `sad`, `excited`, `angry`, `surprised`, `sleep`). Then inspect the
+   (`idle`, `happy`, `sleep`, `proud`, `combat`, `work`, `celebrate`). Then inspect the
+   composited sheet for identity drift (species, build, silhouette, palette,
    crest, subject count) — the structural gate cannot detect body-type drift.
    **Not yet implemented:** binding the rendered UI to the manifest's current
    artifact hashes. Until that exists, treat "browser passed" as wiring evidence

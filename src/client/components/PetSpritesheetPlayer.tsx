@@ -55,7 +55,7 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
 
   // Resolve sheet and hero sources
   const speciesSlug = (guardian.species || 'celestialdrake').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const emotionSheetUrl = guardian.emotion_sheet_url || (guardian.status === 'ASSET_READY' && guardian.spritesheet_url) || `/assets/sample-pets/${speciesSlug}-spritesheet.png`;
+  const emotionSheetUrl = guardian.emotion_sheet_url || (guardian.species ? `/assets/sample-pets/${speciesSlug}-spritesheet.png` : '');
   const heroUrl = guardian.hero_image_url || `/assets/sample-pets/${speciesSlug}.webp`;
 
   // Preload and draw the active frame onto the canvas
@@ -66,28 +66,33 @@ export const PetSpritesheetPlayer: React.FC<PetPlayerProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    if (!emotionSheetUrl) {
+      // Fallback: draw static hero image directly
+      const fallbackImg = new Image();
+      fallbackImg.src = heroUrl;
+      fallbackImg.onload = () => {
+        if (isCancelled) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(fallbackImg, 0, 0, canvas.width, canvas.height);
+      };
+      return;
+    }
+
     const img = new Image();
-    // Intentionally no crossOrigin to avoid CORS failure on CDN domains
     img.src = emotionSheetUrl;
 
     img.onload = () => {
       if (isCancelled) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Adaptive geometry: detect 4096x256 horizontal strip vs 1024x512 4x2 grid
-      const isStrip = img.naturalWidth >= img.naturalHeight * 3.5;
-      const cols = isStrip ? Math.max(1, Math.round(img.naturalWidth / img.naturalHeight)) : 4;
-      const rows = isStrip ? 1 : 2;
+      // Emotion sheet is strictly a 4x2 grid (1024x512, cell size 256x256)
+      const cols = 4;
+      const rows = 2;
       const cellW = img.naturalWidth / cols;
       const cellH = img.naturalHeight / rows;
 
-      // Safe bounds mapping: strips map row*4+col to strip index, grids use (col, row)
-      const targetCol = isStrip
-        ? (activeEmotion.col + activeEmotion.row * 4) % cols
-        : Math.min(cols - 1, activeEmotion.col);
-      const targetRow = isStrip
-        ? 0
-        : Math.min(rows - 1, activeEmotion.row);
+      const targetCol = Math.min(cols - 1, Math.max(0, activeEmotion.col));
+      const targetRow = Math.min(rows - 1, Math.max(0, activeEmotion.row));
 
       const srcX = targetCol * cellW;
       const srcY = targetRow * cellH;
