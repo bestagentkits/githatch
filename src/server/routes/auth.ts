@@ -11,6 +11,7 @@ import { twoPhaseApproveReference } from '../services/ai/reference-manager';
 import { approveGuardianPosesAndPublish } from '../services/ai/hatch-admin';
 import { verifyReviewerAuthorization } from '../services/auth/admin-auth';
 import { reviewRouter } from './review';
+import { deleteProfileCacheKeys } from '../services/github/cache-keys';
 
 export const authRouter = new Hono<{ Bindings: Env }>();
 function escapeHtml(unsafe: string): string {
@@ -146,7 +147,7 @@ authRouter.get('/callback', async (c) => {
           Date.parse(stats.refreshed_at)
         ).run();
         try {
-          await c.env.CACHE_KV.delete(`gh:profile:v3:${authUser.login.toLowerCase()}`);
+          await deleteProfileCacheKeys(c.env.CACHE_KV, authUser.login);
         } catch {}
       }
     } catch {
@@ -261,7 +262,7 @@ authRouter.delete('/aggregate-stats/delete', async (c) => {
   try {
     await c.env.DB.prepare('DELETE FROM github_aggregate_stats WHERE github_user_id = ?').bind(user.id).run();
     try {
-      await c.env.CACHE_KV.delete(`gh:profile:v3:${user.login.toLowerCase()}`);
+      await deleteProfileCacheKeys(c.env.CACHE_KV, user.login);
     } catch {}
     return c.json({ success: true });
   } catch {

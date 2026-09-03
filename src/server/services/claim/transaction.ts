@@ -7,6 +7,7 @@ import { reserveEarlyAccessSlot } from './quota';
 import { checkDailyBudgetLimit } from '../billing/budget-guard';
 import { compileIdentitySpec, canonicalJson } from '../dna/compiler';
 import { sha256Hex } from '../crypto/web-crypto';
+import { deleteProfileCacheKeys } from '../github/cache-keys';
 import { fetchTelemetrySnapshot } from '../github/resolver';
 import { createOutboxStatement } from '../../queue/outbox';
 import type { GenerationQueueMessage } from '../../queue/message-schema';
@@ -191,11 +192,7 @@ export async function executeClaimTransaction(
     }
   }
   try {
-    await Promise.all([
-      env.CACHE_KV.delete(`gh:profile:v3:${authUser.login.toLowerCase()}`),
-      env.CACHE_KV.delete(`gh:profile:v2:${authUser.login.toLowerCase()}`),
-      env.CACHE_KV.delete(`gh:profile:${authUser.login.toLowerCase()}`)
-    ]);
+    await deleteProfileCacheKeys(env.CACHE_KV, authUser.login);
   } catch {
     // KV delete non-fatal
   }

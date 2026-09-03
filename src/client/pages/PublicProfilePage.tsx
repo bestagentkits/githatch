@@ -65,6 +65,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
   const [repoTab, setRepoTab] = useState<'highlighted' | 'active'>('highlighted');
   const [sessionLogin, setSessionLogin] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [imageLoadFailed, setImageLoadFailed] = useState<boolean>(false);
   const eggCardRef = useRef<HTMLDivElement | null>(null);
   const eggTrackedRef = useRef(false);
 
@@ -253,14 +254,14 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
           >
             {profile.claimed && profile.guardian ? (
               <div className="guardian-stage" style={{ width: '100%' }}>
-                {/* Rarity & Genesis Badge */}
+                {/* Rarity & Status Badge */}
                 <div style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
-                  background: 'rgba(0, 240, 255, 0.08)',
-                  border: `1px solid ${getRarityGlowColor(profile.guardian.rarity_tier)}`,
-                  color: getRarityGlowColor(profile.guardian.rarity_tier),
+                  background: profile.guardian.status === 'ASSET_READY' ? 'rgba(0, 240, 255, 0.08)' : 'rgba(255, 168, 0, 0.08)',
+                  border: `1px solid ${profile.guardian.status === 'ASSET_READY' ? getRarityGlowColor(profile.guardian.rarity_tier) : '#ffa800'}`,
+                  color: profile.guardian.status === 'ASSET_READY' ? getRarityGlowColor(profile.guardian.rarity_tier) : '#ffa800',
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: '11px',
                   fontWeight: 800,
@@ -270,7 +271,9 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   letterSpacing: '0.12em',
                   marginBottom: '12px'
                 }}>
-                  ✦ {profile.guardian.rarity_tier} GUARDIAN ✦
+                  {profile.guardian.status === 'ASSET_READY'
+                    ? `✦ ${profile.guardian.rarity_tier} GUARDIAN ✦`
+                    : '✦ HATCHING IN PROGRESS ✦'}
                 </div>
 
                 {/* Floating Pedestal & Hero Sprite */}
@@ -287,21 +290,21 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                         height: '256px'
                       }}
                     />
-                  ) : profile.guardian.hero_image_url ? (
+                  ) : profile.guardian.hero_image_url && !imageLoadFailed ? (
                     <img
                       src={profile.guardian.hero_image_url}
                       alt={profile.guardian.name}
                       className={`guardian-hero-sprite guardian-pet-anim-${(profile.guardian.energy_state || 'active').toLowerCase().replace(/_/g, '-')}`}
-                      onError={(e) => {
-                        const target = e.currentTarget;
-                        if (!target.src.includes('celestialdrake') && !target.src.includes('verdant') && !target.src.includes('neonbyte')) {
-                          target.src = '/assets/sample-pets/celestialdrake.webp';
-                        }
-                      }}
+                      onError={() => setImageLoadFailed(true)}
                     />
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
                       <EggSpritesheetPlayer archetypeId={profile.egg_archetype_id || 'neonbyte-core'} state="wobble" interactive={false} />
+                      {profile.guardian.status !== 'ASSET_READY' && (
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#ffa800', marginTop: '12px', textAlign: 'center', fontWeight: 700, letterSpacing: '0.08em' }}>
+                          ✦ INCUBATING IN REALM ✦
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

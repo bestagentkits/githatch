@@ -6,6 +6,7 @@
 import type { Env, HatchJobRecord, HatchFrameRecord } from '../../types';
 import { verifyPublicationReady } from '../claim/publication-preflight';
 import { createSemanticVerdict } from '../claim/verdict-contract';
+import { deleteProfileCacheKeys } from '../github/cache-keys';
 
 export interface ApprovePosesOptions {
   guardianId: string;
@@ -247,8 +248,7 @@ export async function approveGuardianPosesAndPublish({
     try {
       const ghAccount = await env.DB.prepare('SELECT login FROM github_accounts WHERE user_id = (SELECT user_id FROM guardians WHERE id = ?1)').bind(guardianId).first<{ login: string }>();
       if (ghAccount && ghAccount.login) {
-        await env.CACHE_KV.delete(`gh:profile:v3:${ghAccount.login.toLowerCase()}`);
-        await env.CACHE_KV.delete(`gh:profile:${ghAccount.login.toLowerCase()}`);
+        await deleteProfileCacheKeys(env.CACHE_KV, ghAccount.login);
       }
     } catch {}
   }

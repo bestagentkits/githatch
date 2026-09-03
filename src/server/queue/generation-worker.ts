@@ -29,6 +29,7 @@ import { encodeRgbaToPng, decodePngToRgba } from '../services/image/png-codec';
 import { encodeRgbaToWebp } from '../services/image/webp-encoder';
 import { validateAndNormalizeFrame } from '../services/image/frame-gate';
 import { ensurePngBytes } from '../services/image/jpeg-decoder';
+import { deleteProfileCacheKeys } from '../services/github/cache-keys';
 import { sha256Hex } from '../services/crypto/web-crypto';
 import {
   parseQueueMessage,
@@ -194,7 +195,7 @@ async function handleRevalidateProfile(
 ): Promise<void> {
   console.log(`[Queue] Revalidating profile KV cache for @${message.username}`);
   if (env.CACHE_KV) {
-    await env.CACHE_KV.delete(`gh:profile:${message.username.toLowerCase()}`);
+    await deleteProfileCacheKeys(env.CACHE_KV, message.username);
   }
 }
 

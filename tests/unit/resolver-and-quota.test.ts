@@ -999,13 +999,13 @@ describe('Owner-only Aggregate Snapshot Deletion (consent withdrawal)', () => {
     expect(res.status).toBe(401);
   });
 
-  it('deletes the owner row and invalidates v3 cache for an authenticated owner', async () => {
+  it('deletes the owner row and invalidates profile cache keys for an authenticated owner', async () => {
     let deletedId: number | null = null;
-    let invalidatedKey: string | null = null;
+    const invalidatedKeys: string[] = [];
     const env = {
       AUTH_SECRET: secret,
       DB: { prepare: () => ({ bind: (id: number) => { deletedId = id; return { run: async () => ({}) }; } }) },
-      CACHE_KV: { delete: async (k: string) => { invalidatedKey = k; } }
+      CACHE_KV: { delete: async (k: string) => { invalidatedKeys.push(k); } }
     } as unknown as Env;
 
     const token = await createSessionToken({ id: 6857382, login: 'MrGoonie', name: 'Duy', avatar_url: 'https://a/x' }, secret);
@@ -1018,7 +1018,8 @@ describe('Owner-only Aggregate Snapshot Deletion (consent withdrawal)', () => {
     const body = await res.json() as { success: boolean };
     expect(body.success).toBe(true);
     expect(deletedId).toBe(6857382);
-    expect(invalidatedKey).toBe('gh:profile:v3:mrgoonie');
+    expect(invalidatedKeys).toContain('gh:profile:v4:mrgoonie');
+    expect(invalidatedKeys).toContain('gh:profile:v3:mrgoonie');
   });
 });
 

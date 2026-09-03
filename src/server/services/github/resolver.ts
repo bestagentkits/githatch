@@ -7,7 +7,7 @@ import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary, TelemetrySna
 import { getHealthyGitHubToken, recordTokenResponse } from './token-pool';
 import { deriveGuardianDNA } from '../dna/seed';
 import { calculateGuardianMood } from '../progression/mood-engine';
-
+import { getProfileCacheKey } from './cache-keys';
 export class UserNotFoundError extends Error {
   constructor(username: string) {
     super(`GitHub user "${username}" not found.`);
@@ -48,10 +48,10 @@ export function normalizeGuardianSummary(guardian: GuardianSummary | null): Guar
     hero_image_url: heroUrl
   };
 }
+
 export async function resolveGitHubProfile(username: string, env: Env): Promise<ResolvedProfile> {
   const cleanUsername = username.trim().toLowerCase();
-  const cacheKey = `gh:profile:v3:${cleanUsername}`;
-
+  const cacheKey = getProfileCacheKey(cleanUsername);
   // 1. Check Cloudflare KV Cache
   let cached: CachedEntry | null = null;
   try {
