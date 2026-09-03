@@ -2,12 +2,12 @@
 // GitHoot Public Profile Page (src/client/pages/PublicProfilePage.tsx)
 // ============================================================================
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import type { ResolvedProfile } from '../../server/types';
 import { EggSpritesheetPlayer } from '../components/EggSpritesheetPlayer';
 import { SocialSharePanel } from '../components/SocialSharePanel';
 import { track } from '../lib/analytics';
-
+import { calculateLevelProgression, getActivityExp, LevelProgression } from '../utils/progression';
 function getRarityGlowColor(tier?: string): string {
   switch (tier) {
     case 'Rare': return '#3b82f6';
@@ -79,9 +79,16 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
         }
       })
       .catch(() => {});
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
+  const progression: LevelProgression | null = useMemo(() => {
+    if (!profile?.guardian) return null;
+    if (profile.guardian.progression) return profile.guardian.progression;
+    return calculateLevelProgression(profile.guardian.experience || 0);
+  }, [profile?.guardian]);
   useEffect(() => {
     let isMounted = true;
 
@@ -245,7 +252,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
             style={{
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'center',
+              justifyContent: 'flex-start',
               alignItems: 'center',
               minHeight: '380px',
               border: profile.claimed && profile.guardian ? `2px solid ${getRarityGlowColor(profile.guardian.rarity_tier)}` : '1px solid rgba(0, 240, 255, 0.2)',
@@ -354,7 +361,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                     border: '1px solid rgba(0, 240, 255, 0.35)',
                     color: '#00f0ff'
                   }}>
-                    LVL {profile.guardian.level}
+                    LVL {progression?.level || profile.guardian.level || 1}
                   </span>
                   <span
                     title={profile.mood?.description || 'Hoạt động GitHub'}
@@ -388,31 +395,155 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                   "{profile.mood?.description || 'Chưa có hoạt động GitHub gần đây. Hãy push một commit để cập nhật tâm trạng bé nhé!'}"
                 </p>
 
-                {/* Honest Raw Experience & Progression Stats */}
+                {/* Cyber-Arcade Level Progress Bar & EXP Progression */}
+                {progression && (
+                  <div style={{
+                    width: '100%',
+                    maxWidth: '360px',
+                    margin: '0 auto 16px auto',
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    border: '1px solid rgba(0, 240, 255, 0.25)',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+                    boxSizing: 'border-box'
+                  }}>
+                    {/* Level & EXP Ratio Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: '12px',
+                          fontWeight: 900,
+                          color: '#00f0ff',
+                          letterSpacing: '0.05em'
+                        }}>
+                          LVL {progression.level}
+                        </span>
+                        <span style={{
+                          fontSize: '10px',
+                          color: '#8b9bb4',
+                          fontFamily: "'JetBrains Mono', monospace",
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          padding: '1px 6px',
+                          borderRadius: '4px'
+                        }}>
+                          Next: Lv.{progression.level + 1}
+                        </span>
+                      </div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', fontWeight: 800, color: '#00ff88' }}>
+                        {progression.expInLevel.toLocaleString()} / {progression.levelExpSpan.toLocaleString()} EXP
+                        <span style={{ color: '#8b9bb4', marginLeft: '4px', fontSize: '10px', fontWeight: 600 }}>
+                          ({Math.round(progression.progressPercent)}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Glowing Neon Progress Bar Track */}
+                    <div style={{
+                      width: '100%',
+                      height: '8px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      borderRadius: '9999px',
+                      overflow: 'hidden',
+                      position: 'relative',
+                      border: '1px solid rgba(255, 255, 255, 0.12)'
+                    }}>
+                      <div style={{
+                        width: `${Math.min(100, Math.max(0, progression.progressPercent))}%`,
+                        height: '100%',
+                        background: 'linear-gradient(90deg, #00f0ff 0%, #00ff88 65%, #ffa800 100%)',
+                        borderRadius: '9999px',
+                        boxShadow: '0 0 14px rgba(0, 240, 255, 0.7)',
+                        transition: 'width 0.5s ease-out'
+                      }} />
+                    </div>
+
+                    {/* Total Lifetime EXP & EXP to Next Level */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginTop: '8px',
+                      fontSize: '10px',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      color: '#8b9bb4'
+                    }}>
+                      <span>Total: <strong style={{ color: '#ffffff' }}>{progression.currentExp.toLocaleString()} EXP</strong></span>
+                      <span style={{ color: '#ffa800', fontWeight: 700 }}>+{progression.expToNextLevel.toLocaleString()} to Lv.{progression.level + 1}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Companion Realm Attributes Matrix (Matching Developer Stats 4-Grid) */}
                 <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '12px',
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '8px',
-                  padding: '8px 14px',
-                  margin: '0 auto 10px auto',
-                  maxWidth: '320px',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '8px',
+                  width: '100%',
+                  maxWidth: '360px',
+                  margin: '0 auto 6px auto',
                   boxSizing: 'border-box'
                 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#00f0ff', fontWeight: 800 }}>
-                    LVL {profile.guardian.level || 1}
-                  </span>
-                  <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#c8d6e5', fontWeight: 700 }}>
-                    {profile.guardian.experience || 0} RAW EXP
-                  </span>
-                  <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#8b9bb4' }}>
-                    {profile.public_repos} REPOS
-                  </span>
+                  <div style={{
+                    background: '#141b27',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '15px', fontWeight: 800, color: '#00f0ff' }}>
+                      {progression?.currentExp.toLocaleString() || 0}
+                    </div>
+                    <div style={{ fontSize: '9px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginTop: '2px' }}>
+                      Accumulated EXP
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: '#141b27',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '15px', fontWeight: 800, color: '#00ff88' }}>
+                      {profile.guardian.energy_state || 'Active'}
+                    </div>
+                    <div style={{ fontSize: '9px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginTop: '2px' }}>
+                      Energy State
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: '#141b27',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '14px', fontWeight: 800, color: '#ff2a85', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {profile.guardian.rarity_tier || 'Genesis'}
+                    </div>
+                    <div style={{ fontSize: '9px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginTop: '2px' }}>
+                      Rarity Tier
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: '#141b27',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '15px', fontWeight: 800, color: '#ffa800' }}>
+                      {profile.public_repos} Repos
+                    </div>
+                    <div style={{ fontSize: '9px', color: '#8b9bb4', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginTop: '2px' }}>
+                      Guarded Codebases
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -806,9 +937,24 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
                           >
                             {act.repo}
                           </a>
-                          <span style={{ fontSize: '11px', color: '#53627a', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
-                            {formatRelativeTime(act.created_at)}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: '10px',
+                              fontWeight: 800,
+                              color: '#00ff88',
+                              background: 'rgba(0, 255, 136, 0.1)',
+                              border: '1px solid rgba(0, 255, 136, 0.25)',
+                              borderRadius: '4px',
+                              padding: '2px 6px',
+                              letterSpacing: '0.04em'
+                            }}>
+                              +{act.exp_gain || getActivityExp(act.type)} EXP
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#53627a', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                              {formatRelativeTime(act.created_at)}
+                            </span>
+                          </div>
                         </div>
                         <div style={{ fontSize: '12px', color: '#c8d6e5', marginTop: '2px', lineHeight: 1.4 }}>
                           {act.summary}

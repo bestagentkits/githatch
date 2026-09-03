@@ -7,6 +7,7 @@ import type { Env, ResolvedProfile, GitHubUserRaw, GuardianSummary, TelemetrySna
 import { getHealthyGitHubToken, recordTokenResponse } from './token-pool';
 import { deriveGuardianDNA } from '../dna/seed';
 import { calculateGuardianMood } from '../progression/mood-engine';
+import { calculateDeveloperExperience, getActivityExp } from '../progression/exp-engine';
 import { getProfileCacheKey } from './cache-keys';
 export class UserNotFoundError extends Error {
   constructor(username: string) {
@@ -293,7 +294,8 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
             repo: repoName,
             repo_url: `https://github.com/${repoName}`,
             summary,
-            created_at: ev.created_at
+            created_at: ev.created_at,
+            exp_gain: getActivityExp(ev.type)
           });
         }
       }
@@ -312,11 +314,22 @@ export async function resolveGitHubProfile(username: string, env: Env): Promise<
     let guardianRecord = await getGuardianFromDb(rawUser.id, env);
     const aggregateStats = await getAggregateStatsFromDb(rawUser.id, env);
     if (guardianRecord) {
+      const { totalExp, progression } = calculateDeveloperExperience({
+        public_repos: rawUser.public_repos,
+        followers: rawUser.followers,
+        total_stars: totalStars,
+        contributions_last_year: aggregateStats?.contributions_last_year,
+        activities,
+        stored_experience: guardianRecord.experience
+      });
       guardianRecord = {
         ...guardianRecord,
+        experience: totalExp,
+        level: progression.level,
         energy_state: mood ? mood.state : guardianRecord.energy_state,
         mood_title: mood ? mood.title : undefined,
-        mood_description: mood ? mood.description : undefined
+        mood_description: mood ? mood.description : undefined,
+        progression
       };
     }
 

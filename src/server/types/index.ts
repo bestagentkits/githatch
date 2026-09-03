@@ -76,6 +76,7 @@ export interface UserActivity {
   repo_url: string;
   summary: string;
   created_at: string;
+  exp_gain?: number;
 }
 
 export interface UserSession {
@@ -224,6 +225,16 @@ export interface GuardianSummary {
   manifest_url?: string | null;
   mood_title?: string;
   mood_description?: string;
+  progression?: {
+    level: number;
+    currentExp: number;
+    levelStartExp: number;
+    nextLevelExp: number;
+    expInLevel: number;
+    levelExpSpan: number;
+    progressPercent: number;
+    expToNextLevel: number;
+  };
 }
 
 export interface EarlyAccessStatus {
