@@ -288,3 +288,59 @@ export interface HatchFrameRecord {
   semantic_verdict: string | null;
   created_at: number;
 }
+
+export type GallerySort = 'newest' | 'oldest';
+export const VALID_GALLERY_SORTS: GallerySort[] = ['newest', 'oldest'];
+export const VALID_GALLERY_RARITIES: RarityTier[] = ['Common', 'Rare', 'Epic', 'Legendary', 'Mythic'];
+export const VALID_GALLERY_ELEMENTS: string[] = ['Fire', 'Cyber', 'Water', 'Nature', 'Light', 'Void', 'Metal', 'Cosmic'];
+
+export interface GalleryItem {
+  id: string;
+  name: string;
+  species: string;
+  species_name: string | null;
+  element: string;
+  rarity_tier: RarityTier;
+  level: number;
+  experience: number;
+  energy_state: string;
+  hero_image_url: string;
+  spritesheet_url: string | null;
+  published_at: number;
+  owner: {
+    login: string;
+    name: string | null;
+    avatar_url: string | null;
+    total_stars: number;
+  };
+}
+
+export interface GalleryResponse {
+  items: GalleryItem[];
+  page: {
+    limit: number;
+    has_more: boolean;
+    next_cursor: string | null;
+    snapshot_at: number;
+  };
+  applied: {
+    q: string | null;
+    element: string | null;
+    rarity: RarityTier | null;
+    sort: GallerySort;
+  };
+  meta?: {
+    degraded?: boolean;
+    stale?: boolean;
+    cached_at?: number;
+  };
+}
+
+export interface GalleryCursorPayload {
+  v: 1;
+  sort: GallerySort;
+  snapshot_at: number;
+  last_published_at: number;
+  last_guardian_id: string;
+  fingerprint: string;
+}

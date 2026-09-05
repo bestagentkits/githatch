@@ -240,7 +240,7 @@ export const PublicProfilePage: React.FC<{ username: string }> = ({ username }) 
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: profile.claimed ? '#00ff88' : '#ffa800', boxShadow: profile.claimed ? '0 0 8px #00ff88' : '0 0 8px #ffa800' }} />
             <span>{profile.claimed ? 'GUARDIAN BOUND' : 'GENESIS EGG WAITING'}</span>
             <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-            <span style={{ color: '#00f0ff' }}>SEED: 0x{profile.dna_seed.slice(0, 8)}</span>
+            <span style={{ color: '#00f0ff' }}>SEED: 0x{profile.dna_seed ? profile.dna_seed.slice(0, 8) : '00000000'}</span>
           </div>
         </div>
 

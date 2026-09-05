@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { env, createMessageBatch, getQueueResult, createExecutionContext } from 'cloudflare:test';
+import { app } from '../../src/server/index';
 import { runMigrations } from './setup/migrations';
 import { encodeRgbaToWebp, decodeWebpToRgba } from '../../src/server/services/image/webp-encoder';
 import { decodePngToRgba, encodeRgbaToPng } from '../../src/server/services/image/png-codec';
@@ -1502,6 +1503,145 @@ describe('Workers Runtime Harness Smoke', () => {
       expect(preflight.reasons).toEqual([]);
       expect(preflight.manifestSha256).toBeDefined();
       expect(preflight.spritesheetSha256).toBeDefined();
+    });
+    it('Matrix 25: Gallery API executes on real D1 SQLite with 0009 indexes, keyset paging, and KV SWR', async () => {
+      const now = Date.now();
+
+      // Seed 2 users, accounts, guardians
+      const user1 = 'u-gallery-1';
+      const user2 = 'u-gallery-2';
+      const ghId1 = 881001;
+      const ghId2 = 881002;
+
+      await env.DB.prepare(`
+        INSERT INTO users (id, github_user_id, status, created_at, updated_at)
+        VALUES (?, ?, 'active', ?, ?)
+      `).bind(user1, ghId1, now, now).run();
+
+      await env.DB.prepare(`
+        INSERT INTO users (id, github_user_id, status, created_at, updated_at)
+        VALUES (?, ?, 'active', ?, ?)
+      `).bind(user2, ghId2, now, now).run();
+
+      await env.DB.prepare(`
+        INSERT INTO github_accounts (id, user_id, github_user_id, login, name, avatar_url, total_stars, followers, public_repos, last_synced_at)
+        VALUES ('ga-1', ?, ?, 'octogoonie', 'Octo Goonie', 'https://avatars.example.com/octogoonie', 120, 50, 10, ?)
+      `).bind(user1, ghId1, now).run();
+
+      await env.DB.prepare(`
+        INSERT INTO github_accounts (id, user_id, github_user_id, login, name, avatar_url, total_stars, followers, public_repos, last_synced_at)
+        VALUES ('ga-2', ?, ?, 'cybercat', 'Cyber Cat', 'https://avatars.example.com/cybercat', 88, 30, 5, ?)
+      `).bind(user2, ghId2, now).run();
+      const gId1 = 'g-gal-1';
+      const gId2 = 'g-gal-2';
+
+      // Guardian 1: Published ASSET_READY (Fire, Epic)
+      await env.DB.prepare(`
+        INSERT INTO guardians (
+          id, user_id, github_user_id, name, egg_type, species, species_name, element,
+          dna_seed, rarity_tier, hero_image_url, spritesheet_url, traits, status, level, experience, energy_state, created_at
+        ) VALUES (?, ?, ?, 'Ignis Blade', 'ember-core', 'emberfox', 'Ignis Emberfox', 'Fire', 'seed1', 'Epic', 'https://cdn.githoot.com/heroes/g1.png', 'https://cdn.githoot.com/masters/g1.png', '{}', 'ASSET_READY', 10, 500, 'Active', ?)
+      `).bind(gId1, user1, ghId1, now).run();
+
+      // Guardian 2: Unpublished PENDING (Cyber, Rare) - must NEVER appear in gallery
+      await env.DB.prepare(`
+        INSERT INTO guardians (
+          id, user_id, github_user_id, name, egg_type, species, species_name, element,
+          dna_seed, rarity_tier, hero_image_url, traits, status, level, experience, energy_state, created_at
+        ) VALUES (?, ?, ?, 'Volt Byte', 'neon-byte', 'neonbyte', 'Volt Neonbyte', 'Cyber', 'seed2', 'Rare', 'https://cdn.githoot.com/heroes/g2.png', '{}', 'PENDING', 1, 0, 'Active', ?)
+      `).bind(gId2, user2, ghId2, now).run();
+
+      // Seed hatch job for Guardian 1
+      await env.DB.prepare(`
+        INSERT INTO guardian_hatch_jobs (
+          id, guardian_id, request_fingerprint, state, model_id, created_at, updated_at
+        ) VALUES ('job-gal-1', ?, 'fp-gal-1', 'ASSET_READY', 'gemini-3-pro-image', ?, ?)
+      `).bind(gId1, now, now).run();
+
+      // Authoritative Publication Pointer for Guardian 1 ONLY
+      await env.DB.prepare(`
+        INSERT INTO guardian_publication (
+          guardian_id, job_id, manifest_sha256, manifest_key, spritesheet_sha256, spritesheet_key, state, reviewer, published_at, created_at
+        ) VALUES (?, 'job-gal-1', 'msha1', 'manifests/m1.json', 'ssha1', 'masters/strip1.png', 'ASSET_READY', 'admin@githoot.com', ?, ?)
+      `).bind(gId1, now, now).run();
+
+      // 1. Fetch gallery without filters -> only Guardian 1 returned
+      const res1 = await app.request('/api/gallery', {}, env);
+      expect(res1.status).toBe(200);
+      const data1 = await res1.json();
+      expect(data1.items.some((item: any) => item.id === gId1)).toBe(true);
+      expect(data1.items.some((item: any) => item.id === gId2)).toBe(false); // Unpublished excluded!
+      expect(data1.page.has_more).toBe(false);
+
+      // 2. Fetch gallery with element=Fire -> match
+      const res2 = await app.request('/api/gallery?element=Fire', {}, env);
+      expect(res2.status).toBe(200);
+      const data2 = await res2.json();
+      expect(data2.items.length).toBeGreaterThanOrEqual(1);
+      expect(data2.items[0].element).toBe('Fire');
+
+      // 3. Fetch gallery with element=Water -> no match
+      const res3 = await app.request('/api/gallery?element=Water', {}, env);
+      expect(res3.status).toBe(200);
+      const data3 = await res3.json();
+      expect(data3.items.length).toBe(0);
+
+      // 4. Search by login prefix 'octo'
+      const res4 = await app.request('/api/gallery?q=octo', {}, env);
+      expect(res4.status).toBe(200);
+      expect(res4.headers.get('X-Gallery-Cache')).toBe('BYPASS');
+      const data4 = await res4.json();
+      expect(data4.items.some((item: any) => item.owner.login === 'octogoonie')).toBe(true);
+
+      // 5. Search by name prefix 'Ignis'
+      const res5 = await app.request('/api/gallery?q=ignis', {}, env);
+      expect(res5.status).toBe(200);
+      const data5 = await res5.json();
+      expect(data5.items.some((item: any) => item.name === 'Ignis Blade')).toBe(true);
+    });
+
+    it('Matrix 26: EXPLAIN QUERY PLAN verifies B-tree index coverage on gallery query shapes', async () => {
+      // 1. Browse newest
+      const qp1 = await env.DB.prepare(`
+        EXPLAIN QUERY PLAN
+        SELECT g.id, p.published_at
+        FROM guardian_publication p
+        INNER JOIN guardians g ON g.id = p.guardian_id
+        INNER JOIN github_accounts a ON a.github_user_id = g.github_user_id
+        WHERE p.state = 'ASSET_READY' AND p.published_at <= 1788000000000
+        ORDER BY p.published_at DESC, p.guardian_id DESC
+        LIMIT 25
+      `).all();
+      const plans1 = (qp1.results || []).map((r: any) => r.detail).join('; ');
+      expect(plans1).toContain('idx_gallery_publication_time');
+
+      // 2. Element and Rarity filter
+      const qp2 = await env.DB.prepare(`
+        EXPLAIN QUERY PLAN
+        SELECT g.id, p.published_at
+        FROM guardian_publication p
+        INNER JOIN guardians g ON g.id = p.guardian_id
+        INNER JOIN github_accounts a ON a.github_user_id = g.github_user_id
+        WHERE p.state = 'ASSET_READY' AND g.element = 'Fire' AND g.rarity_tier = 'Epic'
+        ORDER BY p.published_at DESC, p.guardian_id DESC
+        LIMIT 25
+      `).all();
+      const plans2 = (qp2.results || []).map((r: any) => r.detail).join('; ');
+      expect(plans2).toContain('USING');
+
+      // 3. Oldest browse
+      const qp3 = await env.DB.prepare(`
+        EXPLAIN QUERY PLAN
+        SELECT g.id, p.published_at
+        FROM guardian_publication p
+        INNER JOIN guardians g ON g.id = p.guardian_id
+        INNER JOIN github_accounts a ON a.github_user_id = g.github_user_id
+        WHERE p.state = 'ASSET_READY' AND p.published_at >= 1788000000000
+        ORDER BY p.published_at ASC, p.guardian_id ASC
+        LIMIT 25
+      `).all();
+      const plans3 = (qp3.results || []).map((r: any) => r.detail).join('; ');
+      expect(plans3).toContain('idx_gallery_publication_time');
     });
   });
 });

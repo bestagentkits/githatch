@@ -39,6 +39,17 @@ describe('D1 Database Migrations', () => {
     expect(sql).toContain('reference_sha256');
   });
 
+  it('0009_gallery_indexes.sql exists and adds gallery discovery indexes', () => {
+    const p = path.join(process.cwd(), 'src', 'server', 'db', 'migrations', '0009_gallery_indexes.sql');
+    expect(fs.existsSync(p)).toBe(true);
+    const sql = fs.readFileSync(p, 'utf8');
+    expect(sql).toContain('idx_gallery_publication_time');
+    expect(sql).toContain('idx_gallery_guardian_element_rarity');
+    expect(sql).toContain('idx_gallery_guardian_rarity_element');
+    expect(sql).toContain('idx_gallery_guardian_name_nocase');
+    expect(sql).toContain('idx_gallery_login_nocase');
+  });
+
   it('assertDatabaseSchemaReady passes on complete schema and throws on missing table, column, wrong default or index drift', async () => {
     const { assertDatabaseSchemaReady, REQUIRED_V2_TABLES, GUARDIAN_CANONICAL_COLUMNS, REQUIRED_CANONICAL_INDEXES } = await import('../../src/server/db/schema-guard');
 

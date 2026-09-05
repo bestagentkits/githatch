@@ -81,6 +81,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               <li>
                 <button
                   type="button"
+                  onClick={() => handleNav('/gallery')}
+                  className={`nav-link ${activeRoute === '/gallery' ? 'active' : ''}`}
+                >
+                  Gallery
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
                   onClick={() => handleNav('/explore')}
                   className={`nav-link ${activeRoute === '/explore' ? 'active' : ''}`}
                 >
@@ -269,10 +278,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             <li>
               <button
                 type="button"
+                className={`mobile-nav-link ${activeRoute === '/gallery' ? 'active' : ''}`}
+                onClick={() => handleNav('/gallery')}
+              >
+                Gallery of Guardians
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
                 className={`mobile-nav-link ${activeRoute === '/explore' ? 'active' : ''}`}
                 onClick={() => handleNav('/explore')}
               >
-                Explore Guardians
+                Explore Archetypes
               </button>
             </li>
             <li>

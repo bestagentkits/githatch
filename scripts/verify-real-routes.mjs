@@ -28,10 +28,11 @@ const server = http.createServer((req, res) => {
         github_user_id: 11829471,
         login: 'mrgoonie',
         name: 'Hoang Anh',
+        dna_seed: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        top_languages: ['TypeScript', 'Rust'],
         claimed: true,
         guardian: {
           id: 'g-mrgoonie',
-          name: 'Aether Neonbyte',
           species: 'neonbyte',
           species_name: 'Aether Neonbyte',
           element: 'Cyber',
@@ -43,6 +44,45 @@ const server = http.createServer((req, res) => {
           experience: 4280,
           energy_state: 'Active'
         }
+      }));
+      return;
+    }
+    if (req.url.includes('/api/gallery')) {
+      res.end(JSON.stringify({
+        items: [
+          {
+            id: 'g-gal-1',
+            name: 'Aether Neonbyte',
+            species: 'neonbyte',
+            species_name: 'Aether Neonbyte',
+            element: 'Cyber',
+            rarity_tier: 'Epic',
+            level: 14,
+            experience: 4280,
+            energy_state: 'Active',
+            hero_image_url: '/assets/sample-pets/neonbyte-hero.png',
+            spritesheet_url: '/assets/sample-pets/neonbyte-landing16-strip.png',
+            published_at: Date.now(),
+            owner: { login: 'mrgoonie', name: 'Hoang Anh', avatar_url: null, total_stars: 42 }
+          },
+          {
+            id: 'g-gal-2',
+            name: 'Ignis Emberfox',
+            species: 'emberfox',
+            species_name: 'Ignis Emberfox',
+            element: 'Fire',
+            rarity_tier: 'Legendary',
+            level: 18,
+            experience: 6500,
+            energy_state: 'Energetic',
+            hero_image_url: '/assets/sample-pets/emberfox.jpg',
+            spritesheet_url: null,
+            published_at: Date.now() - 3600000,
+            owner: { login: 'octocat', name: 'The Octocat', avatar_url: null, total_stars: 180 }
+          }
+        ],
+        page: { limit: 24, has_more: false, next_cursor: null, snapshot_at: Date.now() },
+        applied: { q: null, element: null, rarity: null, sort: 'newest' }
       }));
       return;
     }
@@ -97,6 +137,23 @@ try {
   await page.goto('http://localhost:8789/design', { waitUntil: 'networkidle0' });
   await page.screenshot({ path: path.join(outDir, 'real-route-design.png') });
   console.log('✓ Verified route: /design');
+  // 4. Test Gallery Route (Desktop, Tablet, Mobile)
+  await page.goto('http://localhost:8789/gallery', { waitUntil: 'networkidle0' });
+  await page.screenshot({ path: path.join(outDir, 'real-route-gallery-desktop.png') });
+  console.log('✓ Verified route: /gallery (desktop)');
+
+  // Tablet Viewport (768x1024)
+  await page.setViewport({ width: 768, height: 1024 });
+  await page.screenshot({ path: path.join(outDir, 'real-route-gallery-tablet.png') });
+  console.log('✓ Verified route: /gallery (tablet)');
+
+  // Mobile Viewport (375x812)
+  await page.setViewport({ width: 375, height: 812 });
+  await page.screenshot({ path: path.join(outDir, 'real-route-gallery-mobile.png') });
+  console.log('✓ Verified route: /gallery (mobile)');
+
+  // Reset viewport to desktop
+  await page.setViewport({ width: 1400, height: 1000 });
 
   // 4. Test Hatch Wait Route
   await page.goto('http://localhost:8789/hatch/wait/mrgoonie', { waitUntil: 'networkidle0' });
